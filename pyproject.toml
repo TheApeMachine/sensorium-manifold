@@ -1,0 +1,124 @@
+[project]
+name = "thermo-manifold"
+version = "0.1.0"
+description = "Thermodynamic Primitives for Neural Computation Without Backpropagation"
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.10"
+authors = [
+    { name = "The Ape Machine" }
+]
+keywords = [
+    "machine-learning",
+    "thermodynamics",
+    "neural-computation",
+    "hebbian-learning",
+    "sparse-graphs",
+    "online-learning",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+
+dependencies = [
+    "torch>=2.0.0",
+    "numpy>=1.24.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+    "black>=23.0.0",
+    "isort>=5.12.0",
+    "mypy>=1.0.0",
+    "ruff>=0.1.0",
+]
+viz = [
+    "matplotlib>=3.7.0",
+]
+experiments = [
+    "datasets>=2.14.0",
+    "matplotlib>=3.7.0",
+    "scipy>=1.11.0",
+    "pillow>=10.0.0",
+]
+cuda = [
+    "torch-scatter>=2.1.0",
+]
+all = [
+    "thermo-manifold[dev,viz,experiments,cuda]",
+]
+
+[project.urls]
+Homepage = "https://github.com/theapemachine/thermo_manifold"
+Repository = "https://github.com/theapemachine/thermo_manifold"
+Documentation = "https://github.com/theapemachine/thermo_manifold#readme"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["thermo_manifold"]
+
+[tool.black]
+line-length = 88
+target-version = ["py310", "py311", "py312"]
+include = '\.pyi?$'
+exclude = '''
+/(
+    \.git
+  | \.venv
+  | build
+  | dist
+)/
+'''
+
+[tool.isort]
+profile = "black"
+line_length = 88
+skip = [".git", ".venv", "build", "dist"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py310"
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "B",   # flake8-bugbear
+    "C4",  # flake8-comprehensions
+    "UP",  # pyupgrade
+]
+ignore = [
+    "E501",  # line too long (handled by black)
+]
+
+[tool.ruff.per-file-ignores]
+"__init__.py" = ["F401"]  # unused imports in __init__
+
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_functions = ["test_*"]
+addopts = "-v --tb=short"
+
+[tool.uv]
+# torch-scatter requires torch at build time but doesn't declare it
+extra-build-dependencies = { torch-scatter = ["torch"] }

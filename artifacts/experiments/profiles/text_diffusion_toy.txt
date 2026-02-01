@@ -1,0 +1,48 @@
+         794461 function calls (770664 primitive calls) in 2.206 seconds
+
+   Ordered by: cumulative time
+   List reduced from 4375 to 40 due to restriction <40>
+
+   ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+      129    0.002    0.000    3.525    0.027 __init__.py:1(<module>)
+        1    0.000    0.000    2.206    2.206 base.py:238(run)
+        1    0.000    0.000    2.204    2.204 text_diffusion.py:67(setup)
+    984/2    0.002    0.000    1.189    0.594 <frozen importlib._bootstrap>:1349(_find_and_load)
+    925/1    0.002    0.000    1.189    1.189 <frozen importlib._bootstrap>:1304(_find_and_load_unlocked)
+    869/1    0.001    0.000    1.189    1.189 <frozen importlib._bootstrap>:911(_load_unlocked)
+    781/1    0.001    0.000    1.189    1.189 <frozen importlib._bootstrap_external>:993(exec_module)
+   2770/3    0.008    0.000    1.188    0.396 <frozen importlib._bootstrap>:480(_call_with_frames_removed)
+   1294/1    0.019    0.000    1.188    1.188 {built-in method builtins.exec}
+        1    0.000    0.000    1.098    1.098 arrow_dataset.py:1(<module>)
+        1    0.000    0.000    1.015    1.015 load.py:1281(load_dataset)
+        1    0.000    0.000    1.015    1.015 load.py:1037(load_dataset_builder)
+  132/117    0.000    0.000    1.013    0.009 {built-in method builtins.next}
+        1    0.000    0.000    1.013    1.013 load.py:829(dataset_module_factory)
+     17/2    0.000    0.000    1.011    0.506 _validators.py:78(_inner_fn)
+        2    0.000    0.000    1.011    0.506 hf_api.py:5468(hf_hub_download)
+        2    0.000    0.000    1.011    0.506 file_download.py:842(hf_hub_download)
+        2    0.000    0.000    1.011    0.506 file_download.py:1045(_hf_hub_download_to_cache_dir)
+        3    0.000    0.000    1.011    0.337 file_download.py:1636(_get_metadata_or_catch_error)
+        3    0.000    0.000    1.011    0.337 file_download.py:1561(get_hf_file_metadata)
+        3    0.000    0.000    1.011    0.337 file_download.py:276(_httpx_follow_relative_redirects)
+        3    0.000    0.000    1.011    0.337 _http.py:441(http_backoff)
+        3    0.000    0.000    1.011    0.337 _http.py:344(_http_backoff_base)
+        1    1.005    1.005    1.005    1.005 {built-in method time.sleep}
+      781    0.002    0.000    0.779    0.001 <frozen importlib._bootstrap_external>:1066(get_code)
+      744    0.000    0.000    0.748    0.001 <frozen importlib._bootstrap_external>:1058(source_to_code)
+     1094    0.745    0.001    0.745    0.001 {built-in method builtins.compile}
+   154/80    0.000    0.000    0.577    0.007 {built-in method builtins.__import__}
+  910/555    0.001    0.000    0.560    0.001 <frozen importlib._bootstrap>:1390(_handle_fromlist)
+       11    0.000    0.000    0.461    0.042 api.py:1(<module>)
+7311/5163    0.001    0.000    0.278    0.000 {built-in method builtins.hasattr}
+    68/66    0.000    0.000    0.271    0.004 __init__.py:73(import_module)
+    68/66    0.000    0.000    0.271    0.004 <frozen importlib._bootstrap>:1375(_gcd_import)
+        3    0.000    0.000    0.263    0.088 generic.py:1(<module>)
+    61/58    0.000    0.000    0.256    0.004 __init__.py:1068(__getattr__)
+        1    0.000    0.000    0.225    0.225 hf_api.py:1(<module>)
+        1    0.000    0.000    0.218    0.218 arrow_reader.py:1(<module>)
+        1    0.000    0.000    0.202    0.202 download_manager.py:1(<module>)
+        1    0.000    0.000    0.176    0.176 file_utils.py:1(<module>)
+        1    0.000    0.000    0.131    0.131 frame.py:1(<module>)
+
+

@@ -1,0 +1,584 @@
+% !TEX program = pdflatex
+\documentclass[11pt,a4paper]{article}
+
+% ============================================================================
+% PACKAGES
+% ============================================================================
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{mathtools}
+\usepackage{bm}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{hyperref}
+\usepackage{cleveref}
+\usepackage{xcolor}
+\usepackage{microtype}
+\usepackage[margin=1in]{geometry}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{natbib}
+
+% ============================================================================
+% THEOREM ENVIRONMENTS
+% ============================================================================
+\newtheorem{definition}{Definition}
+\newtheorem{proposition}{Proposition}
+\newtheorem{remark}{Remark}
+
+% ============================================================================
+% CUSTOM COMMANDS
+% ============================================================================
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\E}{\mathbb{E}}
+\newcommand{\EMA}[1]{\overline{#1}}
+\newcommand{\dt}{\Delta t}
+\newcommand{\eps}{\varepsilon}
+\newcommand{\vocab}{\mathcal{V}}
+\newcommand{\graph}{\mathcal{G}}
+\newcommand{\exc}{e}
+\newcommand{\heat}{h}
+\newcommand{\energy}{E}
+\newcommand{\baseline}{B}
+\newcommand{\ratio}{\rho}
+
+% ============================================================================
+% TITLE
+% ============================================================================
+\title{%
+  \textbf{Thermodynamic Manifolds}: \\[0.3em]
+  \large Online Sequence Learning via Energy-Based Dynamics on Sparse Graphs
+}
+
+\author{
+  [Author Names] \\
+  [Affiliations] \\
+  \texttt{[emails]}
+}
+
+\date{\today}
+
+% ============================================================================
+% DOCUMENT
+% ============================================================================
+\begin{document}
+
+\maketitle
+
+% ============================================================================
+% ABSTRACT
+% ============================================================================
+\begin{abstract}
+We introduce \emph{Thermodynamic Manifolds}, a framework for online sequence learning that replaces backpropagation with local, energy-based dynamics operating on sparse directed graphs. The system models tokens as attractors in a continuous space, with directed bonds encoding transition probabilities. Learning emerges from three thermodynamic principles: (1) energy injection from observations, (2) homeostatic regulation via adaptive baselines, and (3) metabolic decay proportional to system stress. We demonstrate that this approach enables rapid adaptation to distributional shifts, emergent hierarchical structure through chunk condensation, and autonomous knowledge consolidation through idle pondering. Our experiments on a rule-shift benchmark show recovery to baseline accuracy within [X] steps after a complete reversal of sequential structure, with all adaptation occurring online without gradient computation.
+\end{abstract}
+
+% ============================================================================
+% 1. INTRODUCTION
+% ============================================================================
+\section{Introduction}
+\label{sec:introduction}
+
+Modern neural networks learn through backpropagation: computing gradients of a global loss function and propagating error signals through layers. While effective, this paradigm has fundamental limitations. It requires differentiable architectures, struggles with online learning from streaming data, and imposes a separation between training and inference phases.
+
+We propose an alternative paradigm inspired by thermodynamic systems. In physical systems, structure emerges from local interactions governed by energy minimization and entropy production. We apply this principle to sequence learning by modeling:
+
+\begin{itemize}
+  \item \textbf{Tokens as attractors} in a continuous embedding space
+  \item \textbf{Transitions as directed bonds} in a sparse graph
+  \item \textbf{Learning as energy flow} through local, Hebbian-style updates
+  \item \textbf{Stability as homeostasis} via adaptive baseline tracking
+\end{itemize}
+
+Our contributions are:
+
+\begin{enumerate}
+  \item A complete mathematical framework for thermodynamic sequence learning (\Cref{sec:framework})
+  \item Sparse graph representations that avoid dense $V \times V$ matrices (\Cref{sec:graphs})
+  \item Hierarchical abstraction through binding-energy-driven chunk formation (\Cref{sec:hierarchy})
+  \item Autonomous consolidation through idle pondering: transitive closure, conflict resolution, and dream rollouts (\Cref{sec:pondering})
+  \item Empirical validation on rule-shift adaptation (\Cref{sec:experiments})
+\end{enumerate}
+
+% ============================================================================
+% 2. THERMODYNAMIC FRAMEWORK
+% ============================================================================
+\section{Thermodynamic Framework}
+\label{sec:framework}
+
+\subsection{System State}
+\label{sec:state}
+
+Let $\vocab = \{v_1, \ldots, v_V\}$ be a vocabulary of $V$ tokens. Each token $v_i$ is associated with an \emph{attractor} in $\R^D$ with:
+
+\begin{itemize}
+  \item Position $\bm{p}_i \in \R^D$ (embedding)
+  \item Excitation $\exc_i \geq 0$ (activation level)
+  \item Heat $\heat_i \geq 0$ (accumulated noise/uncertainty)
+  \item Energy $\energy_i \geq 0$ (total energetic content)
+\end{itemize}
+
+The system also maintains a sparse directed graph $\graph = (\vocab, \mathcal{E})$ where each edge $(i, j) \in \mathcal{E}$ has:
+
+\begin{itemize}
+  \item Weight $w_{ij} \geq 0$ (transition strength)
+  \item Trace $\tau_{ij} \geq 0$ (eligibility trace for credit assignment)
+\end{itemize}
+
+\subsection{Homeostatic Regulation}
+\label{sec:homeostasis}
+
+The central regulating mechanism is a \emph{homeostatic ratio} that compares current system energy to an adaptive baseline:
+
+\begin{definition}[Homeostatic Ratio]
+\label{def:ratio}
+Let $\energy_{\text{total}} = \sum_i \energy_i + \sum_i \exc_i$ be the total system energy. The homeostatic ratio is:
+\begin{equation}
+\ratio = \frac{\log(1 + \energy_{\text{total}})}{\log(1 + \baseline) + \eps}
+\label{eq:ratio}
+\end{equation}
+where $\baseline$ is an exponential moving average (EMA) baseline updated as:
+\begin{equation}
+\baseline_{t+1} = (1 - \alpha) \baseline_t + \alpha \, \energy_{\text{total}}
+\label{eq:baseline}
+\end{equation}
+with $\alpha = \dt / (\tau + \dt)$ and $\tau$ the homeostasis time constant.
+\end{definition}
+
+When $\ratio > 1$, the system is ``overheated'' and damping increases. When $\ratio < 1$, the system is ``cold'' and damping decreases. This creates a self-regulating dynamic that prevents runaway activation or complete quiescence.
+
+\begin{remark}[Plasticity Gating]
+During surprising observations, we modulate the effective time constant:
+\begin{equation}
+\tau_{\text{eff}} = \tau \cdot (1 + \gamma \cdot g)
+\label{eq:plasticity_tau}
+\end{equation}
+where $g \in [0,1]$ is a plasticity gate (e.g., normalized surprise) and $\gamma$ is a gain parameter. This allows the system to temporarily suspend homeostasis during learning events.
+\end{remark}
+
+\subsection{Energy Injection}
+\label{sec:injection}
+
+When observing a context sequence $[c_1, \ldots, c_n]$, energy enters the system via excitation:
+
+\begin{equation}
+\exc_i \leftarrow \exc_i + \dt \sum_{k: c_k = i} \frac{k}{\sum_{j=1}^n j + \eps}
+\label{eq:injection}
+\end{equation}
+
+This recency-weighted injection assigns higher energy to more recent tokens, creating a gradient of influence that naturally emphasizes local context.
+
+\subsection{Observation Learning}
+\label{sec:observation}
+
+When we observe token $j$ following context with final token $i$, we compute the surprise:
+
+\begin{equation}
+S = -\log(P(j | i) + \eps)
+\label{eq:surprise}
+\end{equation}
+
+where $P(j | i) = w_{ij} / \sum_k w_{ik}$ is the normalized transition probability. The \emph{metabolic pressure} normalizes surprise against a baseline:
+
+\begin{equation}
+\text{pressure} = \frac{S}{S + \baseline_S + \eps}
+\label{eq:pressure}
+\end{equation}
+
+where $\baseline_S$ tracks expected surprise via EMA. Bond mass is then injected:
+
+\begin{equation}
+w_{ij} \leftarrow w_{ij} + \dt \cdot \text{pressure} \cdot (1 + \text{hunger}_i)
+\label{eq:bond_injection}
+\end{equation}
+
+where $\text{hunger}_i$ is a signal accumulated from dead-end explorations (see \Cref{sec:pondering}).
+
+% ============================================================================
+% 3. SPARSE GRAPH DYNAMICS
+% ============================================================================
+\section{Sparse Graph Dynamics}
+\label{sec:graphs}
+
+\subsection{Bond Graph Representation}
+\label{sec:bond_graph}
+
+The bond graph $\graph$ is stored as a sparse edge list $(I, J, W, T)$ where:
+\begin{itemize}
+  \item $I \in \mathbb{Z}^E$ are source indices
+  \item $J \in \mathbb{Z}^E$ are destination indices  
+  \item $W \in \R^E_{\geq 0}$ are edge weights
+  \item $T \in \R^E_{\geq 0}$ are eligibility traces
+\end{itemize}
+
+This representation scales with the number of observed transitions, not $O(V^2)$.
+
+\subsection{Flow Propagation}
+\label{sec:flow}
+
+Given a source distribution $\bm{d} \in \R^V_{\geq 0}$ (e.g., from context excitation), we compute the outgoing flow:
+
+\begin{equation}
+\text{flow}_j = \sum_{i: (i,j) \in \mathcal{E}} d_i \cdot \frac{w_{ij}}{\sum_{k: (i,k) \in \mathcal{E}} w_{ik} + \eps}
+\label{eq:flow}
+\end{equation}
+
+This is computed efficiently via scatter operations without materializing dense matrices.
+
+\subsection{Metabolism}
+\label{sec:metabolism}
+
+Active edges undergo metabolism: income from use, cost from existence:
+
+\begin{equation}
+\text{income}_{ij} = \exc_i \cdot \tilde{w}_{ij} \cdot \frac{1}{1 + \bar{\heat} + \eps}
+\label{eq:income}
+\end{equation}
+
+where $\tilde{w}_{ij} = w_{ij} / \sum_k w_{ik}$ is the normalized weight and $\bar{\heat}$ is mean heat (entropy reduces utility).
+
+\begin{equation}
+\text{cost}_{ij} = \ratio \cdot \bar{\exc} \cdot \frac{w_{ij}}{\bar{w} + \eps}
+\label{eq:cost}
+\end{equation}
+
+The weight update is:
+\begin{equation}
+w_{ij} \leftarrow \max(0, w_{ij} + \dt \cdot (\text{income}_{ij} - \text{cost}_{ij}))
+\label{eq:weight_update}
+\end{equation}
+
+\subsection{Trace Dynamics}
+\label{sec:traces}
+
+Eligibility traces provide temporal credit assignment:
+
+\begin{equation}
+\tau_{ij} \leftarrow \tau_{ij} \cdot \exp\left(-\dt \cdot \ratio / (\bar{\exc} + \bar{\tau})\right) + \text{income}_{ij}
+\label{eq:trace_update}
+\end{equation}
+
+\subsection{Adaptive Pruning}
+\label{sec:pruning}
+
+Rather than fixed thresholds, edges are pruned when their weight falls below the mean outgoing weight from their source:
+
+\begin{equation}
+\text{prune}(i,j) \iff w_{ij} < \frac{1}{|\{k : (i,k) \in \mathcal{E}\}|} \sum_{k: (i,k) \in \mathcal{E}} w_{ik}
+\label{eq:pruning}
+\end{equation}
+
+This maintains a sparse but adaptive structure.
+
+% ============================================================================
+% 4. HIERARCHICAL STRUCTURE
+% ============================================================================
+\section{Hierarchical Structure}
+\label{sec:hierarchy}
+
+\subsection{Chunk Store}
+\label{sec:chunks}
+
+We maintain a collection of \emph{chunks}: variable-length token sequences (length 2-4) that have condensed from repeated observation. Each chunk $c$ has:
+
+\begin{itemize}
+  \item Token sequence $\bm{s}_c = [s_1, \ldots, s_L]$
+  \item Position $\bm{p}_c \in \R^D$ (centroid of constituent embeddings)
+  \item Excitation $\exc_c \geq 0$
+  \item Heat $\heat_c \geq 0$
+  \item Energy $\energy_c \geq 0$
+\end{itemize}
+
+A separate \emph{bipartite bond graph} connects chunks to tokens.
+
+\subsection{Binding Energy}
+\label{sec:binding}
+
+The binding energy of a candidate sequence measures how strongly its token transitions are bonded:
+
+\begin{definition}[Binding Energy Density]
+For a sequence $\bm{s} = [s_1, \ldots, s_L]$:
+\begin{equation}
+\text{binding}(\bm{s}) = \exp\left(\frac{1}{L-1}\sum_{k=1}^{L-1} \log\left(\sqrt{\tilde{w}_{s_k,s_{k+1}} \cdot \tilde{\tau}_{s_k,s_{k+1}}} + \eps\right)\right)
+\label{eq:binding}
+\end{equation}
+where $\tilde{w}, \tilde{\tau}$ are scale-normalized weights and traces.
+\end{definition}
+
+This is a geometric mean of bond strengths, normalized by sequence length.
+
+\subsection{Condensation Dynamics}
+\label{sec:condensation}
+
+Chunk condensation occurs when binding energy exceeds a per-length adaptive baseline:
+
+\begin{equation}
+\text{pressure}_L = \frac{\text{binding} - \baseline_L}{\text{binding} + \baseline_L + \eps}
+\label{eq:chunk_pressure}
+\end{equation}
+
+\begin{equation}
+\text{mass} = \dt \cdot \max(0, \text{pressure}_L)
+\label{eq:chunk_mass}
+\end{equation}
+
+If $\text{mass} > 0$, the chunk is created (or reinforced if it exists). The baseline $\baseline_L$ tracks typical binding energy for sequences of length $L$.
+
+\subsection{Top-Down Influence}
+\label{sec:topdown}
+
+Active chunks bias token-level predictions:
+
+\begin{equation}
+\text{flow}_j^{\text{chunk}} = \sum_{c: (c,j) \in \mathcal{E}_{\text{bipartite}}} \exc_c \cdot w_{cj}
+\label{eq:chunk_flow}
+\end{equation}
+
+The final prediction combines word-level and chunk-level flows:
+
+\begin{equation}
+\text{combined} = (1 - \lambda) \cdot \text{flow}^{\text{word}} + \lambda \cdot \text{flow}^{\text{chunk}}
+\label{eq:combined}
+\end{equation}
+
+where $\lambda = |\text{flow}^{\text{chunk}}| / (|\text{flow}^{\text{chunk}}| + |\text{flow}^{\text{word}}| + \eps)$.
+
+% ============================================================================
+% 5. IDLE PONDERING
+% ============================================================================
+\section{Idle Pondering}
+\label{sec:pondering}
+
+Between observations, the system can consolidate knowledge through three mechanisms.
+
+\subsection{Transitive Closure}
+\label{sec:transitive}
+
+If bonds $A \to B$ and $B \to C$ exist, we can infer a shortcut $A \to C$:
+
+\begin{equation}
+\text{mass}_{AC} = \dt \cdot \tilde{w}_{AB} \cdot \tilde{w}_{BC} \cdot \exp\left(-\frac{\|\bm{p}_A - \bm{p}_C\|^2}{\bar{d}^2}\right)
+\label{eq:transitive}
+\end{equation}
+
+The geometric compatibility factor $\exp(-d^2/\bar{d}^2)$ discounts shortcuts between distant embeddings.
+
+\subsection{Conflict Resolution}
+\label{sec:conflict}
+
+Sources with high outgoing entropy (ambiguous predictions) receive noise injection:
+
+\begin{equation}
+\exc_i \leftarrow \exc_i + \dt \cdot \mathcal{N}(0, \sigma_i^2)
+\label{eq:conflict}
+\end{equation}
+
+where $\sigma_i \propto H_i = -\sum_j \tilde{w}_{ij} \log \tilde{w}_{ij}$ is proportional to entropy. Subsequent metabolism allows competition to sharpen predictions.
+
+\subsection{Dream Rollouts}
+\label{sec:dreams}
+
+The system samples hypothetical trajectories from its current structure:
+
+\begin{algorithm}[H]
+\caption{Dream Rollout}
+\label{alg:dream}
+\begin{algorithmic}[1]
+\State $\text{budget} \leftarrow \text{dream\_energy\_budget} \cdot (1 + \text{stress\_gain} \cdot \max(0, \ratio - 1))$
+\While{$\text{budget} > 0$}
+  \State Sample starting token $i$ proportional to $\exc_i$
+  \State $\text{path\_prob} \leftarrow 1$
+  \For{$t = 1, \ldots, T_{\text{max}}$}
+    \State Compute $P(\cdot | i)$ from bond graph
+    \If{$P$ is empty (dead end)}
+      \State $\text{hunger}_i \leftarrow \text{hunger}_i + \dt$ \Comment{Mark dead end}
+      \State \textbf{break}
+    \EndIf
+    \State Sample $j \sim P$
+    \State $\text{path\_prob} \leftarrow \text{path\_prob} \cdot P(j|i)$
+    \State Reinforce $(i, j)$ with mass $\propto \text{path\_prob}$
+    \State $i \leftarrow j$
+    \State $\text{budget} \leftarrow \text{budget} - (1 + \heat_i / \bar{\heat})$
+  \EndFor
+\EndWhile
+\State $\text{hunger} \leftarrow \text{hunger} \cdot \exp(-\dt \cdot \ratio / \bar{\text{hunger}})$ \Comment{Homeostatic decay}
+\end{algorithmic}
+\end{algorithm}
+
+Hunger accumulates at dead ends and increases plasticity for those transitions when real observations arrive.
+
+% ============================================================================
+% 6. EXPERIMENTS
+% ============================================================================
+\section{Experiments}
+\label{sec:experiments}
+
+\subsection{Rule-Shift Benchmark}
+\label{sec:rule_shift}
+
+We evaluate adaptation to distributional shifts using a controlled benchmark:
+
+\begin{itemize}
+  \item \textbf{Forward phase} (steps 1-1000): The sequence ``The cat sat on the mat'' repeats
+  \item \textbf{Reverse phase} (steps 1001-2000): The sequence reverses to ``mat the on sat cat the''
+\end{itemize}
+
+This tests the system's ability to rapidly unlearn forward transitions and learn reverse transitions, without gradient-based retraining.
+
+\subsubsection{Metrics}
+
+\begin{itemize}
+  \item \textbf{Accuracy}: Rolling accuracy of next-token prediction
+  \item \textbf{System Energy}: $\sum_i \exc_i + \sum_i \heat_i + \sum_c \exc_c + \sum_c \heat_c$
+  \item \textbf{Topological Entropy}: Mean per-source entropy $\bar{H} = \frac{1}{|\{i : \exists j, (i,j) \in \mathcal{E}\}|} \sum_i H_i$
+  \item \textbf{Chunk Count}: Number of condensed chunks
+  \item \textbf{Pondering Metrics}: Shortcuts found, dead ends explored, mean hunger
+\end{itemize}
+
+\subsection{Results}
+\label{sec:results}
+
+% Auto-generated tables and figures will be included here
+\input{tables/rule_shift_summary.tex}
+
+\begin{figure}[t]
+  \centering
+  \IfFileExists{figures/rule_shift.pdf}{%
+    \includegraphics[width=\textwidth]{figures/rule_shift.pdf}
+  }{%
+    \fbox{\parbox{0.9\textwidth}{\centering\vspace{2cm}\textit{Figure will be generated by \texttt{make paper}}\vspace{2cm}}}
+  }
+  \caption{Rule-shift adaptation dynamics. \textbf{Top}: Rolling accuracy (blue) with rule shift at step 1000 (dashed line). System energy and topological entropy shown on right axis. \textbf{Bottom}: Pondering metrics showing shortcuts discovered, dead ends encountered, and mean hunger over time.}
+  \label{fig:rule_shift}
+\end{figure}
+
+\begin{figure}[t]
+  \centering
+  \IfFileExists{figures/pondering.pdf}{%
+    \includegraphics[width=0.8\textwidth]{figures/pondering.pdf}
+  }{%
+    \fbox{\parbox{0.7\textwidth}{\centering\vspace{2cm}\textit{Figure will be generated by \texttt{make paper}}\vspace{2cm}}}
+  }
+  \caption{Idle pondering behavior. Shortcuts peak during rule-shift as the system discovers new transitive paths. Dead ends increase during confusion, driving hunger that modulates plasticity.}
+  \label{fig:pondering}
+\end{figure}
+
+\subsection{Ablation Studies}
+\label{sec:ablations}
+
+\input{tables/ablation.tex}
+
+% ============================================================================
+% 7. RELATED WORK
+% ============================================================================
+\section{Related Work}
+\label{sec:related}
+
+\paragraph{Hebbian Learning}
+Our approach shares principles with Hebbian learning \citep{hebb1949organization}: ``neurons that fire together wire together.'' We extend this with thermodynamic regulation and sparse graph dynamics.
+
+\paragraph{Energy-Based Models}
+Energy-based models \citep{lecun2006tutorial} define learning as energy minimization. Our framework differs in using energy for homeostatic regulation rather than direct optimization.
+
+\paragraph{Predictive Coding}
+Predictive coding \citep{rao1999predictive} models the brain as a prediction engine that minimizes surprise. Our surprise-driven plasticity and pondering mechanisms relate to this framework.
+
+\paragraph{Online Learning}
+Unlike batch gradient descent, our system learns continuously from each observation, related to online learning \citep{shalev2012online} but without explicit loss minimization.
+
+\paragraph{Thermodynamic Computing}
+Recent work on thermodynamic computing \citep{conte2019thermodynamic} explores physical substrates for computation. We draw inspiration from these principles in software.
+
+\paragraph{Sparse Attention}
+Sparse attention mechanisms \citep{child2019generating} reduce quadratic complexity. Our sparse bond graphs achieve similar scaling for sequential learning without attention.
+
+% ============================================================================
+% 8. DISCUSSION
+% ============================================================================
+\section{Discussion}
+\label{sec:discussion}
+
+\subsection{Honest Assessment of Limitations}
+
+We emphasize what our framework does \emph{not} claim:
+
+\begin{enumerate}
+  \item \textbf{Not strict thermodynamics}: We use thermodynamic \emph{metaphors}—energy, heat, homeostasis—but do not claim physical conservation laws. Energy can grow or decay; there is no detailed balance.
+  
+  \item \textbf{Not gradient-free optimization}: We are not optimizing a loss function without gradients. Instead, we sidestep the optimization paradigm entirely in favor of local, reactive dynamics.
+  
+  \item \textbf{Not a replacement for transformers}: Our experiments are on small-scale sequential tasks. We make no claims about scaling to language model pretraining.
+  
+  \item \textbf{Discrete updates}: Our ``continuous'' dynamics are Euler-discretized. We do not solve PDEs.
+\end{enumerate}
+
+\subsection{What We Do Claim}
+
+\begin{enumerate}
+  \item Rapid online adaptation to distributional shifts without retraining
+  \item Emergent hierarchical structure from local dynamics
+  \item Autonomous consolidation through idle pondering
+  \item Sparse, interpretable representations
+\end{enumerate}
+
+\subsection{Future Directions}
+
+\begin{itemize}
+  \item Scaling to larger vocabularies and longer sequences
+  \item Multi-modal integration via bridge manifolds
+  \item Hardware implementations exploiting physical thermodynamics
+\end{itemize}
+
+% ============================================================================
+% 9. CONCLUSION
+% ============================================================================
+\section{Conclusion}
+\label{sec:conclusion}
+
+We have presented Thermodynamic Manifolds, a framework for online sequence learning based on energy dynamics, sparse graphs, and homeostatic regulation. The system learns from local interactions without backpropagation, adapts rapidly to distributional shifts, discovers hierarchical structure through binding energy, and consolidates knowledge through idle pondering.
+
+Our work suggests that the optimization-centric paradigm of modern machine learning, while powerful, is not the only path to adaptive systems. Physical metaphors—particularly thermodynamics—offer alternative principles that may be better suited to continuous, online, embodied learning.
+
+% ============================================================================
+% REFERENCES
+% ============================================================================
+\bibliographystyle{plainnat}
+\bibliography{references}
+
+% ============================================================================
+% APPENDIX
+% ============================================================================
+\appendix
+
+\section{Algorithm Pseudocode}
+\label{app:algorithms}
+
+\begin{algorithm}[H]
+\caption{Grammar Step}
+\label{alg:grammar_step}
+\begin{algorithmic}[1]
+\Require Context tokens $[c_1, \ldots, c_n]$, bond graph $\graph$, attractors $\{(\exc_i, \heat_i)\}$
+\State \textbf{Injection}: $\exc_i \leftarrow \exc_i + \dt \sum_{k: c_k = i} k / \sum_j j$
+\State \textbf{Topology}: Add edges $(c_k, c_{k+1})$ for $k = 1, \ldots, n-1$
+\State Compute $\ratio$ via \Cref{eq:ratio}
+\State \textbf{Metabolism}: For active edges, apply \Cref{eq:weight_update}
+\State \textbf{Flow}: Propagate excitation via \Cref{eq:flow}
+\State \textbf{Damping}: $\exc_i \leftarrow \exc_i \cdot \exp(-\dt \cdot \ratio / \bar{\exc})$
+\State \textbf{Heat}: $\heat_i \leftarrow \heat_i + \dt \cdot |\text{flow}_i| / \bar{\text{flow}}$
+\State \textbf{Pruning}: Remove edges below per-source mean
+\end{algorithmic}
+\end{algorithm}
+
+\section{Hyperparameter Settings}
+\label{app:hyperparameters}
+
+\input{tables/hyperparameters.tex}
+
+\section{Additional Experimental Details}
+\label{app:details}
+
+All experiments were run on [hardware]. Code is available at \url{https://github.com/theapemachine/thermo_manifold}.
+
+\end{document}

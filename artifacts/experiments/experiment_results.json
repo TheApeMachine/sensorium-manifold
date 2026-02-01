@@ -1,0 +1,12 @@
+{
+  "timestamp": "2026-02-01T13:17:51.926148",
+  "experiments": [
+    {
+      "name": "text_diffusion",
+      "scale": "toy",
+      "success": false,
+      "failure_reason": "[Errno 1] Operation not permitted: '/Users/theapemachine/.cache/huggingface/datasets/_Users_theapemachine_.cache_huggingface_datasets_wikitext_wikitext-2-raw-v1_0.0.0_b08601e04326c79dfdd32d625aee71d232d685c3.lock'",
+      "metrics": {}
+    }
+  ]
+}
