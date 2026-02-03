@@ -25,6 +25,13 @@ import torch
 from .kernel_rule_shift import KernelRuleShiftConfig, run_kernel_rule_shift
 from .kernel_ablations import run_kernel_ablation_study
 from .kernel_continuous import KernelContinuousConfig, run_kernel_continuous
+from .kernel_next_token import KernelNextTokenConfig, run_kernel_next_token
+from .kernel_timeseries import KernelTimeSeriesConfig, run_kernel_timeseries
+from .kernel_mnist_bytes import KernelMNISTBytesConfig, run_kernel_mnist_bytes
+from .kernel_image_gen import KernelImageGenConfig, run_kernel_image_gen
+from .kernel_audio_gen import KernelAudioGenConfig, run_kernel_audio_gen
+from .kernel_text_diffusion import KernelTextDiffusionConfig, run_kernel_text_diffusion
+from .kernel_cocktail_party import KernelCocktailPartyConfig, run_kernel_cocktail_party
 
 
 def get_device_str() -> str:
@@ -53,6 +60,15 @@ def run_kernel_experiments_all(*, device: str) -> None:
     run_paper_pipeline(device=device, run_rule_shift=True, run_ablation=True)
     # Also produce a stable kernel-physics visualization.
     run_kernel_continuous(KernelContinuousConfig(device=device, dashboard_enabled=False), out_dir=Path("./paper"))
+    # Universal Tokenizer benchmarks + modality demos
+    run_kernel_next_token(KernelNextTokenConfig(device=device), out_dir=Path("./paper"))
+    run_kernel_timeseries(KernelTimeSeriesConfig(device=device), out_dir=Path("./paper"))
+    run_kernel_text_diffusion(KernelTextDiffusionConfig(device=device), out_dir=Path("./paper"))
+    # Vision/audio (may require torchvision; audio uses synthetic by default)
+    run_kernel_mnist_bytes(KernelMNISTBytesConfig(device=device), out_dir=Path("./paper"))
+    run_kernel_image_gen(KernelImageGenConfig(device=device), out_dir=Path("./paper"))
+    run_kernel_audio_gen(KernelAudioGenConfig(device=device), out_dir=Path("./paper"))
+    run_kernel_cocktail_party(KernelCocktailPartyConfig(device=device), out_dir=Path("./paper"))
 
 
 def main() -> None:
@@ -61,7 +77,19 @@ def main() -> None:
     )
     parser.add_argument(
         "--experiment",
-        choices=["rule_shift", "ablation", "continuous", "all"],
+        choices=[
+            "rule_shift",
+            "ablation",
+            "continuous",
+            "next_token",
+            "timeseries",
+            "text_diffusion",
+            "mnist_bytes",
+            "image_gen",
+            "audio_gen",
+            "cocktail_party",
+            "all",
+        ],
         default="all",
         help="Which experiment to run (default: all).",
     )
@@ -85,6 +113,20 @@ def main() -> None:
         run_kernel_experiments_all(device=device)
     elif args.experiment == "continuous":
         run_kernel_continuous(KernelContinuousConfig(device=device, dashboard_enabled=False), out_dir=Path("./paper"))
+    elif args.experiment == "next_token":
+        run_kernel_next_token(KernelNextTokenConfig(device=device), out_dir=Path("./paper"))
+    elif args.experiment == "timeseries":
+        run_kernel_timeseries(KernelTimeSeriesConfig(device=device), out_dir=Path("./paper"))
+    elif args.experiment == "text_diffusion":
+        run_kernel_text_diffusion(KernelTextDiffusionConfig(device=device), out_dir=Path("./paper"))
+    elif args.experiment == "mnist_bytes":
+        run_kernel_mnist_bytes(KernelMNISTBytesConfig(device=device), out_dir=Path("./paper"))
+    elif args.experiment == "image_gen":
+        run_kernel_image_gen(KernelImageGenConfig(device=device), out_dir=Path("./paper"))
+    elif args.experiment == "audio_gen":
+        run_kernel_audio_gen(KernelAudioGenConfig(device=device), out_dir=Path("./paper"))
+    elif args.experiment == "cocktail_party":
+        run_kernel_cocktail_party(KernelCocktailPartyConfig(device=device), out_dir=Path("./paper"))
     else:
         run_paper_pipeline(
             device=device,

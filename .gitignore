@@ -11,3 +11,6 @@ __pycache__/
 tmp/
 data/
 *.mp4
+
+# Local profiling traces (too large for GitHub)
+artifacts/profiles/

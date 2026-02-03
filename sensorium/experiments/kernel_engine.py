@@ -154,7 +154,7 @@ class KernelTokenEngine:
             self._last_carrier_state = self.carriers.step(self.osc_phase, self.excitations, self.energies)
             self.osc_phase = self._last_carrier_state["osc_phase"]
 
-    def score_ids(self, token_ids: torch.Tensor) -> torch.Tensor:
+    def score_ids(self, token_ids: torch.Tensor, *, carrier_mask: Optional[torch.Tensor] = None) -> torch.Tensor:
         """Score candidate IDs via current carrier spectrum.
 
         Returns non-negative scores (higher is better).
@@ -168,6 +168,17 @@ class KernelTokenEngine:
         if int(om_c.numel()) == 0:
             return torch.zeros_like(token_ids, dtype=torch.float32, device=token_ids.device)
 
+        if carrier_mask is not None:
+            carrier_mask = carrier_mask.to(device=om_c.device)
+            if carrier_mask.dtype != torch.bool:
+                carrier_mask = carrier_mask.to(torch.bool)
+            if int(carrier_mask.numel()) == int(om_c.numel()):
+                om_c = om_c[carrier_mask]
+                sig = sig[carrier_mask]
+                amp = amp[carrier_mask]
+            if int(om_c.numel()) == 0:
+                return torch.zeros_like(token_ids, dtype=torch.float32, device=token_ids.device)
+
         om_q = (token_ids.to(torch.long) % int(self.cfg.omega_mod)).to(torch.float32) / float(self.cfg.omega_mod) * float(self.cfg.omega_range)  # (K,)
         # tuning: (M,K)
         diff = om_c.view(-1, 1) - om_q.view(1, -1)
@@ -175,7 +186,7 @@ class KernelTokenEngine:
         scores = (amp.view(-1, 1) * tuning).sum(dim=0)
         return scores.to(torch.float32)
 
-    def predict_byte(self, pos: int) -> Tuple[int, torch.Tensor]:
+    def predict_byte(self, pos: int, *, carrier_mask: Optional[torch.Tensor] = None) -> Tuple[int, torch.Tensor]:
         """Predict next byte at sequence position `pos`.
 
         Returns (argmax_byte, scores[256]).
@@ -183,7 +194,7 @@ class KernelTokenEngine:
         cand_bytes = torch.arange(256, device=self.dev, dtype=torch.long)
         cand_ids = (cand_bytes * int(self.cfg.hash_prime) + int(pos)) % int(self.cfg.hash_vocab_size)
         cand_ids = cand_ids + int(self.cfg.special_size)
-        scores = self.score_ids(cand_ids)
+        scores = self.score_ids(cand_ids, carrier_mask=carrier_mask)
         b = int(torch.argmax(scores).item())
         return b, scores
 
