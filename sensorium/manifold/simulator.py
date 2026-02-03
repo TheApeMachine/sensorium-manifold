@@ -54,8 +54,8 @@ def run_simulation(config: SimulationConfig) -> Dict[str, Any]:
         restitution=config.restitution,
         young_modulus=config.young_modulus,
     )
-    physics = ManifoldPhysics(physics_config, device="mps")
-    print("[INFO] Using Metal-accelerated physics")
+    physics = ManifoldPhysics(physics_config, device=str(config.device))
+    print("[INFO] Using kernel-accelerated physics")
     
     # Initialize particle state
     state = ParticleState.random(config.num_particles, config)
@@ -63,9 +63,9 @@ def run_simulation(config: SimulationConfig) -> Dict[str, Any]:
     # Initialize Metal-accelerated data generator
     generator = ParticleGenerator(
         grid_size=config.grid_size,
-        device="mps",
+        device=str(config.device),
     )
-    print("[INFO] Using Metal-accelerated particle generation")
+    print("[INFO] Using kernel-accelerated particle generation")
     
     # Initialize dashboard
     dashboard = SimulationDashboard(config) if config.dashboard_enabled else None
@@ -95,9 +95,9 @@ def run_simulation(config: SimulationConfig) -> Dict[str, Any]:
         config=spectral_cfg,
         grid_size=config.grid_size,
         dt=config.dt,
-        device="mps",
+        device=str(config.device),
     )
-    print("[INFO] Using Metal-accelerated spectral carriers (resonance potential)")
+    print("[INFO] Using kernel-accelerated spectral carriers (resonance potential)")
     
     # Initialize empty carriers for dashboard (will be populated on first carrier update)
     carriers = CarrierState.empty(config.device, config.dtype)

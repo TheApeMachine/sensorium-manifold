@@ -156,8 +156,6 @@ def run_ablation_study(
     dt: float = 0.02,
 ):
     """Run all ablation conditions and generate table."""
-    from .harness import ExperimentResult
-    
     conditions = [
         ("Full system", True, True, True),
         ("No hierarchy", False, True, True),
@@ -187,7 +185,9 @@ def run_ablation_study(
     # Generate table
     table_content = generate_ablation_table(results)
     table_path = tables_dir / "ablation.tex"
-    table_path.write_text(table_content)
+    tables_dir.mkdir(parents=True, exist_ok=True)
+    figures_dir.mkdir(parents=True, exist_ok=True)
+    table_path.write_text(table_content, encoding="utf-8")
     print(f"  [TABLE] ablation.tex")
     
     # Combine metrics
@@ -197,10 +197,5 @@ def run_ablation_study(
         "full_post": results[0]["post_shift_accuracy"],
         "full_recovery": results[0]["recovery_steps"],
     }
-    
-    return ExperimentResult(
-        name="Ablation Study",
-        metrics=metrics,
-        tables={"ablation": table_content},
-        figures={},
-    )
+
+    return metrics

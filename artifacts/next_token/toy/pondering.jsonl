@@ -1,9 +1,0 @@
-{"step": 0, "active": 9, "shortcuts": 32.0, "confused": 5.0, "dreams": 1.0, "dead_ends": 0.0, "hunger_mean": 0.0, "heat_mean": 0.6907308101654053, "exc_mean": 6.167340278625488}
-{"step": 1, "active": 10, "shortcuts": 65.0, "confused": 6.0, "dreams": 1.0, "dead_ends": 0.0, "hunger_mean": 0.0, "heat_mean": 0.7838776111602783, "exc_mean": 6.483757972717285}
-{"step": 2, "active": 13, "shortcuts": 79.0, "confused": 7.0, "dreams": 3.0, "dead_ends": 1.0, "hunger_mean": 0.0, "heat_mean": 0.8439125418663025, "exc_mean": 6.508444786071777}
-{"step": 3, "active": 15, "shortcuts": 145.0, "confused": 8.0, "dreams": 1.0, "dead_ends": 0.0, "hunger_mean": 0.0, "heat_mean": 0.8679996132850647, "exc_mean": 6.7196807861328125}
-{"step": 4, "active": 15, "shortcuts": 107.0, "confused": 8.0, "dreams": 1.0, "dead_ends": 0.0, "hunger_mean": 0.0, "heat_mean": 0.8875646591186523, "exc_mean": 6.728392601013184}
-{"step": 5, "active": 19, "shortcuts": 289.0, "confused": 10.0, "dreams": 1.0, "dead_ends": 0.0, "hunger_mean": 0.0, "heat_mean": 0.8871949315071106, "exc_mean": 6.767956733703613}
-{"step": 6, "active": 17, "shortcuts": 336.0, "confused": 9.0, "dreams": 2.0, "dead_ends": 0.0, "hunger_mean": 0.0, "heat_mean": 0.8909925818443298, "exc_mean": 6.483741760253906}
-{"step": 7, "active": 19, "shortcuts": 673.0, "confused": 10.0, "dreams": 1.0, "dead_ends": 0.0, "hunger_mean": 0.0, "heat_mean": 0.9256818890571594, "exc_mean": 6.880702495574951}
-{"step": 8, "active": 19, "shortcuts": 1117.0, "confused": 10.0, "dreams": 1.0, "dead_ends": 0.0, "hunger_mean": 0.0, "heat_mean": 0.9200433492660522, "exc_mean": 6.794058322906494}

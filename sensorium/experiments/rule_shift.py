@@ -16,6 +16,7 @@ import torch
 
 from ..core.config import PhysicsConfig
 from ..semantic.hierarchical import HierarchicalSemanticManifold
+from ..core.tokenizer import UniversalTokenizer, UniversalTokenizerConfig
 
 
 def _topological_entropy(src: torch.Tensor, w: torch.Tensor, eps: float) -> float:
@@ -49,6 +50,21 @@ def _make_stream(vocab: List[str]) -> Tuple[Dict[str, int], List[int], List[int]
     return tid, fwd, rev
 
 
+def _make_universal_stream(tokenizer: UniversalTokenizer) -> Tuple[List[int], List[int]]:
+    """Create forward/reverse streams using Universal Tokenizer IDs.
+
+    We byte-tokenize the phrase and treat it as the repeating sequence.
+    """
+    phrase = "<bos> The cat sat on the mat <eos>"
+    ids = tokenizer.encode_text(phrase, add_bos_eos=False).to(torch.long).tolist()
+    # Ensure at least 2 tokens
+    if len(ids) < 2:
+        ids = [tokenizer.bos_id, tokenizer.eos_id]
+    fwd = ids
+    rev = list(reversed(ids))
+    return fwd, rev
+
+
 def run_rule_shift(
     *,
     steps: int,
@@ -63,8 +79,10 @@ def run_rule_shift(
     Returns:
         Dictionary with all metrics and raw data
     """
-    vocab = ["<bos>", "the", "cat", "sat", "on", "mat", "<eos>"]
-    tid, fwd, rev = _make_stream(vocab)
+    # Universal tokenizer stream (paper §3)
+    tok = UniversalTokenizer(UniversalTokenizerConfig(hash_vocab_size=4096, num_labels=0))
+    fwd, rev = _make_universal_stream(tok)
+    vocab = tok.vocab
     
     # Pre-generate the full token stream
     stream: List[int] = []
@@ -81,7 +99,7 @@ def run_rule_shift(
     brain = HierarchicalSemanticManifold(
         cfg, device,
         vocab=vocab,
-        embed_dim=min(16, len(vocab)),
+        embed_dim=min(64, len(vocab)),
         chunk_min_len=2,
         chunk_max_len=4,
     )

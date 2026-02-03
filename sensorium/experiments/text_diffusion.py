@@ -21,8 +21,8 @@ from typing import Any, Dict, Iterator, List, Optional, Tuple
 
 import torch
 
-from thermo_manifold.core.config import PhysicsConfig
-from thermo_manifold.semantic.hierarchical import HierarchicalSemanticManifold
+from sensorium.semantic.hierarchical import HierarchicalSemanticManifold
+from sensorium.core.tokenizer import UniversalTokenizer, UniversalTokenizerConfig
 
 from .base import BaseExperiment, Scale
 
@@ -61,14 +61,13 @@ class TextDiffusionExperiment(BaseExperiment):
             self.gen_length = 32
             self.annealing_steps = 200
         
-        self.vocab: List[str] = []
-        self.token_to_id: Dict[str, int] = {}
+        hash_vocab = 4096 if scale == Scale.TOY else (16384 if scale == Scale.MEDIUM else 65536)
+        self.tokenizer = UniversalTokenizer(UniversalTokenizerConfig(hash_vocab_size=hash_vocab, num_labels=0))
     
     def setup(self) -> None:
-        """Load dataset and build vocabulary."""
+        """Load dataset and pre-tokenize with the universal tokenizer."""
         try:
             from datasets import load_dataset
-            from collections import Counter
         except ImportError:
             raise ImportError("Please install datasets: pip install datasets")
         
@@ -77,28 +76,10 @@ class TextDiffusionExperiment(BaseExperiment):
         # `trust_remote_code` is no longer supported by `datasets` for security reasons.
         dataset = load_dataset("wikitext", "wikitext-2-raw-v1", streaming=True)
         
-        # Build vocabulary
-        print(f"    Building vocabulary...")
-        word_counts: Counter = Counter()
-        sample_count = 0
-        
-        for sample in dataset["train"]:
-            text = sample["text"]
-            if not text.strip():
-                continue
-            tokens = text.split()
-            word_counts.update(tokens)
-            sample_count += 1
-            if sample_count >= 5000:
-                break
-        
-        special_tokens = ["<pad>", "<unk>", "<bos>", "<eos>", "<mask>"]
-        self.vocab = special_tokens + [
-            word for word, _ in word_counts.most_common(self.vocab_size - len(special_tokens))
-        ]
-        self.token_to_id = {token: i for i, token in enumerate(self.vocab)}
-        
-        print(f"    Vocabulary size: {len(self.vocab)}")
+        print(
+            f"    UniversalTokenizer: vocab_size={self.tokenizer.vocab_size} "
+            f"(hash_vocab_size={self.tokenizer.hash_vocab_size})"
+        )
         
         # Prefetch and tokenize data
         self._train_sequences: List[List[int]] = []
@@ -114,8 +95,8 @@ class TextDiffusionExperiment(BaseExperiment):
         self.manifold = HierarchicalSemanticManifold(
             self.physics_config,
             self.device,
-            vocab=self.vocab,
-            embed_dim=min(self.scale_config.embed_dim, len(self.vocab)),
+            vocab=self.tokenizer.vocab,
+            embed_dim=min(self.scale_config.embed_dim, self.tokenizer.vocab_size),
             chunk_min_len=2,
             chunk_max_len=4,
         )
@@ -144,20 +125,16 @@ class TextDiffusionExperiment(BaseExperiment):
         output: List[List[int]],
         max_samples: int,
     ) -> None:
-        """Tokenize stream into sequences."""
-        unk_id = self.token_to_id.get("<unk>", 1)
-        
+        """Tokenize stream into universal byte-hash sequences."""
         for sample in stream:
             text = sample["text"]
             if not text.strip():
                 continue
-            
-            tokens = text.split()
-            if len(tokens) < self.context_length + self.gen_length:
+
+            ids_t = self.tokenizer.encode_text(text, add_bos_eos=True)
+            if int(ids_t.numel()) < self.context_length + self.gen_length:
                 continue
-            
-            ids = [self.token_to_id.get(t, unk_id) for t in tokens]
-            output.append(ids)
+            output.append(ids_t.to(torch.long).tolist())
             
             if len(output) >= max_samples:
                 break
@@ -249,7 +226,7 @@ class TextDiffusionExperiment(BaseExperiment):
         
         # Initialize: random tokens for generation positions
         generated = [
-            torch.randint(0, len(self.vocab), (1,)).item()
+            torch.randint(0, self.tokenizer.vocab_size, (1,)).item()
             for _ in range(self.gen_length)
         ]
         
@@ -342,7 +319,11 @@ class TextDiffusionExperiment(BaseExperiment):
         }
     
     def generate_samples(self, num_samples: int = 5) -> List[str]:
-        """Generate text samples for inspection."""
+        """Generate sample ID sequences for inspection.
+
+        Universal tokenization is not trivially invertible (hash collisions),
+        so we log IDs rather than attempting to decode to text.
+        """
         samples = []
         
         for sequence in self._eval_sequences[:num_samples]:
@@ -352,13 +333,9 @@ class TextDiffusionExperiment(BaseExperiment):
             context = sequence[:self.context_length]
             generated = self._generate_by_annealing(context)
             
-            # Convert to text
-            context_text = " ".join(self.vocab[i] for i in context)
-            gen_text = " ".join(self.vocab[i] for i in generated)
-            
             samples.append({
-                "context": context_text,
-                "generated": gen_text,
+                "context_ids": context,
+                "generated_ids": generated,
             })
         
         return samples
@@ -376,8 +353,8 @@ def run_text_diffusion_experiment(
     samples = exp.generate_samples(3)
     for i, sample in enumerate(samples):
         print(f"\n  Sample {i+1}:")
-        print(f"    Context: ...{sample['context'][-50:]}")
-        print(f"    Generated: {sample['generated']}")
+        print(f"    Context IDs (tail): {sample['context_ids'][-16:]}")
+        print(f"    Generated IDs: {sample['generated_ids']}")
     
     return {
         "result": result,

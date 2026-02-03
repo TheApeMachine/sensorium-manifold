@@ -1,36 +1,21 @@
-"""Experiment suite for Thermodynamic Manifolds.
+"""Experiment entrypoints.
 
-All experiments use HuggingFace datasets for real-world benchmarks.
-Each experiment runs at three scales: toy, medium, full.
+This package previously contained a legacy, Torch/Python semantic stack.
+The *current* experiments are kernel-based (Metal on macOS) and produce
+paper-ready artifacts under `paper/tables/` and `paper/figures/`.
+
+We intentionally avoid importing legacy modules at import-time to prevent
+mixing old/new implementations.
 """
 
-from .base import BaseExperiment, Scale, ScaleConfig, ExperimentResult, SCALE_CONFIGS
-from .timeseries import TimeSeriesExperiment, run_timeseries_experiment
-from .next_token import NextTokenExperiment, run_next_token_experiment
-from .image_gen import ImageGenerationExperiment, run_image_gen_experiment
-from .audio_gen import AudioGenerationExperiment, run_audio_gen_experiment
-from .text_diffusion import TextDiffusionExperiment, run_text_diffusion_experiment
-from .mnist_bytes import MNISTBytesExperiment, run_mnist_bytes_experiment
+from .kernel_rule_shift import KernelRuleShiftConfig, run_kernel_rule_shift
+from .kernel_ablations import run_kernel_ablation_study
+from .kernel_continuous import KernelContinuousConfig, run_kernel_continuous
 
 __all__ = [
-    # Base
-    "BaseExperiment",
-    "Scale",
-    "ScaleConfig", 
-    "ExperimentResult",
-    "SCALE_CONFIGS",
-    # Experiments
-    "TimeSeriesExperiment",
-    "NextTokenExperiment",
-    "ImageGenerationExperiment",
-    "AudioGenerationExperiment",
-    "TextDiffusionExperiment",
-    "MNISTBytesExperiment",
-    # Runners
-    "run_timeseries_experiment",
-    "run_next_token_experiment",
-    "run_image_gen_experiment",
-    "run_audio_gen_experiment",
-    "run_text_diffusion_experiment",
-    "run_mnist_bytes_experiment",
+    "KernelRuleShiftConfig",
+    "run_kernel_rule_shift",
+    "run_kernel_ablation_study",
+    "KernelContinuousConfig",
+    "run_kernel_continuous",
 ]

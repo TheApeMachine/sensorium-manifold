@@ -10,16 +10,16 @@ Metrics: Accuracy, Perplexity (where applicable)
 from __future__ import annotations
 
 import json
-from collections import Counter
 from dataclasses import asdict
 from pathlib import Path
 from typing import Any, Dict, Iterator, List, Optional, Tuple
 
 import torch
 
-from thermo_manifold.core.diagnostics import SemanticDiagnosticsLogger
-from thermo_manifold.core.viz import plot_pondering_jsonl
-from thermo_manifold.semantic.hierarchical import HierarchicalSemanticManifold
+from sensorium.core.diagnostics import SemanticDiagnosticsLogger
+from sensorium.core.viz import plot_pondering_jsonl
+from sensorium.core.tokenizer import UniversalTokenizer, UniversalTokenizerConfig
+from sensorium.semantic.hierarchical import HierarchicalSemanticManifold
 
 from .base import BaseExperiment, Scale
 
@@ -47,22 +47,20 @@ class NextTokenExperiment(BaseExperiment):
         if scale == Scale.TOY:
             self.dataset_name = "wikitext-2-raw-v1"
             self.context_length = 32
-            self.vocab_size = 1000  # Limit vocab
         elif scale == Scale.MEDIUM:
             self.dataset_name = "wikitext-2-raw-v1"
             self.context_length = 64
-            self.vocab_size = 10000
         else:
             self.dataset_name = "wikitext-103-raw-v1"
             self.context_length = 128
-            self.vocab_size = 50000
-        
-        self.vocab: List[str] = []
-        self.token_to_id: Dict[str, int] = {}
+
+        # Universal Tokenizer (paper §3): deterministic hashing of (byte, index).
+        hash_vocab = 4096 if scale == Scale.TOY else (16384 if scale == Scale.MEDIUM else 65536)
+        self.tokenizer = UniversalTokenizer(UniversalTokenizerConfig(hash_vocab_size=hash_vocab, num_labels=0))
         self._train_steps: int = int(self.scale_config.train_steps)
     
     def setup(self) -> None:
-        """Load WikiText and build vocabulary."""
+        """Load WikiText and pre-tokenize to universal byte-hash IDs."""
         try:
             from datasets import load_dataset
         except ImportError:
@@ -76,35 +74,10 @@ class NextTokenExperiment(BaseExperiment):
             streaming=True
         )
         
-        # Build vocabulary from training data
-        print(f"    Building vocabulary (max {self.vocab_size} tokens)...")
-        
-        word_counts: Counter = Counter()
-        sample_count = 0
-        max_vocab_samples = self.scale_config.max_train_samples or 10000
-        
-        for sample in dataset["train"]:
-            text = sample["text"]
-            if not text.strip():
-                continue
-            
-            # Simple whitespace tokenization
-            tokens = text.split()
-            word_counts.update(tokens)
-            sample_count += 1
-            
-            if sample_count >= max_vocab_samples:
-                break
-        
-        # Build vocab from most common tokens
-        special_tokens = ["<pad>", "<unk>", "<bos>", "<eos>"]
-        self.vocab = special_tokens + [
-            word for word, _ in word_counts.most_common(self.vocab_size - len(special_tokens))
-        ]
-        self.token_to_id = {token: i for i, token in enumerate(self.vocab)}
-        
-        print(f"    Vocabulary size: {len(self.vocab)}")
-        print(f"    Sample tokens: {self.vocab[4:14]}")
+        print(
+            f"    UniversalTokenizer: vocab_size={self.tokenizer.vocab_size} "
+            f"(hash_vocab_size={self.tokenizer.hash_vocab_size})"
+        )
         
         # Store dataset iterators
         self.train_stream = dataset["train"]
@@ -132,8 +105,8 @@ class NextTokenExperiment(BaseExperiment):
         self.manifold = HierarchicalSemanticManifold(
             self.physics_config,
             self.device,
-            vocab=self.vocab,
-            embed_dim=min(self.scale_config.embed_dim, len(self.vocab)),
+            vocab=self.tokenizer.vocab,
+            embed_dim=min(self.scale_config.embed_dim, self.tokenizer.vocab_size),
             chunk_min_len=2,
             chunk_max_len=4,
         )
@@ -362,7 +335,8 @@ Chunks & """
                 "scale": self.scale.value,
                 "dataset": self.dataset_name,
                 "context_length": int(self.context_length),
-                "vocab_size": int(len(self.vocab)),
+                "vocab_size": int(self.tokenizer.vocab_size),
+                "hash_vocab_size": int(self.tokenizer.hash_vocab_size),
                 "steps": steps,
                 "acc": acc.cpu().tolist(),
                 "acc_smooth": acc_smooth,
@@ -416,21 +390,15 @@ Chunks & """
         output: List[List[int]],
         max_samples: int,
     ) -> None:
-        """Tokenize a stream into sequences."""
-        unk_id = self.token_to_id.get("<unk>", 1)
-        
+        """Tokenize a stream into universal byte-hash sequences."""
         for sample in stream:
             text = sample["text"]
             if not text.strip():
                 continue
-            
-            tokens = text.split()
-            if len(tokens) < 2:
+            ids_t = self.tokenizer.encode_text(text, add_bos_eos=True)
+            if int(ids_t.numel()) < 2:
                 continue
-            
-            # Convert to IDs
-            ids = [self.token_to_id.get(t, unk_id) for t in tokens]
-            output.append(ids)
+            output.append(ids_t.to(torch.long).tolist())
             
             if len(output) >= max_samples:
                 break

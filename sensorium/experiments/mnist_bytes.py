@@ -20,9 +20,9 @@ from typing import Any, Dict, Iterator, List, Optional, Tuple
 
 import torch
 
-from thermo_manifold.core.config import PhysicsConfig
-from thermo_manifold.semantic.manifold import SemanticManifold
-from thermo_manifold.semantic.hierarchical import HierarchicalSemanticManifold
+from sensorium.semantic.manifold import SemanticManifold
+from sensorium.semantic.hierarchical import HierarchicalSemanticManifold
+from sensorium.core.tokenizer import UniversalTokenizer, UniversalTokenizerConfig
 
 from .base import BaseExperiment, ExperimentResult, Scale, ScaleConfig
 
@@ -77,10 +77,6 @@ class MNISTBytesExperiment(BaseExperiment):
     name = "mnist_bytes"
     goal = "Classify MNIST digits from raw pixel bytes (no encoder)"
     
-    # Hash parameters for position-aware byte tokens
-    # We use a prime-based hash to mix byte value and position
-    HASH_PRIME = 31
-    
     def __init__(
         self,
         scale: Scale = Scale.TOY,
@@ -96,11 +92,13 @@ class MNISTBytesExperiment(BaseExperiment):
         # Override scale config with MNIST-specific settings
         self.scale_config = MNIST_SCALE_CONFIGS[scale]
         
-        # Vocab: hash_vocab_size position-aware byte tokens + 10 label tokens
-        self.hash_vocab_size = hash_vocab_size
+        # Universal tokenizer (bytes+index hashing) + label tokens
         self.num_labels = 10
-        self.label_offset = hash_vocab_size  # Labels are tokens hash_vocab_size to hash_vocab_size+9
-        self.vocab_size = hash_vocab_size + self.num_labels
+        self.tokenizer = UniversalTokenizer(
+            UniversalTokenizerConfig(hash_vocab_size=int(hash_vocab_size), num_labels=self.num_labels)
+        )
+        self.vocab_size = int(self.tokenizer.vocab_size)
+        self.label_offset = int(self.tokenizer.label_offset)
         
         # Context window (can't use all 784 bytes as context—too long)
         self.context_window = context_window
@@ -110,8 +108,8 @@ class MNISTBytesExperiment(BaseExperiment):
         self._dashboard = None
         self.enable_ponder = ponder
         
-        # Build vocabulary (for SemanticManifold compatibility)
-        self.vocab = [f"hash_{i}" for i in range(hash_vocab_size)] + [f"label_{i}" for i in range(10)]
+        # Vocab (for manifold compatibility / dashboards)
+        self.vocab = self.tokenizer.vocab
         
         # Data storage
         self._train_images: List[torch.Tensor] = []
@@ -121,25 +119,6 @@ class MNISTBytesExperiment(BaseExperiment):
         
         # Manifold
         self.manifold: Optional[SemanticManifold] = None
-    
-    def _hash_byte_position(self, byte_value: torch.Tensor, position: torch.Tensor) -> torch.Tensor:
-        """Hash (byte_value, position) pairs to token IDs in [0, hash_vocab_size).
-        
-        Uses a simple but effective hash: (byte * prime + position) mod vocab_size.
-        This ensures different positions with the same byte value get different tokens.
-        
-        Args:
-            byte_value: Tensor of byte values (0-255)
-            position: Tensor of position indices (0-783 for MNIST)
-            
-        Returns:
-            Tensor of hashed token IDs in [0, hash_vocab_size)
-        """
-        byte_value = byte_value.to(torch.long)
-        position = position.to(torch.long)
-        # Hash formula: (byte * HASH_PRIME + position) mod hash_vocab_size
-        hashed = (byte_value * self.HASH_PRIME + position) % self.hash_vocab_size
-        return hashed
     
     def setup(self) -> None:
         """Load MNIST and initialize manifold."""
@@ -189,9 +168,12 @@ class MNISTBytesExperiment(BaseExperiment):
         
         print(f"    Train images: {len(self._train_images)}")
         print(f"    Eval images: {len(self._eval_images)}")
-        print(f"    Vocabulary: {self.vocab_size} tokens ({self.hash_vocab_size} hashed + 10 labels)")
+        print(
+            f"    UniversalTokenizer: vocab_size={self.tokenizer.vocab_size} "
+            f"(hash_vocab_size={self.tokenizer.hash_vocab_size} + labels={self.num_labels})"
+        )
         print(f"    Context window: {self.context_window} bytes")
-        print(f"    Position-aware hashing: enabled (prime={self.HASH_PRIME})")
+        print(f"    Position-aware hashing: enabled (prime={self.tokenizer.cfg.hash_prime})")
         
         # Initialize hierarchical semantic manifold (with chunks)
         self.manifold = HierarchicalSemanticManifold(
@@ -208,15 +190,10 @@ class MNISTBytesExperiment(BaseExperiment):
         
         Returns: tensor of shape (785,) with byte tokens followed by label token.
         """
-        # Image bytes are already 0-255, which maps directly to token IDs 0-255
-        img_tokens = img_bytes.to(torch.long)
-        
-        # Label token is 256 + label
-        label_token = torch.tensor([self.label_offset + label], dtype=torch.long)
-        
-        # Concatenate
-        sequence = torch.cat([img_tokens, label_token])
-        return sequence
+        img_bytes = img_bytes.to(torch.uint8).flatten()
+        img_tokens = self.tokenizer.encode_bytes(img_bytes, add_bos_eos=False)
+        label_token = torch.tensor([self.tokenizer.label_id(int(label))], dtype=torch.long)
+        return torch.cat([img_tokens, label_token], dim=0)
     
     def train_iterator(self) -> Iterator[Tuple[torch.Tensor, int]]:
         """Iterate over training images.
@@ -241,12 +218,7 @@ class MNISTBytesExperiment(BaseExperiment):
         """
         img_bytes, label = batch
         
-        # Create position indices for all bytes
-        positions = torch.arange(len(img_bytes), device=self.device, dtype=torch.long)
-        byte_values = img_bytes.to(torch.long).to(self.device)
-        
-        # Hash (byte, position) pairs to get position-aware tokens
-        img_tokens = self._hash_byte_position(byte_values, positions)
+        img_tokens = self.tokenizer.encode_bytes(img_bytes.to(torch.uint8), add_bos_eos=False).to(self.device)
         
         # Stream the full image as a sequence of hashed tokens
         # Process in chunks to build up context incrementally
@@ -290,7 +262,7 @@ class MNISTBytesExperiment(BaseExperiment):
             for i in range(self.num_labels):
                 probs[self.label_offset + i] = 1.0 / self.num_labels
         
-        label_token = self.label_offset + label
+        label_token = self.tokenizer.label_id(int(label))
         label_prob = float(probs[label_token].detach().item())
         obs = self.manifold.observe_next_token(label_token, probs=probs, cur_id=last_token)
         
@@ -332,10 +304,7 @@ class MNISTBytesExperiment(BaseExperiment):
         class_total = [0] * 10
         
         for img_bytes, label in zip(self._eval_images, self._eval_labels):
-            # Create position indices and hash (byte, position) pairs
-            positions = torch.arange(len(img_bytes), device=self.device, dtype=torch.long)
-            byte_values = img_bytes.to(torch.long).to(self.device)
-            img_tokens = self._hash_byte_position(byte_values, positions)
+            img_tokens = self.tokenizer.encode_bytes(img_bytes.to(torch.uint8), add_bos_eos=False).to(self.device)
             
             # Reset excitation state for fresh prediction on each sample
             self.manifold.attractors.set(
@@ -368,7 +337,7 @@ class MNISTBytesExperiment(BaseExperiment):
                 probs = probs / probs_sum
             
             # Get label predictions
-            label_probs = probs[self.label_offset:self.label_offset + self.num_labels]
+            label_probs = probs[self.label_offset : self.label_offset + self.num_labels]
             predicted_label = int(torch.argmax(label_probs).item())
             
             if predicted_label == label:
