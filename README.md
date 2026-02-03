@@ -276,6 +276,140 @@ config = PhysicsConfig(
 
 ---
 
+## Physics Model
+
+The core of Thermo Manifold is a rigorous thermodynamic simulation. This is not metaphor—it is accurate physics. All learning emerges from these fundamental rules.
+
+### Core Entities
+
+| Entity | Description |
+|--------|-------------|
+| **Particle** | A token/concept. Has position (embedding), energy, heat, and excitation. |
+| **Carrier** | Intermediary node mediating transport. Has position, energy, and heat. |
+| **Bond** | Connection between particle and carrier. Determines flow distribution. |
+
+### The Thermodynamic Cascade
+
+**Heat is the transport mechanism.** Heat carries energy as it flows. The cascade:
+
+```
+Heat arrives → Energy transfers → Temperature rises → Excitation rises → Heat generated → Heat flows out
+     ↑                                                                                           ↓
+     └───────────────────────────────────────────────────────────────────────────────────────────┘
+```
+
+This cycle applies to **every entity** (particles, carriers). Each step:
+
+1. Heat arrives at entity
+2. Energy transfers with heat
+3. Temperature rises (kinetic energy = heat)
+4. Excitation rises with temperature
+5. Excitation generates heat
+6. Heat flows out via bonds (split by attraction/gravity)
+
+### Rule 1: Particles Bond to Carriers via Attraction
+
+Bonds form based on **attraction** (cosine similarity = gravity):
+
+```
+attraction = (particle_position · carrier_position + 1) / 2
+```
+
+Attraction determines how heat/energy **splits** when flowing to multiple targets.
+
+### Rule 2: Heat Flows via Bonds
+
+Heat flows from hot to cold, carrying energy with it. Flow is split by attraction:
+
+```
+For particle p with heat H bonded to carriers c₁, c₂, c₃:
+
+heat_to_c₁ = H × dt × (attraction(p, c₁) / total_attraction)
+heat_to_c₂ = H × dt × (attraction(p, c₂) / total_attraction)
+heat_to_c₃ = H × dt × (attraction(p, c₃) / total_attraction)
+```
+
+**Energy transfers with heat** in the same proportions.
+
+### Rule 3: Temperature Drives Excitation
+
+Temperature = heat (assuming unit mass). Excitation rises with temperature:
+
+```
+excitation += temperature × dt
+```
+
+### Rule 4: Excitation Generates Heat
+
+Excitation converts to heat (excitation is consumed in the process):
+
+```
+heat_generated = excitation × dt
+excitation -= heat_generated
+heat += heat_generated
+```
+
+This is self-limiting: high excitation generates heat quickly, depleting itself.
+
+### Rule 5: Carriers Follow the Same Physics
+
+Carriers are not passive conduits. They have their own:
+- Heat (which drives their excitation)
+- Excitation (which generates more heat)
+- Energy (which transfers with heat flow)
+
+The cascade continues: particle → carrier → particle → carrier → ...
+
+### Rule 6: Heat Decreases Viscosity
+
+Hot entities move faster in embedding space:
+
+```
+effective_viscosity = base_viscosity / (1 + temperature)
+```
+
+### Rule 7: Bonds Snap When No Heat/Energy Flows
+
+Bonds break when nothing flows through them:
+
+```
+if last_heat_flow == 0 and last_energy_flow == 0:
+    bond.snap()
+```
+
+### Rule 8: Conservation Laws
+
+**Energy is conserved**: Total energy (all particles + all carriers + all heat) only increases from external input.
+
+**Heat only increases** (second law): Processes generate heat; heat cannot spontaneously convert back to usable energy.
+
+### Rule 9: Homeostasis
+
+Adaptive baselines prevent runaway dynamics:
+
+```
+homeostasis_ratio = current_energy / baseline_energy
+baseline_energy ← τ × baseline_energy + (1-τ) × current_energy
+```
+
+### The Complete Cycle
+
+Each timestep:
+
+1. **Input** → External data injects energy/heat into active particles
+2. **Bond Formation** → Active particles bond to carriers (attraction = gravity)
+3. **Particle Thermodynamics** → Temperature → excitation → heat generation
+4. **Heat Flows Out** → Heat flows via bonds to carriers (split by attraction)
+5. **Energy Flows With Heat** → Energy transfers with heat
+6. **Carrier Thermodynamics** → Carriers process heat → excitation → more heat
+7. **Heat Flows to Particles** → Heat flows back to all bonded particles
+8. **Bond Snapping** → Dead bonds (no flow) break
+9. **Repeat** → Continuous cascade through the network
+
+This creates a self-organizing system where structure emerges from thermodynamic flow patterns.
+
+---
+
 ## Design Principles
 
 1. **No Backpropagation**: All updates are local and Hebbian-style

@@ -49,6 +49,7 @@ experiments = [
     "matplotlib>=3.7.0",
     "scipy>=1.11.0",
     "pillow>=10.0.0",
+    "torchvision>=0.16.0",
 ]
 cuda = [
     "torch-scatter>=2.1.0",

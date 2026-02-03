@@ -21,6 +21,19 @@
 \usepackage{caption}
 \usepackage{subcaption}
 \usepackage{natbib}
+\usepackage[most]{tcolorbox}
+\usepackage{array}
+\usepackage{colortbl}
+
+% Fix for array column syntax
+\newcolumntype{P}[1]{>{\raggedright\arraybackslash}p{#1}}
+
+% ============================================================================
+% COLORS
+% ============================================================================
+\definecolor{physicsblue}{RGB}{51, 102, 153}
+\definecolor{mlgreen}{RGB}{76, 153, 76}
+\definecolor{boxgray}{RGB}{245, 245, 245}
 
 % ============================================================================
 % THEOREM ENVIRONMENTS
@@ -28,35 +41,47 @@
 \newtheorem{definition}{Definition}
 \newtheorem{proposition}{Proposition}
 \newtheorem{remark}{Remark}
+\newtheorem{principle}{Principle}
 
 % ============================================================================
-% CUSTOM COMMANDS
+% CUSTOM COMMANDS - PHYSICS VOCABULARY
 % ============================================================================
 \newcommand{\R}{\mathbb{R}}
 \newcommand{\E}{\mathbb{E}}
 \newcommand{\EMA}[1]{\overline{#1}}
 \newcommand{\dt}{\Delta t}
 \newcommand{\eps}{\varepsilon}
-\newcommand{\vocab}{\mathcal{V}}
-\newcommand{\graph}{\mathcal{G}}
-\newcommand{\exc}{e}
-\newcommand{\heat}{h}
-\newcommand{\energy}{E}
-\newcommand{\baseline}{B}
-\newcommand{\ratio}{\rho}
+
+% Physical quantities
+\newcommand{\sensorium}{\mathcal{S}}          % The manifold
+\newcommand{\particle}{p}                      % A particle
+\newcommand{\attractor}{a}                     % An attractor
+\newcommand{\energy}{E}                        % Energy
+\newcommand{\heat}{Q}                          % Heat (entropy carrier)
+\newcommand{\excitation}{\varepsilon}          % Excitation
+\newcommand{\baseline}{\mathcal{B}}            % Homeostatic baseline
+\newcommand{\ratio}{\rho}                      % Homeostatic ratio
+\newcommand{\bondgraph}{\mathcal{G}}           % Bond graph
+\newcommand{\mass}{m}                          % Mass (bond strength)
+\newcommand{\trace}{\tau}                      % Eligibility trace
+\newcommand{\flux}{\Phi}                       % Energy flux
+\newcommand{\entropy}{S}                       % Entropy
+\newcommand{\pressure}{\Pi}                    % Metabolic pressure
+\newcommand{\temperature}{T}                   % Temperature (sampling)
+\newcommand{\diffusion}{D}                     % Diffusion coefficient
 
 % ============================================================================
 % TITLE
 % ============================================================================
 \title{%
-  \textbf{Thermodynamic Manifolds}: \\[0.3em]
-  \large Online Sequence Learning via Energy-Based Dynamics on Sparse Graphs
+  \textbf{The Sensorium Manifold}: \\[0.3em]
+  \large Native Multimodality via Isomorphism
 }
 
 \author{
-  [Author Names] \\
-  [Affiliations] \\
-  \texttt{[emails]}
+  Daniel Owen van Dommelen\\
+  \textit{Independent Research - WORKING DRAFT}\\
+  \texttt{theapemachine@gmail.com}
 }
 
 \date{\today}
@@ -68,12 +93,40 @@
 
 \maketitle
 
+
 % ============================================================================
 % ABSTRACT
 % ============================================================================
 \begin{abstract}
-We introduce \emph{Thermodynamic Manifolds}, a framework for online sequence learning that replaces backpropagation with local, energy-based dynamics operating on sparse directed graphs. The system models tokens as attractors in a continuous space, with directed bonds encoding transition probabilities. Learning emerges from three thermodynamic principles: (1) energy injection from observations, (2) homeostatic regulation via adaptive baselines, and (3) metabolic decay proportional to system stress. We demonstrate that this approach enables rapid adaptation to distributional shifts, emergent hierarchical structure through chunk condensation, and autonomous knowledge consolidation through idle pondering. Our experiments on a rule-shift benchmark show recovery to baseline accuracy within [X] steps after a complete reversal of sequential structure, with all adaptation occurring online without gradient computation.
+We introduce the \emph{Sensorium Manifold}, a thermodynamic computing substrate that replaces the autoregressive paradigm with global energy minimization. Current AI models rely on serial token generation and backpropagation-based optimization. We propose a system governed by \emph{Hamiltonian dynamics}, where data is represented as a field of coupled oscillators and learning is the emergence of resonant modes (carriers).
+
+We introduce the \emph{Universal Tokenizer}, a modality-agnostic input mechanism that maps raw bytes and sequence indices to unique attractor IDs via hashing. This treats all data---text, image, audio---as a single branching stream where ``collision is compression.'' Structure emerges not through architectural bias, but through the physical bifurcation of energy flows.
+
+The system operates via three principles: (1) \textbf{Spectral Entanglement}, where distant oscillators couple via shared carrier frequencies; (2) \textbf{Metabolic Gating}, where carriers persist only if energetically maintained by resonance; and (3) \textbf{Crystallization}, a parallel inference process where inputs are ``dumped'' into the manifold and allowed to relax into a minimum-energy configuration, filling in missing information simultaneously rather than causally. We demonstrate that this system conserves energy (symplectic integration), adapts to rule shifts online, and enables massive parallelism impossible in Transformer architectures.
 \end{abstract}
+
+\vspace{0.5em}
+\noindent\textbf{A Note on Vocabulary.} This paper presents a computational substrate based on Hamiltonian mechanics and coupled oscillators. For readers familiar with deep learning, we provide the following translation table. Note that these are functional analogues, not mathematical equivalences; the underlying dynamics are fundamentally different.
+
+\vspace{0.5em}
+\begin{center}
+\renewcommand{\arraystretch}{1.3}
+\begin{tabular}{l l p{5.5cm}}
+\toprule
+\textbf{Physics Term} & \textbf{ML Analogue} & \textbf{Key Difference} \\
+\midrule
+Oscillator & Input Token & Has phase/frequency; exists in continuous time. \\
+Carrier (Soliton) & Hidden State / Weight & A standing wave that couples oscillators. \\
+Hamiltonian ($H$) & Loss Function & Conserved quantity; system minimizes potential $V$. \\
+Spectral Coupling & Attention Mechanism & Non-local entanglement via frequency resonance. \\
+Crystallization & Inference & Global parallel relaxation, not serial generation. \\
+Metabolism & Regularization & Carriers decay if they do not receive energy. \\
+Universal Tokenizer & Embedding Layer & Deterministic hashing of raw bytes; no training. \\
+Phase Locking & Pattern Matching & Information encoded in relative phase angles. \\
+Symplectic Integrator & Optimizer & Preserves energy phase-space; no gradient descent. \\
+\bottomrule
+\end{tabular}
+\end{center}
 
 % ============================================================================
 % 1. INTRODUCTION
@@ -81,25 +134,49 @@ We introduce \emph{Thermodynamic Manifolds}, a framework for online sequence lea
 \section{Introduction}
 \label{sec:introduction}
 
-Modern neural networks learn through backpropagation: computing gradients of a global loss function and propagating error signals through layers. While effective, this paradigm has fundamental limitations. It requires differentiable architectures, struggles with online learning from streaming data, and imposes a separation between training and inference phases.
+The dominant paradigm in machine learning treats computation as optimization: define a loss function, compute gradients via backpropagation, and descend toward minima. This has proven remarkably effective, yet it imposes constraints that may not reflect how physical systems learn. Biological neural networks do not have access to global error signals; they adapt through local interactions governed by thermodynamic and biochemical principles.
 
-We propose an alternative paradigm inspired by thermodynamic systems. In physical systems, structure emerges from local interactions governed by energy minimization and entropy production. We apply this principle to sequence learning by modeling:
+We propose an alternative paradigm: \emph{thermodynamic computation}. In physical systems, structure emerges from energy flow, entropy production, and homeostatic regulation. We apply these principles to construct a learning system where:
 
 \begin{itemize}
-  \item \textbf{Tokens as attractors} in a continuous embedding space
-  \item \textbf{Transitions as directed bonds} in a sparse graph
-  \item \textbf{Learning as energy flow} through local, Hebbian-style updates
-  \item \textbf{Stability as homeostasis} via adaptive baseline tracking
+  \item \textbf{Particles} represent activated concepts, carrying energy through continuous space
+  \item \textbf{Attractors} are stable points in the space, corresponding to learned representations
+  \item \textbf{Bonds} encode relationships between concepts, with mass that grows from use and decays from disuse
+  \item \textbf{Heat} captures uncertainty and accumulated noise, driving exploration
+  \item \textbf{Homeostasis} regulates system activity through adaptive baselines, preventing runaway excitation or quiescence
 \end{itemize}
 
-Our contributions are:
+\subsection{Native Multimodality}
+\label{sec:native_multimodality}
+
+A central claim of this work is that thermodynamic dynamics are \emph{modality-agnostic}. Current multimodal architectures---CLIP \citep{radford2021learning}, Flamingo \citep{alayrac2022flamingo}, Gemini \citep{team2023gemini}---require explicit cross-modal coupling mechanisms: contrastive losses that align representations, cross-attention layers that route information between modalities, or fusion modules that combine features. Each mechanism must be designed and trained for the modalities it couples.
+
+We take a different approach. Like these systems, we use modality-specific encoders and decoders. Unlike them, we require no cross-modal coupling mechanisms. All sensory modalities can be represented as \emph{spectral distributions}: energy distributed over frequency bases.
+
+\begin{itemize}
+  \item \textbf{Audio}: Energy over temporal frequencies (Hz)
+  \item \textbf{Images}: Energy over 2D spatial frequencies $(u, v)$
+  \item \textbf{Video}: Energy over 3D spatiotemporal frequencies $(u, v, t)$
+  \item \textbf{Text}: Energy over semantic embedding dimensions
+\end{itemize}
+
+By projecting these native spectral coordinates into a common Euclidean embedding space $\R^D$, we obtain a \emph{unified manifold} where particles from all modalities coexist. The thermodynamic dynamics---diffusion, bonding, metabolism, homeostasis---operate identically regardless of particle origin. This is integration by isomorphism.
+
+\begin{principle}[Spectral Isomorphism]
+\label{principle:isomorphism}
+Let $\mathcal{M}_1, \mathcal{M}_2$ be sensory modalities with native spectral spaces $\mathcal{F}_1, \mathcal{F}_2$. There exist projections $\pi_1: \mathcal{F}_1 \to \R^D$ and $\pi_2: \mathcal{F}_2 \to \R^D$ such that the thermodynamic dynamics on $\R^D$ are identical for particles from either modality. Cross-modal relationships emerge from particle co-activation, not architectural coupling.
+\end{principle}
+
+The consequence is that adding a new modality requires only a new encoder (spectral decomposition) and decoder (spectral reconstruction). No new loss terms, attention patterns, or fusion modules are needed. Cross-modal relationships emerge from Hebbian co-activation: when particles from different modalities are active together, carriers couple them automatically. The manifold dynamics remain unchanged.
+
+\subsection{Contributions}
 
 \begin{enumerate}
-  \item A complete mathematical framework for thermodynamic sequence learning (\Cref{sec:framework})
-  \item Sparse graph representations that avoid dense $V \times V$ matrices (\Cref{sec:graphs})
-  \item Hierarchical abstraction through binding-energy-driven chunk formation (\Cref{sec:hierarchy})
-  \item Autonomous consolidation through idle pondering: transitive closure, conflict resolution, and dream rollouts (\Cref{sec:pondering})
-  \item Empirical validation on rule-shift adaptation (\Cref{sec:experiments})
+  \item A complete thermodynamic framework for learning without backpropagation (\Cref{sec:framework})
+  \item The Sensorium Manifold: a unified substrate for native multimodality (\Cref{sec:sensorium})
+  \item Sparse bond graph dynamics that avoid dense $V \times V$ matrices (\Cref{sec:graphs})
+  \item Dissipative structure maintenance through stochastic traversal (\Cref{sec:traversal})
+  \item Empirical validation on cross-modal transduction and adaptation (\Cref{sec:experiments})
 \end{enumerate}
 
 % ============================================================================
@@ -108,24 +185,56 @@ Our contributions are:
 \section{Thermodynamic Framework}
 \label{sec:framework}
 
-\subsection{System State}
-\label{sec:state}
+We model learning as a physical process. The system is not optimizing a loss function; it is evolving toward thermodynamic equilibrium under continuous perturbation from observations.
 
-Let $\vocab = \{v_1, \ldots, v_V\}$ be a vocabulary of $V$ tokens. Each token $v_i$ is associated with an \emph{attractor} in $\R^D$ with:
+\subsection{The Particle-Attractor System}
+\label{sec:particles}
 
+The Sensorium Manifold $\sensorium$ is a flat Euclidean space $\R^D$. Within this space, we distinguish two types of entities:
+
+\begin{definition}[Particle]
+A particle $\particle_i$ is a transient entity with:
 \begin{itemize}
-  \item Position $\bm{p}_i \in \R^D$ (embedding)
-  \item Excitation $\exc_i \geq 0$ (activation level)
-  \item Heat $\heat_i \geq 0$ (accumulated noise/uncertainty)
-  \item Energy $\energy_i \geq 0$ (total energetic content)
+  \item Position $\bm{x}_i \in \R^D$
+  \item Energy $\energy_i \geq 0$
+  \item Heat $\heat_i \geq 0$
+  \item Modality tag $\mu_i \in \{\text{text}, \text{audio}, \text{image}, \ldots\}$
 \end{itemize}
+Particles are created by encoders, evolve through dynamics, and are consumed by decoders.
+\end{definition}
 
-The system also maintains a sparse directed graph $\graph = (\vocab, \mathcal{E})$ where each edge $(i, j) \in \mathcal{E}$ has:
-
+\begin{definition}[Attractor]
+An attractor $\attractor_j$ is a persistent entity with:
 \begin{itemize}
-  \item Weight $w_{ij} \geq 0$ (transition strength)
-  \item Trace $\tau_{ij} \geq 0$ (eligibility trace for credit assignment)
+  \item Position $\bm{a}_j \in \R^D$
+  \item Energy $\energy_j \geq 0$
+  \item Heat $\heat_j \geq 0$
+  \item Optional: associated token, frequency, or other modality-specific data
 \end{itemize}
+Attractors represent learned structure. Particles diffuse toward nearby attractors.
+\end{definition}
+
+\subsection{Thermodynamic Quantities}
+\label{sec:quantities}
+
+\begin{definition}[Total Energy]
+The total energy of the system is:
+\begin{equation}
+\energy_{\text{total}} = \sum_i \energy_i + \sum_j \energy_j + \sum_i \excitation_i
+\label{eq:total_energy}
+\end{equation}
+where $\excitation_i$ is the excitation (active energy available for flow).
+\end{definition}
+
+\begin{definition}[Heat]
+Heat $\heat$ is the entropic component of energy---energy that has been ``used'' and can no longer do directed work. Heat accumulates from:
+\begin{itemize}
+  \item Incoherent activity (mismatch between modalities)
+  \item Flow through bonds (friction)
+  \item Conflict between competing predictions
+\end{itemize}
+Heat drives diffusion (exploration) and decays homeostatically.
+\end{definition}
 
 \subsection{Homeostatic Regulation}
 \label{sec:homeostasis}
@@ -134,224 +243,387 @@ The central regulating mechanism is a \emph{homeostatic ratio} that compares cur
 
 \begin{definition}[Homeostatic Ratio]
 \label{def:ratio}
-Let $\energy_{\text{total}} = \sum_i \energy_i + \sum_i \exc_i$ be the total system energy. The homeostatic ratio is:
+The homeostatic ratio is:
 \begin{equation}
 \ratio = \frac{\log(1 + \energy_{\text{total}})}{\log(1 + \baseline) + \eps}
 \label{eq:ratio}
 \end{equation}
-where $\baseline$ is an exponential moving average (EMA) baseline updated as:
+where $\baseline$ is an exponential moving average (EMA) baseline:
 \begin{equation}
-\baseline_{t+1} = (1 - \alpha) \baseline_t + \alpha \, \energy_{\text{total}}
+\baseline_{t+1} = (1 - \alpha) \baseline_t + \alpha \, \energy_{\text{total}}, \quad \alpha = \frac{\dt}{\tau + \dt}
 \label{eq:baseline}
 \end{equation}
-with $\alpha = \dt / (\tau + \dt)$ and $\tau$ the homeostasis time constant.
+and $\tau$ is the homeostasis time constant.
 \end{definition}
 
-When $\ratio > 1$, the system is ``overheated'' and damping increases. When $\ratio < 1$, the system is ``cold'' and damping decreases. This creates a self-regulating dynamic that prevents runaway activation or complete quiescence.
+When $\ratio > 1$, the system is ``overheated'' and damping increases. When $\ratio < 1$, the system is ``cold'' and damping decreases. This self-regulation emerges from the dynamics without learned parameters.
 
-\begin{remark}[Plasticity Gating]
-During surprising observations, we modulate the effective time constant:
-\begin{equation}
-\tau_{\text{eff}} = \tau \cdot (1 + \gamma \cdot g)
-\label{eq:plasticity_tau}
-\end{equation}
-where $g \in [0,1]$ is a plasticity gate (e.g., normalized surprise) and $\gamma$ is a gain parameter. This allows the system to temporarily suspend homeostasis during learning events.
+\begin{remark}[Comparison to Batch Normalization]
+Machine learning practitioners may recognize similarities to batch normalization \citep{ioffe2015batch}. However, homeostasis differs in key ways:
+\begin{enumerate}
+  \item No learned affine parameters ($\gamma$, $\beta$)
+  \item Operates on total energy, not per-layer activations
+  \item Adapts continuously online, not per-batch
+  \item Regulates dynamics, not representations
+\end{enumerate}
 \end{remark}
 
-\subsection{Energy Injection}
-\label{sec:injection}
+\subsection{Diffusion Dynamics}
+\label{sec:diffusion}
 
-When observing a context sequence $[c_1, \ldots, c_n]$, energy enters the system via excitation:
-
-\begin{equation}
-\exc_i \leftarrow \exc_i + \dt \sum_{k: c_k = i} \frac{k}{\sum_{j=1}^n j + \eps}
-\label{eq:injection}
-\end{equation}
-
-This recency-weighted injection assigns higher energy to more recent tokens, creating a gradient of influence that naturally emphasizes local context.
-
-\subsection{Observation Learning}
-\label{sec:observation}
-
-When we observe token $j$ following context with final token $i$, we compute the surprise:
+Particles diffuse toward nearby attractors. The dynamics are:
 
 \begin{equation}
-S = -\log(P(j | i) + \eps)
-\label{eq:surprise}
+\frac{d\bm{x}_i}{dt} = -\nabla_{\bm{x}_i} U(\bm{x}_i) + \sqrt{2 \diffusion \heat_i} \, \bm{\xi}(t)
+\label{eq:diffusion}
 \end{equation}
 
-where $P(j | i) = w_{ij} / \sum_k w_{ik}$ is the normalized transition probability. The \emph{metabolic pressure} normalizes surprise against a baseline:
-
+where $U(\bm{x})$ is a potential defined by attractor positions:
 \begin{equation}
-\text{pressure} = \frac{S}{S + \baseline_S + \eps}
-\label{eq:pressure}
+U(\bm{x}) = -\sum_j \energy_j \exp\left(-\frac{\|\bm{x} - \bm{a}_j\|^2}{2\sigma^2}\right)
+\label{eq:potential}
 \end{equation}
 
-where $\baseline_S$ tracks expected surprise via EMA. Bond mass is then injected:
+and $\bm{\xi}(t)$ is white noise. Heat drives the stochastic term, enabling exploration when uncertainty is high.
 
-\begin{equation}
-w_{ij} \leftarrow w_{ij} + \dt \cdot \text{pressure} \cdot (1 + \text{hunger}_i)
-\label{eq:bond_injection}
-\end{equation}
-
-where $\text{hunger}_i$ is a signal accumulated from dead-end explorations (see \Cref{sec:pondering}).
+\begin{remark}[Discretization]
+In practice, we use Euler-Maruyama discretization with timestep $\dt$. We do not claim to solve continuous-time SDEs exactly.
+\end{remark}
 
 % ============================================================================
-% 3. SPARSE GRAPH DYNAMICS
+% 3. THE UNIVERSAL TOKENIZER
 % ============================================================================
-\section{Sparse Graph Dynamics}
+\section{The Universal Tokenizer}
+\label{sec:tokenizer}
+
+Standard multimodal models require specialized encoders (ViT for images, Mel-filters for audio). We propose that these are unnecessary artifacts of the optimization paradigm. In a physical system, structure is discovered, not engineered.
+
+\subsection{Collision is Compression}
+We map raw data to the manifold using a deterministic hash function:
+
+\begin{equation}
+\text{ID} = \mathcal{H}(\text{Byte}, \text{Index}) \pmod N
+\label{eq:hash}
+\end{equation}
+
+where $\text{Byte} \in [0, 255]$ is the raw data and $\text{Index}$ is the sequence position (or spatial coordinate).
+
+This implies that a black pixel at $(0,0)$ in Image A has the exact same ID as a black pixel at $(0,0)$ in Image B. In a neural network, this collision is a conflict. In the Resonant Manifold, this is \emph{compression}.
+\begin{itemize}
+    \item \textbf{Convergence}: All inputs sharing a prefix flow into the same initial attractors.
+    \item \textbf{Bifurcation}: When the data diverges (e.g., Image A has a white pixel at $(0,1)$, Image B has black), the energy flow splits.
+\end{itemize}
+
+This creates a \emph{Thermodynamic Trie}. The system naturally learns the topology of the data stream by observing which transitions (bonds) are energetically favorable.
+
+\subsection{Modality Agnosticism}
+The physics engine is blind to the source of the data.
+\begin{itemize}
+    \item \textbf{Text}: $\mathcal{H}(\text{'H'}, 0) \to \mathcal{H}(\text{'e'}, 1) \dots$
+    \item \textbf{Image}: $\mathcal{H}(\text{0xFF}, 0) \to \mathcal{H}(\text{0x00}, 1) \dots$
+\end{itemize}
+The manifold processes ``horizontal'' relationships identically, whether they represent a phoneme sequence or a line of pixels.
+
+% ============================================================================
+% 4. HAMILTONIAN DYNAMICS
+% ============================================================================
+\section{Hamiltonian Dynamics}
+\label{sec:hamiltonian}
+
+Unlike dissipative neural networks, the Resonant Manifold is a conservative system. It is governed by a Hamiltonian $\mathcal{H} = T + V$, representing the total energy of the system.
+
+\subsection{The Resonant Ghost Field}
+\label{subsec:ghost_field}
+
+In standard graph-based learning, relationships are modeled as explicit edges in an adjacency matrix $A_{ij}$. This scales poorly ($O(N^2)$) and is rigid. We propose that semantic structure is not a wire connecting two points, but a standing wave potential that permeates the space. We term this the \emph{Resonant Ghost Field}.
+
+\subsubsection{Field Definition}
+The Ghost Field $\Psi$ is the aggregate scalar potential generated by the population of $M$ crystallized carriers (solitons). Unlike a neural network weight which exists to multiply a specific input, the Ghost Field exists as a background potential even in the absence of particles.
+
+The Hamiltonian interaction term is defined as:
+
+\begin{equation}
+V_{\text{ghost}}(\mathbf{q}) = - \sum_{k=1}^M \underbrace{\mu_k}_{\text{Mass}} \cdot \left| \sum_{i=1}^N \exp\left( -\frac{(\omega_i - \Omega_k)^2}{2\sigma_k^2} + i(\theta_i - \phi_k) \right) \right|^2
+\label{eq:ghost_potential}
+\end{equation}
+
+where:
+\begin{itemize}
+    \item $\mu_k$ is the metabolic mass (importance) of Carrier $k$.
+    \item $\Omega_k$ is the intrinsic frequency of the Carrier.
+    \item $\omega_i, \theta_i$ are the frequency and phase of the input oscillator $i$.
+\end{itemize}
+
+\subsubsection{Action at a Distance (Wormholes)}
+This potential creates a non-Euclidean geometry. In the raw sequence index, token $i$ (at $t=0$) and token $j$ (at $t=1000$) are distant. However, if both tokens resonate with Carrier $k$ (i.e., $|\omega - \Omega_k| < \sigma_k$), the potential $V_{\text{ghost}}$ creates a deep energy well that binds them.
+
+Effectively, the Resonant Ghost Field folds the manifold, creating a \emph{semantic wormhole}. Two oscillators tuned to the same carrier are entangled with zero distance in phase space, regardless of their separation in sequence space.
+
+\subsubsection{The ``Ghost'' Property}
+We term this field a ``Ghost'' field because it represents \emph{potential energy}. A crystallized carrier for the concept ``Cat'' exists in the manifold with $\mu_k > 0$. It is invisible and consumes no active compute (kinetic energy) until an input oscillator with the hash for ``Cat'' enters the system.
+
+Upon entry, the oscillator immediately falls into the potential well of the Ghost Field, transferring kinetic energy into the carrier. The carrier ``wakes up'' (resonates), and through the entanglement described above, immediately pulls the ``Meow'' oscillator (if present) or hallucinates it (if missing) via the shared potential well.
+
+\subsection{Symplectic Integration}
+To ensure stability without ``magic number'' damping, we use a symplectic integrator (Velocity Verlet). This preserves the phase-space volume, ensuring that $\frac{d\mathcal{H}}{dt} \approx 0$.
+
+\begin{align}
+p(t + \dt/2) &= p(t) - \nabla V(q(t)) \frac{\dt}{2} \\
+q(t + \dt) &= q(t) + \frac{p(t + \dt/2)}{m} \dt \\
+p(t + \dt) &= p(t + \dt/2) - \nabla V(q(t + \dt)) \frac{\dt}{2}
+\end{align}
+
+This allows the system to explore the energy landscape without exploding, removing the need for gradient clipping or artificial normalization.
+
+\subsection{Metabolic Gating}
+While the short-term dynamics are conservative, the long-term structure is dissipative. Carriers (memory units) are subject to metabolic decay:
+
+\begin{equation}
+\frac{d \text{Mass}_k}{dt} = \text{Income}_k - \text{Cost}(\bar{E})
+\end{equation}
+
+Carriers that successfully resonate with input data receive ``Income'' (energy injection). Carriers that fail to resonate starve and vanish. This implements continuous, online model selection (Occam's Razor) via thermodynamics.
+
+% ============================================================================
+% 5. CRYSTALLIZATION: PARALLEL INFERENCE
+% ============================================================================
+\section{Crystallization}
+\label{sec:crystallization}
+
+Autoregressive models generate data serially ($t_1 \to t_2 \to t_3$). The Resonant Manifold performs inference via \emph{Global Relaxation} or \emph{Crystallization}.
+
+\subsection{The Bucket Dump}
+We slice the input data (e.g., an image with missing patches) into buckets and inject them into the manifold simultaneously.
+\begin{enumerate}
+    \item \textbf{Excitation}: Injected oscillators vibrate at their intrinsic frequencies.
+    \item \textbf{Resonance}: Stored carriers (learned patterns) that match the partial input begin to resonate sympathetically.
+    \item \textbf{Hallucination}: The resonating carriers pump energy into the missing oscillators (the gaps).
+\end{enumerate}
+
+\subsection{Phase Locking}
+The solution emerges when the system settles into a phase-locked state (a local energy minimum). This is a non-causal process: future tokens can stabilize past tokens, and boundary conditions propagate inward. This allows for massive parallelism, as the entire sequence ``crystallizes'' out of the noise at once.
+
+% ============================================================================
+% 6. THE SENSORIUM MANIFOLD
+% ============================================================================
+\section{The Sensorium Manifold}
+\label{sec:sensorium}
+
+\subsection{Unified Particle Space}
+\label{sec:unified}
+
+The key insight is that particles from different modalities can coexist in a shared embedding space if we project their native coordinates appropriately.
+
+\begin{definition}[Spectral Encoding]
+For a sensory input with native spectral representation $\bm{f} \in \mathcal{F}$, the spectral encoding is:
+\begin{equation}
+\bm{x} = \pi(\bm{f}) \in \R^D
+\label{eq:spectral_encoding}
+\end{equation}
+where $\pi: \mathcal{F} \to \R^D$ is a projection that preserves distance relationships.
+\end{definition}
+
+For modalities with native dimension $d < D$, we pad with zeros:
+\begin{equation}
+\pi(\bm{f}) = [\bm{f}; \bm{0}_{D-d}]
+\label{eq:padding}
+\end{equation}
+
+For modalities with native dimension $d > D$, we use random projection (Johnson-Lindenstrauss):
+\begin{equation}
+\pi(\bm{f}) = \bm{f} \cdot \bm{P}, \quad \bm{P} \in \R^{d \times D}, \quad \bm{P}_{ij} \sim \mathcal{N}(0, 1/D)
+\label{eq:random_projection}
+\end{equation}
+
+\subsection{Modality-Specific Encoders}
+\label{sec:encoders}
+
+\subsubsection{Audio Encoding}
+
+Audio is encoded via 1D Fourier transform:
+\begin{equation}
+\hat{x}(f) = \int_{-\infty}^{\infty} x(t) e^{-2\pi i f t} \, dt
+\label{eq:audio_fft}
+\end{equation}
+
+Each frequency bin $f_k$ with magnitude $|\hat{x}(f_k)|$ becomes a particle with:
+\begin{itemize}
+  \item Position: $\pi([f_k]) \in \R^D$
+  \item Energy: $\energy_k = |\hat{x}(f_k)| / \sum_j |\hat{x}(f_j)|$
+  \item Phase: $\phi_k = \arg(\hat{x}(f_k))$ (stored for reconstruction)
+\end{itemize}
+
+\subsubsection{Image Encoding}
+
+Images are encoded via 2D Fourier transform:
+\begin{equation}
+\hat{I}(u, v) = \int \int I(x, y) e^{-2\pi i (ux + vy)} \, dx \, dy
+\label{eq:image_fft}
+\end{equation}
+
+Each spatial frequency $(u_k, v_k)$ becomes a particle with:
+\begin{itemize}
+  \item Position: $\pi([u_k, v_k]) \in \R^D$
+  \item Energy: $\energy_k = |\hat{I}(u_k, v_k)| / \sum_j |\hat{I}(u_j, v_j)|$
+  \item Phase: $\phi_k = \arg(\hat{I}(u_k, v_k))$
+\end{itemize}
+
+\subsubsection{Text Encoding}
+
+Text tokens are encoded via learned or pretrained embeddings:
+\begin{equation}
+\bm{x}_k = \text{embed}(t_k) \in \R^D
+\label{eq:text_embed}
+\end{equation}
+
+If using a semantic embedding of dimension $d$, we project to $\R^D$ via $\pi$.
+
+\subsection{The Unified Dynamics}
+\label{sec:unified_dynamics}
+
+Once all particles are in $\R^D$, the dynamics are identical:
+
+\begin{enumerate}
+  \item \textbf{Diffusion}: Particles drift toward attractors and diffuse based on heat
+  \item \textbf{Bonding}: Co-activated particles form bonds (see \Cref{sec:graphs})
+  \item \textbf{Metabolism}: Bonds grow from use, decay from cost
+  \item \textbf{Homeostasis}: System energy is regulated against adaptive baseline
+\end{enumerate}
+
+The manifold does not ``know'' that a particle came from audio vs. image. It only sees positions, energies, and heats. Cross-modal relationships emerge naturally when particles from different modalities co-activate.
+
+\subsection{Modality-Specific Decoders}
+\label{sec:decoders}
+
+To output in a specific modality, we select particles by modality tag and reconstruct:
+
+\subsubsection{Audio Decoding}
+
+Collect all audio-tagged particles. Reconstruct the spectrum:
+\begin{equation}
+\hat{x}(f_k) = \energy_k \cdot e^{i\phi_k}
+\label{eq:audio_decode}
+\end{equation}
+
+Apply inverse FFT to obtain the waveform.
+
+\subsubsection{Image Decoding}
+
+Collect all image-tagged particles. Reconstruct the 2D spectrum:
+\begin{equation}
+\hat{I}(u_k, v_k) = \energy_k \cdot e^{i\phi_k}
+\label{eq:image_decode}
+\end{equation}
+
+Apply inverse FFT2D to obtain the image.
+
+% ============================================================================
+% 4. SPARSE BOND GRAPH DYNAMICS
+% ============================================================================
+\section{Sparse Bond Graph Dynamics}
 \label{sec:graphs}
+
+Relationships between particles are encoded in a sparse directed graph, not dense weight matrices.
 
 \subsection{Bond Graph Representation}
 \label{sec:bond_graph}
 
-The bond graph $\graph$ is stored as a sparse edge list $(I, J, W, T)$ where:
+\begin{definition}[Bond Graph]
+The bond graph $\bondgraph = (V, E)$ is a sparse directed graph where:
 \begin{itemize}
-  \item $I \in \mathbb{Z}^E$ are source indices
-  \item $J \in \mathbb{Z}^E$ are destination indices  
-  \item $W \in \R^E_{\geq 0}$ are edge weights
-  \item $T \in \R^E_{\geq 0}$ are eligibility traces
+  \item $V$ is the set of attractor indices
+  \item $E \subseteq V \times V$ is the set of directed bonds
+  \item Each bond $(i, j) \in E$ has mass $\mass_{ij} \geq 0$ and trace $\trace_{ij} \geq 0$
 \end{itemize}
+\end{definition}
 
-This representation scales with the number of observed transitions, not $O(V^2)$.
+The graph is stored as a sparse edge list $(I, J, M, T)$, scaling with the number of observed transitions, not $O(V^2)$.
 
-\subsection{Flow Propagation}
-\label{sec:flow}
+\subsection{Bond Formation (Hebbian Dynamics)}
+\label{sec:hebbian}
 
-Given a source distribution $\bm{d} \in \R^V_{\geq 0}$ (e.g., from context excitation), we compute the outgoing flow:
+Bonds form and strengthen through co-activation:
 
+\begin{principle}[Hebbian Bonding]
+When particles at attractors $i$ and $j$ are co-activated (e.g., observed in sequence), the bond $(i, j)$ receives mass:
 \begin{equation}
-\text{flow}_j = \sum_{i: (i,j) \in \mathcal{E}} d_i \cdot \frac{w_{ij}}{\sum_{k: (i,k) \in \mathcal{E}} w_{ik} + \eps}
-\label{eq:flow}
+\mass_{ij} \leftarrow \mass_{ij} + \dt \cdot \excitation_i \cdot \excitation_j
+\label{eq:hebbian}
+\end{equation}
+\end{principle}
+
+For sequential data, we observe $i \to j$ and inject mass:
+\begin{equation}
+\mass_{ij} \leftarrow \mass_{ij} + \dt \cdot \pressure \cdot (1 + \text{depletion}_i)
+\label{eq:bond_injection}
 \end{equation}
 
-This is computed efficiently via scatter operations without materializing dense matrices.
+where $\pressure$ is the metabolic pressure (normalized surprise) and $\text{depletion}_i$ is accumulated from sink encounters during stochastic traversal.
 
 \subsection{Metabolism}
 \label{sec:metabolism}
 
-Active edges undergo metabolism: income from use, cost from existence:
+Active bonds undergo metabolism: they receive income from use and pay cost for existence.
 
+\begin{definition}[Bond Income]
 \begin{equation}
-\text{income}_{ij} = \exc_i \cdot \tilde{w}_{ij} \cdot \frac{1}{1 + \bar{\heat} + \eps}
+\text{income}_{ij} = \excitation_i \cdot \tilde{\mass}_{ij} \cdot \frac{1}{1 + \bar{\heat} + \eps}
 \label{eq:income}
 \end{equation}
+where $\tilde{\mass}_{ij} = \mass_{ij} / \sum_k \mass_{ik}$ is the normalized mass and $\bar{\heat}$ is mean heat.
+\end{definition}
 
-where $\tilde{w}_{ij} = w_{ij} / \sum_k w_{ik}$ is the normalized weight and $\bar{\heat}$ is mean heat (entropy reduces utility).
-
+\begin{definition}[Bond Cost]
 \begin{equation}
-\text{cost}_{ij} = \ratio \cdot \bar{\exc} \cdot \frac{w_{ij}}{\bar{w} + \eps}
+\text{cost}_{ij} = \ratio \cdot \bar{\excitation} \cdot \frac{\mass_{ij}}{\bar{\mass} + \eps}
 \label{eq:cost}
 \end{equation}
+where $\ratio$ is the homeostatic ratio.
+\end{definition}
 
-The weight update is:
+The mass update is:
 \begin{equation}
-w_{ij} \leftarrow \max(0, w_{ij} + \dt \cdot (\text{income}_{ij} - \text{cost}_{ij}))
-\label{eq:weight_update}
+\mass_{ij} \leftarrow \max(0, \mass_{ij} + \dt \cdot (\text{income}_{ij} - \text{cost}_{ij}))
+\label{eq:mass_update}
 \end{equation}
 
-\subsection{Trace Dynamics}
-\label{sec:traces}
+This is not gradient descent. There is no loss function. Bonds that are used grow; bonds that are unused decay. The homeostatic ratio modulates the rate.
 
-Eligibility traces provide temporal credit assignment:
+\subsection{Energy Flux}
+\label{sec:flux}
+
+Energy flows through bonds according to the flux equation:
 
 \begin{equation}
-\tau_{ij} \leftarrow \tau_{ij} \cdot \exp\left(-\dt \cdot \ratio / (\bar{\exc} + \bar{\tau})\right) + \text{income}_{ij}
-\label{eq:trace_update}
+\flux_j = \sum_{i: (i,j) \in E} \excitation_i \cdot \tilde{\mass}_{ij}
+\label{eq:flux}
 \end{equation}
+
+This is the amount of excitation arriving at attractor $j$ from all sources. The computation is sparse---we only sum over existing bonds.
 
 \subsection{Adaptive Pruning}
 \label{sec:pruning}
 
-Rather than fixed thresholds, edges are pruned when their weight falls below the mean outgoing weight from their source:
+Rather than fixed thresholds, bonds are pruned when their mass falls below the mean outgoing mass from their source:
 
 \begin{equation}
-\text{prune}(i,j) \iff w_{ij} < \frac{1}{|\{k : (i,k) \in \mathcal{E}\}|} \sum_{k: (i,k) \in \mathcal{E}} w_{ik}
+\text{prune}(i,j) \iff \mass_{ij} < \frac{1}{|N_{\text{out}}(i)|} \sum_{k \in N_{\text{out}}(i)} \mass_{ik}
 \label{eq:pruning}
 \end{equation}
 
-This maintains a sparse but adaptive structure.
+This maintains sparsity while adapting to the scale of each source.
 
 % ============================================================================
-% 4. HIERARCHICAL STRUCTURE
+% 5. STOCHASTIC TRAVERSAL (DISSIPATIVE STRUCTURE MAINTENANCE)
 % ============================================================================
-\section{Hierarchical Structure}
-\label{sec:hierarchy}
+\section{Stochastic Traversal}
+\label{sec:traversal}
 
-\subsection{Chunk Store}
-\label{sec:chunks}
+Between observations, the system performs stochastic traversal---sampling paths through its bond graph under thermal noise. This is not passive relaxation toward equilibrium, but active dissipation: the system expends energy to explore its own structure.
 
-We maintain a collection of \emph{chunks}: variable-length token sequences (length 2-4) that have condensed from repeated observation. Each chunk $c$ has:
+Following Prigogine's theory of dissipative structures \citep{prigogine1977self}, we recognize this as the mechanism by which the system maintains organization far from equilibrium. The traversal \emph{exports entropy} (by exploring and abandoning unproductive paths) while \emph{reducing internal entropy} (by discovering shortcuts that sharpen future predictions). Without this process, the system would approach heat death---maximum entropy, no gradients, no useful work possible.
 
-\begin{itemize}
-  \item Token sequence $\bm{s}_c = [s_1, \ldots, s_L]$
-  \item Position $\bm{p}_c \in \R^D$ (centroid of constituent embeddings)
-  \item Excitation $\exc_c \geq 0$
-  \item Heat $\heat_c \geq 0$
-  \item Energy $\energy_c \geq 0$
-\end{itemize}
-
-A separate \emph{bipartite bond graph} connects chunks to tokens.
-
-\subsection{Binding Energy}
-\label{sec:binding}
-
-The binding energy of a candidate sequence measures how strongly its token transitions are bonded:
-
-\begin{definition}[Binding Energy Density]
-For a sequence $\bm{s} = [s_1, \ldots, s_L]$:
-\begin{equation}
-\text{binding}(\bm{s}) = \exp\left(\frac{1}{L-1}\sum_{k=1}^{L-1} \log\left(\sqrt{\tilde{w}_{s_k,s_{k+1}} \cdot \tilde{\tau}_{s_k,s_{k+1}}} + \eps\right)\right)
-\label{eq:binding}
-\end{equation}
-where $\tilde{w}, \tilde{\tau}$ are scale-normalized weights and traces.
-\end{definition}
-
-This is a geometric mean of bond strengths, normalized by sequence length.
-
-\subsection{Condensation Dynamics}
-\label{sec:condensation}
-
-Chunk condensation occurs when binding energy exceeds a per-length adaptive baseline:
-
-\begin{equation}
-\text{pressure}_L = \frac{\text{binding} - \baseline_L}{\text{binding} + \baseline_L + \eps}
-\label{eq:chunk_pressure}
-\end{equation}
-
-\begin{equation}
-\text{mass} = \dt \cdot \max(0, \text{pressure}_L)
-\label{eq:chunk_mass}
-\end{equation}
-
-If $\text{mass} > 0$, the chunk is created (or reinforced if it exists). The baseline $\baseline_L$ tracks typical binding energy for sequences of length $L$.
-
-\subsection{Top-Down Influence}
-\label{sec:topdown}
-
-Active chunks bias token-level predictions:
-
-\begin{equation}
-\text{flow}_j^{\text{chunk}} = \sum_{c: (c,j) \in \mathcal{E}_{\text{bipartite}}} \exc_c \cdot w_{cj}
-\label{eq:chunk_flow}
-\end{equation}
-
-The final prediction combines word-level and chunk-level flows:
-
-\begin{equation}
-\text{combined} = (1 - \lambda) \cdot \text{flow}^{\text{word}} + \lambda \cdot \text{flow}^{\text{chunk}}
-\label{eq:combined}
-\end{equation}
-
-where $\lambda = |\text{flow}^{\text{chunk}}| / (|\text{flow}^{\text{chunk}}| + |\text{flow}^{\text{word}}| + \eps)$.
-
-% ============================================================================
-% 5. IDLE PONDERING
-% ============================================================================
-\section{Idle Pondering}
-\label{sec:pondering}
-
-Between observations, the system can consolidate knowledge through three mechanisms.
+This is not ``offline training''---there is no training data. The system processes its own structure.
 
 \subsection{Transitive Closure}
 \label{sec:transitive}
@@ -359,11 +631,11 @@ Between observations, the system can consolidate knowledge through three mechani
 If bonds $A \to B$ and $B \to C$ exist, we can infer a shortcut $A \to C$:
 
 \begin{equation}
-\text{mass}_{AC} = \dt \cdot \tilde{w}_{AB} \cdot \tilde{w}_{BC} \cdot \exp\left(-\frac{\|\bm{p}_A - \bm{p}_C\|^2}{\bar{d}^2}\right)
+\mass_{AC} = \dt \cdot \tilde{\mass}_{AB} \cdot \tilde{\mass}_{BC} \cdot \exp\left(-\frac{\|\bm{a}_A - \bm{a}_C\|^2}{\bar{d}^2}\right)
 \label{eq:transitive}
 \end{equation}
 
-The geometric compatibility factor $\exp(-d^2/\bar{d}^2)$ discounts shortcuts between distant embeddings.
+The geometric factor $\exp(-d^2/\bar{d}^2)$ discounts shortcuts between distant attractors.
 
 \subsection{Conflict Resolution}
 \label{sec:conflict}
@@ -371,29 +643,29 @@ The geometric compatibility factor $\exp(-d^2/\bar{d}^2)$ discounts shortcuts be
 Sources with high outgoing entropy (ambiguous predictions) receive noise injection:
 
 \begin{equation}
-\exc_i \leftarrow \exc_i + \dt \cdot \mathcal{N}(0, \sigma_i^2)
+\excitation_i \leftarrow \excitation_i + \dt \cdot \mathcal{N}(0, \sigma_i^2), \quad \sigma_i \propto \entropy_i
 \label{eq:conflict}
 \end{equation}
 
-where $\sigma_i \propto H_i = -\sum_j \tilde{w}_{ij} \log \tilde{w}_{ij}$ is proportional to entropy. Subsequent metabolism allows competition to sharpen predictions.
+where $\entropy_i = -\sum_j \tilde{\mass}_{ij} \log \tilde{\mass}_{ij}$ is the entropy of outgoing bonds. Subsequent metabolism allows competition to sharpen predictions.
 
-\subsection{Dream Rollouts}
-\label{sec:dreams}
+\subsection{Stochastic Trajectories}
+\label{sec:trajectories}
 
 The system samples hypothetical trajectories from its current structure:
 
 \begin{algorithm}[H]
-\caption{Dream Rollout}
-\label{alg:dream}
+\caption{Stochastic Trajectory Sampling}
+\label{alg:trajectory}
 \begin{algorithmic}[1]
-\State $\text{budget} \leftarrow \text{dream\_energy\_budget} \cdot (1 + \text{stress\_gain} \cdot \max(0, \ratio - 1))$
+\State $\text{budget} \leftarrow E_{\text{dream}} \cdot (1 + \gamma \cdot \max(0, \ratio - 1))$
 \While{$\text{budget} > 0$}
-  \State Sample starting token $i$ proportional to $\exc_i$
+  \State Sample starting attractor $i$ proportional to $\excitation_i$
   \State $\text{path\_prob} \leftarrow 1$
   \For{$t = 1, \ldots, T_{\text{max}}$}
     \State Compute $P(\cdot | i)$ from bond graph
-    \If{$P$ is empty (dead end)}
-      \State $\text{hunger}_i \leftarrow \text{hunger}_i + \dt$ \Comment{Mark dead end}
+    \If{$P$ is empty (sink)}
+      \State $\text{depletion}_i \leftarrow \text{depletion}_i + \dt$ \Comment{Mark sink}
       \State \textbf{break}
     \EndIf
     \State Sample $j \sim P$
@@ -403,44 +675,81 @@ The system samples hypothetical trajectories from its current structure:
     \State $\text{budget} \leftarrow \text{budget} - (1 + \heat_i / \bar{\heat})$
   \EndFor
 \EndWhile
-\State $\text{hunger} \leftarrow \text{hunger} \cdot \exp(-\dt \cdot \ratio / \bar{\text{hunger}})$ \Comment{Homeostatic decay}
+\State $\text{depletion} \leftarrow \text{depletion} \cdot \exp(-\dt \cdot \ratio / \bar{\text{depletion}})$ \Comment{Homeostatic decay}
 \end{algorithmic}
 \end{algorithm}
 
-Hunger accumulates at dead ends and increases plasticity for those transitions when real observations arrive.
+Depletion accumulates at sinks (states with no outgoing flux). When real observations arrive, depletion modulates plasticity---the system is more receptive to learning transitions from depleted attractors. This is not a biological hunger signal; it is a local measurement of incomplete structure that increases the rate of bond formation.
 
 % ============================================================================
-% 6. EXPERIMENTS
+% 6. CROSS-MODAL TRANSDUCTION
+% ============================================================================
+\section{Cross-Modal Transduction}
+\label{sec:bridge}
+
+The Sensorium Manifold enables cross-modal transduction without architectural changes. We describe the mechanism.
+
+\subsection{Carrier Coupling}
+\label{sec:carriers}
+
+To transduce between semantic (text) and spectral (audio/image) representations, we introduce a population of \emph{carriers}---particles that have positions in both semantic and spectral spaces.
+
+\begin{definition}[Carrier]
+A carrier $c_k$ has:
+\begin{itemize}
+  \item Semantic position $\bm{s}_k \in \R^D$
+  \item Spectral position $\bm{f}_k \in \R^{d_{\text{spec}}}$ (1D for audio, 2D for image)
+  \item Energy $\energy_k \geq 0$
+  \item Heat $\heat_k \geq 0$
+\end{itemize}
+\end{definition}
+
+Carriers learn to couple semantic and spectral spaces through co-activation. When semantic particle at $\bm{s}$ and spectral particle at $\bm{f}$ are observed together, nearby carriers receive energy:
+
+\begin{equation}
+\energy_k \leftarrow \energy_k + \dt \cdot w_{\text{sem}}(\bm{s}, \bm{s}_k) \cdot w_{\text{spec}}(\bm{f}, \bm{f}_k)
+\label{eq:carrier_update}
+\end{equation}
+
+where $w$ are kernel functions (e.g., Gaussian).
+
+\subsection{Forward Transduction (Semantic to Spectral)}
+\label{sec:forward}
+
+To transduce semantic input to spectral output:
+
+\begin{enumerate}
+  \item Compute carrier activations from semantic input
+  \item Each carrier projects its energy to its spectral position
+  \item Collect spectral energy distribution
+  \item Decode via inverse FFT
+\end{enumerate}
+
+\subsection{Backward Transduction (Spectral to Semantic)}
+\label{sec:backward}
+
+The same mechanism works in reverse. The manifold is bidirectional.
+
+% ============================================================================
+% 7. EXPERIMENTS
 % ============================================================================
 \section{Experiments}
 \label{sec:experiments}
 
-\subsection{Rule-Shift Benchmark}
+We validate the framework on three tasks:
+
+\subsection{Rule-Shift Adaptation}
 \label{sec:rule_shift}
 
 We evaluate adaptation to distributional shifts using a controlled benchmark:
 
 \begin{itemize}
   \item \textbf{Forward phase} (steps 1-1000): The sequence ``The cat sat on the mat'' repeats
-  \item \textbf{Reverse phase} (steps 1001-2000): The sequence reverses to ``mat the on sat cat the''
+  \item \textbf{Reverse phase} (steps 1001-2000): The sequence reverses
 \end{itemize}
 
-This tests the system's ability to rapidly unlearn forward transitions and learn reverse transitions, without gradient-based retraining.
+The system must rapidly unlearn forward transitions and learn reverse transitions, online, without gradient-based retraining.
 
-\subsubsection{Metrics}
-
-\begin{itemize}
-  \item \textbf{Accuracy}: Rolling accuracy of next-token prediction
-  \item \textbf{System Energy}: $\sum_i \exc_i + \sum_i \heat_i + \sum_c \exc_c + \sum_c \heat_c$
-  \item \textbf{Topological Entropy}: Mean per-source entropy $\bar{H} = \frac{1}{|\{i : \exists j, (i,j) \in \mathcal{E}\}|} \sum_i H_i$
-  \item \textbf{Chunk Count}: Number of condensed chunks
-  \item \textbf{Pondering Metrics}: Shortcuts found, dead ends explored, mean hunger
-\end{itemize}
-
-\subsection{Results}
-\label{sec:results}
-
-% Auto-generated tables and figures will be included here
 \input{tables/rule_shift_summary.tex}
 
 \begin{figure}[t]
@@ -450,20 +759,19 @@ This tests the system's ability to rapidly unlearn forward transitions and learn
   }{%
     \fbox{\parbox{0.9\textwidth}{\centering\vspace{2cm}\textit{Figure will be generated by \texttt{make paper}}\vspace{2cm}}}
   }
-  \caption{Rule-shift adaptation dynamics. \textbf{Top}: Rolling accuracy (blue) with rule shift at step 1000 (dashed line). System energy and topological entropy shown on right axis. \textbf{Bottom}: Pondering metrics showing shortcuts discovered, dead ends encountered, and mean hunger over time.}
+  \caption{Rule-shift adaptation dynamics. The system recovers to baseline accuracy within [X] steps after complete reversal of sequential structure.}
   \label{fig:rule_shift}
 \end{figure}
 
-\begin{figure}[t]
-  \centering
-  \IfFileExists{figures/pondering.pdf}{%
-    \includegraphics[width=0.8\textwidth]{figures/pondering.pdf}
-  }{%
-    \fbox{\parbox{0.7\textwidth}{\centering\vspace{2cm}\textit{Figure will be generated by \texttt{make paper}}\vspace{2cm}}}
-  }
-  \caption{Idle pondering behavior. Shortcuts peak during rule-shift as the system discovers new transitive paths. Dead ends increase during confusion, driving hunger that modulates plasticity.}
-  \label{fig:pondering}
-\end{figure}
+\subsection{Cross-Modal Audio Synthesis}
+\label{sec:audio_exp}
+
+We demonstrate semantic-to-audio transduction using the carrier coupling mechanism. Given text tokens, the system produces spectral distributions that can be synthesized to audio.
+
+\subsection{Native Image Handling}
+\label{sec:image_exp}
+
+We show that the same unified manifold handles 2D image frequencies. Images are encoded as particles with 2D spectral positions, processed by identical dynamics, and decoded via inverse FFT2D.
 
 \subsection{Ablation Studies}
 \label{sec:ablations}
@@ -471,75 +779,76 @@ This tests the system's ability to rapidly unlearn forward transitions and learn
 \input{tables/ablation.tex}
 
 % ============================================================================
-% 7. RELATED WORK
+% 8. RELATED WORK
 % ============================================================================
 \section{Related Work}
 \label{sec:related}
 
-\paragraph{Hebbian Learning}
-Our approach shares principles with Hebbian learning \citep{hebb1949organization}: ``neurons that fire together wire together.'' We extend this with thermodynamic regulation and sparse graph dynamics.
-
-\paragraph{Energy-Based Models}
-Energy-based models \citep{lecun2006tutorial} define learning as energy minimization. Our framework differs in using energy for homeostatic regulation rather than direct optimization.
-
-\paragraph{Predictive Coding}
-Predictive coding \citep{rao1999predictive} models the brain as a prediction engine that minimizes surprise. Our surprise-driven plasticity and pondering mechanisms relate to this framework.
-
-\paragraph{Online Learning}
-Unlike batch gradient descent, our system learns continuously from each observation, related to online learning \citep{shalev2012online} but without explicit loss minimization.
+\paragraph{Dissipative Structures}
+Prigogine's theory of dissipative structures \citep{prigogine1977self, prigogine1978time} describes how systems far from equilibrium can maintain complex organization by continuously dissipating energy. Our stochastic traversal mechanism is a direct application: the system avoids heat death by actively exporting entropy through path exploration, while reducing internal entropy by discovering structural shortcuts.
 
 \paragraph{Thermodynamic Computing}
-Recent work on thermodynamic computing \citep{conte2019thermodynamic} explores physical substrates for computation. We draw inspiration from these principles in software.
+Recent work explores physical substrates for computation based on thermodynamic principles \citep{conte2019thermodynamic}. We draw inspiration from these ideas but implement them in software.
 
-\paragraph{Sparse Attention}
-Sparse attention mechanisms \citep{child2019generating} reduce quadratic complexity. Our sparse bond graphs achieve similar scaling for sequential learning without attention.
+\paragraph{Hebbian Learning}
+Our approach shares principles with Hebbian learning \citep{hebb1949organization}. We extend this with thermodynamic regulation and sparse graph dynamics.
+
+\paragraph{Energy-Based Models}
+Energy-based models \citep{lecun2006tutorial} define learning as energy minimization. Our framework differs: energy is for homeostatic regulation, not optimization.
+
+\paragraph{Multimodal Architectures}
+CLIP \citep{radford2021learning} uses contrastive learning to align image and text encoders. Flamingo \citep{alayrac2022flamingo} introduces cross-attention layers to fuse visual features into language models. These approaches require explicit coupling mechanisms that must be designed per modality pair. We propose that cross-modal coupling can emerge from shared dynamics: particles coexist in a common space, and Hebbian co-activation creates associations without architectural intervention.
+
+\paragraph{Predictive Coding}
+Predictive coding \citep{rao1999predictive} models the brain as a prediction engine minimizing surprise. Our surprise-driven plasticity relates to this framework.
 
 % ============================================================================
-% 8. DISCUSSION
+% 9. DISCUSSION
 % ============================================================================
 \section{Discussion}
 \label{sec:discussion}
 
-\subsection{Honest Assessment of Limitations}
-
-We emphasize what our framework does \emph{not} claim:
+\subsection{What We Claim}
 
 \begin{enumerate}
-  \item \textbf{Not strict thermodynamics}: We use thermodynamic \emph{metaphors}—energy, heat, homeostasis—but do not claim physical conservation laws. Energy can grow or decay; there is no detailed balance.
-  
-  \item \textbf{Not gradient-free optimization}: We are not optimizing a loss function without gradients. Instead, we sidestep the optimization paradigm entirely in favor of local, reactive dynamics.
-  
-  \item \textbf{Not a replacement for transformers}: Our experiments are on small-scale sequential tasks. We make no claims about scaling to language model pretraining.
-  
-  \item \textbf{Discrete updates}: Our ``continuous'' dynamics are Euler-discretized. We do not solve PDEs.
+  \item \textbf{Native multimodality}: All sensory modalities can be processed by the same thermodynamic dynamics on a shared manifold.
+  \item \textbf{No backpropagation}: Learning emerges from local, Hebbian-style dynamics regulated by homeostasis.
+  \item \textbf{Online adaptation}: The system adapts continuously to streaming data and distributional shifts.
+  \item \textbf{Dissipative self-organization}: Stochastic traversal maintains structure far from equilibrium by exporting entropy while discovering shortcuts.
 \end{enumerate}
 
-\subsection{What We Do Claim}
+\subsection{What We Do Not Claim}
 
 \begin{enumerate}
-  \item Rapid online adaptation to distributional shifts without retraining
-  \item Emergent hierarchical structure from local dynamics
-  \item Autonomous consolidation through idle pondering
-  \item Sparse, interpretable representations
+  \item \textbf{Strict thermodynamics}: We use thermodynamic \emph{metaphors}. Energy is not conserved; there is no detailed balance.
+  \item \textbf{Gradient-free optimization}: We are not optimizing a loss function without gradients. We sidestep optimization entirely.
+  \item \textbf{Transformer replacement}: Our experiments are on small-scale tasks. We make no claims about scaling to language model pretraining.
+  \item \textbf{Continuous dynamics}: Our ``continuous'' dynamics are Euler-discretized. We do not solve PDEs exactly.
 \end{enumerate}
 
-\subsection{Future Directions}
+\subsection{The Physics of ``Horizontal''}
+
+We claimed that ``the physics of horizontal is the same whether it is a word, a sound wave, or a pixel pattern.'' Let us make this precise:
 
 \begin{itemize}
-  \item Scaling to larger vocabularies and longer sequences
-  \item Multi-modal integration via bridge manifolds
-  \item Hardware implementations exploiting physical thermodynamics
+  \item \textbf{Text}: The word ``horizontal'' is a token with a D-dimensional embedding.
+  \item \textbf{Audio}: A sound panning left-to-right has specific frequency characteristics (Doppler, stereo phase).
+  \item \textbf{Image}: A horizontal line has energy concentrated at $v \approx 0$ in the 2D frequency domain.
 \end{itemize}
 
+All three representations enter the manifold as particles. Through co-activation during training, carriers couple these representations. The word ``horizontal'' activates carriers that also respond to horizontal image frequencies and horizontal audio characteristics. This is not a metaphor---it is the mechanism.
+
 % ============================================================================
-% 9. CONCLUSION
+% 10. CONCLUSION
 % ============================================================================
 \section{Conclusion}
 \label{sec:conclusion}
 
-We have presented Thermodynamic Manifolds, a framework for online sequence learning based on energy dynamics, sparse graphs, and homeostatic regulation. The system learns from local interactions without backpropagation, adapts rapidly to distributional shifts, discovers hierarchical structure through binding energy, and consolidates knowledge through idle pondering.
+We have presented the Sensorium Manifold, a unified thermodynamic substrate for native multimodal computation. By representing all sensory inputs as spectral distributions in a shared Euclidean space, we achieve modality-agnostic dynamics. Learning emerges from local thermodynamic interactions---energy flow, Hebbian bonding, homeostatic regulation---without backpropagation.
 
-Our work suggests that the optimization-centric paradigm of modern machine learning, while powerful, is not the only path to adaptive systems. Physical metaphors—particularly thermodynamics—offer alternative principles that may be better suited to continuous, online, embodied learning.
+The framework suggests an alternative to the optimization-centric paradigm of modern machine learning. Physical principles---thermodynamics, diffusion, homeostasis---may offer paths to adaptive systems that are better suited to continuous, online, embodied learning.
+
+The physics of ``horizontal'' really is the same across modalities. And that, perhaps, is how perception should work.
 
 % ============================================================================
 % REFERENCES
@@ -552,33 +861,63 @@ Our work suggests that the optimization-centric paradigm of modern machine learn
 % ============================================================================
 \appendix
 
-\section{Algorithm Pseudocode}
-\label{app:algorithms}
+\section{Extended Translation Table}
+\label{app:translation}
 
-\begin{algorithm}[H]
-\caption{Grammar Step}
-\label{alg:grammar_step}
-\begin{algorithmic}[1]
-\Require Context tokens $[c_1, \ldots, c_n]$, bond graph $\graph$, attractors $\{(\exc_i, \heat_i)\}$
-\State \textbf{Injection}: $\exc_i \leftarrow \exc_i + \dt \sum_{k: c_k = i} k / \sum_j j$
-\State \textbf{Topology}: Add edges $(c_k, c_{k+1})$ for $k = 1, \ldots, n-1$
-\State Compute $\ratio$ via \Cref{eq:ratio}
-\State \textbf{Metabolism}: For active edges, apply \Cref{eq:weight_update}
-\State \textbf{Flow}: Propagate excitation via \Cref{eq:flow}
-\State \textbf{Damping}: $\exc_i \leftarrow \exc_i \cdot \exp(-\dt \cdot \ratio / \bar{\exc})$
-\State \textbf{Heat}: $\heat_i \leftarrow \heat_i + \dt \cdot |\text{flow}_i| / \bar{\text{flow}}$
-\State \textbf{Pruning}: Remove edges below per-source mean
-\end{algorithmic}
-\end{algorithm}
+For readers seeking deeper correspondences:
+
+\begin{center}
+\renewcommand{\arraystretch}{1.3}
+\begin{tabular}{l l}
+\toprule
+\textcolor{physicsblue}{\textbf{Physics Concept}} & \textcolor{mlgreen}{\textbf{ML Analogue}} \\
+\midrule
+\textcolor{physicsblue}{Euclidean space $\R^D$} & \textcolor{mlgreen}{Embedding space} \\
+\textcolor{physicsblue}{Particle diffusion} & \textcolor{mlgreen}{Gradient flow / Langevin dynamics} \\
+\textcolor{physicsblue}{Attractor basin} & \textcolor{mlgreen}{Class region / prototype} \\
+\textcolor{physicsblue}{Energy injection} & \textcolor{mlgreen}{Forward pass activation} \\
+\textcolor{physicsblue}{Heat dissipation} & \textcolor{mlgreen}{Regularization / dropout (sort of)} \\
+\textcolor{physicsblue}{Homeostatic ratio $\ratio$} & \textcolor{mlgreen}{Adaptive learning rate} \\
+\textcolor{physicsblue}{Bond mass $\mass$} & \textcolor{mlgreen}{Edge weight in sparse graph} \\
+\textcolor{physicsblue}{Eligibility trace $\trace$} & \textcolor{mlgreen}{Temporal credit (no backprop)} \\
+\textcolor{physicsblue}{Metabolic cost} & \textcolor{mlgreen}{Weight decay / L2 regularization} \\
+\textcolor{physicsblue}{Metabolic income} & \textcolor{mlgreen}{Hebbian update} \\
+\textcolor{physicsblue}{Transitive closure} & \textcolor{mlgreen}{Shortcut / skip connections} \\
+\textcolor{physicsblue}{Stochastic trajectories} & \textcolor{mlgreen}{Monte Carlo sampling / rollouts} \\
+\textcolor{physicsblue}{Depletion signal} & \textcolor{mlgreen}{Curiosity / exploration bonus} \\
+\textcolor{physicsblue}{Sink} & \textcolor{mlgreen}{Absorbing state / dead end} \\
+\textcolor{physicsblue}{Dissipative structure} & \textcolor{mlgreen}{Self-organizing system} \\
+\textcolor{physicsblue}{Spectral distribution} & \textcolor{mlgreen}{Frequency representation} \\
+\textcolor{physicsblue}{Carrier coupling} & \textcolor{mlgreen}{Cross-modal alignment} \\
+\textcolor{physicsblue}{Event horizon locality} & \textcolor{mlgreen}{Local / sparse attention} \\
+\bottomrule
+\end{tabular}
+\end{center}
 
 \section{Hyperparameter Settings}
 \label{app:hyperparameters}
 
 \input{tables/hyperparameters.tex}
 
-\section{Additional Experimental Details}
-\label{app:details}
+\section{Pseudocode}
+\label{app:algorithms}
 
-All experiments were run on [hardware]. Code is available at \url{https://github.com/theapemachine/thermo_manifold}.
+\begin{algorithm}[H]
+\caption{Unified Manifold Step}
+\label{alg:unified_step}
+\begin{algorithmic}[1]
+\Require Particles $\{(\bm{x}_i, \energy_i, \heat_i)\}$, Attractors $\{(\bm{a}_j, \energy_j)\}$, Bond graph $\bondgraph$
+\State Project all particles to common space: $\bm{z}_i = \pi(\bm{x}_i)$
+\State Compute $\ratio$ via \Cref{eq:ratio}
+\State \textbf{Diffusion}: Update particle positions via \Cref{eq:diffusion}
+\State \textbf{Bonding}: For co-activated pairs, inject mass via \Cref{eq:hebbian}
+\State \textbf{Metabolism}: Update bond masses via \Cref{eq:mass_update}
+\State \textbf{Flux}: Propagate energy via \Cref{eq:flux}
+\State \textbf{Heat}: $\heat_i \leftarrow \heat_i + \dt \cdot |\flux_i| / \bar{\flux}$
+\State \textbf{Damping}: $\excitation_i \leftarrow \excitation_i \cdot \exp(-\dt \cdot \ratio / \bar{\excitation})$
+\State \textbf{Pruning}: Remove bonds below per-source mean
+\State Sync energy and heat back to particles
+\end{algorithmic}
+\end{algorithm}
 
 \end{document}

@@ -40,25 +40,25 @@ clean: ## Remove virtual environment and build artifacts
 	find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
 	find . -type f -name "*.pyc" -delete 2>/dev/null || true
 
-test: ## Run tests
-	$(ACTIVATE) && pytest tests/ -v
+test: ## Run all tests
+	$(ACTIVATE) && pytest thermo_manifold/ -v
 
 test-cov: ## Run tests with coverage
-	$(ACTIVATE) && pytest tests/ -v --cov=thermo_manifold --cov-report=term-missing
+	$(ACTIVATE) && pytest thermo_manifold/ -v --cov=thermo_manifold --cov-report=term-missing
 
 lint: ## Run linter (ruff)
-	$(ACTIVATE) && ruff check thermo_manifold/ tests/
+	$(ACTIVATE) && ruff check thermo_manifold/
 
 lint-fix: ## Run linter and fix issues
-	$(ACTIVATE) && ruff check --fix thermo_manifold/ tests/
+	$(ACTIVATE) && ruff check --fix thermo_manifold/
 
 format: ## Format code with black and isort
-	$(ACTIVATE) && black thermo_manifold/ tests/
-	$(ACTIVATE) && isort thermo_manifold/ tests/
+	$(ACTIVATE) && black thermo_manifold/
+	$(ACTIVATE) && isort thermo_manifold/
 
 format-check: ## Check formatting without making changes
-	$(ACTIVATE) && black --check thermo_manifold/ tests/
-	$(ACTIVATE) && isort --check-only thermo_manifold/ tests/
+	$(ACTIVATE) && black --check thermo_manifold/
+	$(ACTIVATE) && isort --check-only thermo_manifold/
 
 typecheck: ## Run type checking with mypy
 	$(ACTIVATE) && mypy thermo_manifold/
@@ -76,6 +76,28 @@ demo-multimodal: ## Run the unified multimodal demo (image encoding/decoding)
 
 demo-cross-modal: ## Run the cross-modal demo (text + image together)
 	$(ACTIVATE) && python -m thermo_manifold.demos.cross_modal_demo
+
+# ============================================================================
+# SIMULATION
+# ============================================================================
+
+run: ## Run the physics simulation with dashboard
+	$(ACTIVATE) && python run.py
+
+run-profile: ## Run simulation with GPU profiling
+	$(ACTIVATE) && python run.py --profile
+
+run-bench: ## Run headless benchmark (no dashboard)
+	$(ACTIVATE) && python run.py --no-dashboard --steps 1000 --profile
+
+run-quick: ## Quick test run (100 steps, 500 particles)
+	$(ACTIVATE) && python run.py --steps 100 --particles 500
+
+run-continuous: ## Run indefinitely with random file injections
+	$(ACTIVATE) && python run.py --continuous --particles 200 --dashboard-video artifacts/dashboard.mp4 --dashboard-fps 30
+
+run-continuous-fast: ## Continuous mode with faster injections (5-20s)
+	$(ACTIVATE) && python run.py --continuous --particles 100 --inject-min 5 --inject-max 20
 
 # ============================================================================
 # EXPERIMENTS

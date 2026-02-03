@@ -1,0 +1,94 @@
+\begin{thebibliography}{10}
+\providecommand{\natexlab}[1]{#1}
+\providecommand{\url}[1]{\texttt{#1}}
+\expandafter\ifx\csname urlstyle\endcsname\relax
+  \providecommand{\doi}[1]{doi: #1}\else
+  \providecommand{\doi}{doi: \begingroup \urlstyle{rm}\Url}\fi
+
+\bibitem[Alayrac et~al.(2022)Alayrac, Donahue, Luc, Miech, Barr, Hasson, Lenc,
+  Mensch, Millican, Reynolds, Ring, Rutherford, Cabi, Han, Gong, Samangooei,
+  Monteiro, Menick, Borgeaud, Brock, Nematzadeh, Sharifzadeh, Binkowski,
+  Barreira, Vinyals, Zisserman, and Simonyan]{alayrac2022flamingo}
+Jean-Baptiste Alayrac, Jeff Donahue, Pauline Luc, Antoine Miech, Iain Barr,
+  Yana Hasson, Karel Lenc, Arthur Mensch, Katherine Millican, Malcolm Reynolds,
+  Roman Ring, Eliza Rutherford, Serkan Cabi, Tengda Han, Zhitao Gong, Sina
+  Samangooei, Marianne Monteiro, Jacob Menick, Sebastian Borgeaud, Andy Brock,
+  Aida Nematzadeh, Sahand Sharifzadeh, Miko{\l}aj Binkowski, Ricardo Barreira,
+  Oriol Vinyals, Andrew Zisserman, and Karen Simonyan.
+\newblock Flamingo: A visual language model for few-shot learning.
+\newblock \emph{Advances in Neural Information Processing Systems},
+  35:\penalty0 23716--23736, 2022.
+
+\bibitem[Conte et~al.(2019)Conte, DeBenedictis, Ganesh, Hylton, Strachan,
+  Williams, Alemi, Altenberg, Crooks, Crutchfield, del Rio, Deutsch, DeWeese,
+  Douglas, Faggin, Frank, Fry, Harsha, Henry, Kish, Knight, Kumar, Li, Meaney,
+  Molter, Morrision, Nisoli, Ogunnaike, Qian, Riechers, Rosen, Rubenstein,
+  Sarpeshkar, Silvestri, Singer, Sinha, Smith, Still, Stokbro, Stopnitzky, Teo,
+  Wootters, Yunes, Zak, and Zia]{conte2019thermodynamic}
+Tom Conte, Erik DeBenedictis, Natesh Ganesh, Todd Hylton, John~Paul Strachan,
+  R.~Stanley Williams, Alexander Alemi, Lee Altenberg, Gavin Crooks, James
+  Crutchfield, Lidia del Rio, Josh Deutsch, Michael DeWeese, Ken Douglas,
+  Federico Faggin, Michael Frank, Ryan Fry, Prahladh Harsha, Michael Henry,
+  Laszlo Kish, James Knight, Suhas Kumar, Hava Li, Patrick Meaney, Tony Molter,
+  Philip Morrision, Cristiano Nisoli, Babatunde Ogunnaike, Lulu Qian, Paul
+  Riechers, Jim Rosen, Barry Rubenstein, Rahul Sarpeshkar, Leonard Silvestri,
+  Barak Singer, Samarth Sinha, Eric Smith, Susanne Still, Kurt Stokbro, Elan
+  Stopnitzky, CJ~Teo, William Wootters, Jean-Baptiste Yunes, Michail Zak, and
+  Royce Zia.
+\newblock Thermodynamic computing.
+\newblock \emph{arXiv preprint arXiv:1911.01968}, 2019.
+
+\bibitem[Gemini~Team(2023)]{team2023gemini}
+Google Gemini~Team.
+\newblock Gemini: A family of highly capable multimodal models.
+\newblock \emph{arXiv preprint arXiv:2312.11805}, 2023.
+
+\bibitem[Hebb(1949)]{hebb1949organization}
+Donald~O. Hebb.
+\newblock \emph{The Organization of Behavior: A Neuropsychological Theory}.
+\newblock Wiley, New York, 1949.
+
+\bibitem[Ioffe and Szegedy(2015)]{ioffe2015batch}
+Sergey Ioffe and Christian Szegedy.
+\newblock Batch normalization: Accelerating deep network training by reducing
+  internal covariate shift.
+\newblock In \emph{International Conference on Machine Learning}, pages
+  448--456, 2015.
+
+\bibitem[LeCun et~al.(2006)LeCun, Chopra, Hadsell, Ranzato, and
+  Huang]{lecun2006tutorial}
+Yann LeCun, Sumit Chopra, Raia Hadsell, Marc'Aurelio Ranzato, and Fu~Jie Huang.
+\newblock A tutorial on energy-based learning.
+\newblock In G{\"o}khan Bakir, Thomas Hofmann, Bernhard Sch{\"o}lkopf,
+  Alexander~J. Smola, Ben Taskar, and S.~V.~N. Vishwanathan, editors,
+  \emph{Predicting Structured Data}, pages 191--246. MIT Press, 2006.
+
+\bibitem[Prigogine(1978)]{prigogine1978time}
+Ilya Prigogine.
+\newblock Time, structure, and fluctuations.
+\newblock \emph{Science}, 201\penalty0 (4358):\penalty0 777--785, 1978.
+\newblock Nobel Lecture.
+
+\bibitem[Prigogine and Nicolis(1977)]{prigogine1977self}
+Ilya Prigogine and Gr{\'e}goire Nicolis.
+\newblock \emph{Self-Organization in Nonequilibrium Systems: From Dissipative
+  Structures to Order Through Fluctuations}.
+\newblock Wiley, New York, 1977.
+
+\bibitem[Radford et~al.(2021)Radford, Kim, Hallacy, Ramesh, Goh, Agarwal,
+  Sastry, Askell, Mishkin, Clark, Krueger, and Sutskever]{radford2021learning}
+Alec Radford, Jong~Wook Kim, Chris Hallacy, Aditya Ramesh, Gabriel Goh,
+  Sandhini Agarwal, Girish Sastry, Amanda Askell, Pamela Mishkin, Jack Clark,
+  Gretchen Krueger, and Ilya Sutskever.
+\newblock Learning transferable visual models from natural language
+  supervision.
+\newblock In \emph{International Conference on Machine Learning}, pages
+  8748--8763, 2021.
+
+\bibitem[Rao and Ballard(1999)]{rao1999predictive}
+Rajesh P.~N. Rao and Dana~H. Ballard.
+\newblock Predictive coding in the visual cortex: A functional interpretation
+  of some extra-classical receptive-field effects.
+\newblock \emph{Nature Neuroscience}, 2\penalty0 (1):\penalty0 79--87, 1999.
+
+\end{thebibliography}
