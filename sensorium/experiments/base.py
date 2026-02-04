@@ -356,3 +356,72 @@ class Experiment(ABC):
         plt.savefig(path)
         plt.close()
         return path
+
+    # ---------------------------------------------------------------------
+    # Simulation statistics table (standardized reporting)
+    # ---------------------------------------------------------------------
+    def simulation_stats_table(
+        self,
+        *,
+        n_particles: int,
+        n_carriers: int,
+        n_crystallized: int = 0,
+        grid_size: Tuple[int, int, int],
+        dt: float,
+        n_steps: int,
+        wall_time_ms: float,
+    ) -> str:
+        """Generate a standardized simulation statistics LaTeX table.
+        
+        Args:
+            n_particles: Number of particles/tokens
+            n_carriers: Final number of active carriers
+            n_crystallized: Number of crystallized carriers
+            grid_size: (X, Y, Z) grid dimensions
+            dt: Simulation timestep
+            n_steps: Number of simulation steps
+            wall_time_ms: Wall clock time in milliseconds
+        """
+        sim_time_ms = n_steps * dt * 1000  # Convert to ms
+        
+        lines = []
+        lines.append(r"\begin{tabular}{l r}")
+        lines.append(r"\toprule")
+        lines.append(r"\textbf{Metric} & \textbf{Value} \\")
+        lines.append(r"\midrule")
+        lines.append(f"Simulated time & {sim_time_ms:.1f} ms ({n_steps} steps $\\times$ {dt}) \\\\")
+        lines.append(f"Wall clock time & {wall_time_ms:.0f} ms \\\\")
+        lines.append(f"Particles & {n_particles:,} \\\\")
+        lines.append(f"Carriers (final) & {n_carriers:,} \\\\")
+        if n_crystallized > 0:
+            lines.append(f"Crystallized & {n_crystallized:,} \\\\")
+        lines.append(f"Grid resolution & ({grid_size[0]}, {grid_size[1]}, {grid_size[2]}) \\\\")
+        lines.append(f"Device & {self.device.upper()} \\\\")
+        lines.append(r"\bottomrule")
+        lines.append(r"\end{tabular}")
+        
+        return "\n".join(lines) + "\n"
+    
+    def write_simulation_stats(
+        self,
+        name: str,
+        *,
+        n_particles: int,
+        n_carriers: int,
+        n_crystallized: int = 0,
+        grid_size: Tuple[int, int, int],
+        dt: float,
+        n_steps: int,
+        wall_time_ms: float,
+    ) -> Path:
+        """Write simulation statistics table to paper/tables/<name>_stats.tex."""
+        table_tex = self.simulation_stats_table(
+            n_particles=n_particles,
+            n_carriers=n_carriers,
+            n_crystallized=n_crystallized,
+            grid_size=grid_size,
+            dt=dt,
+            n_steps=n_steps,
+            wall_time_ms=wall_time_ms,
+        )
+        return self.write_table_tex(f"{name}_stats", table_tex)

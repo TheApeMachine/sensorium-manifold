@@ -1,30 +1,26 @@
-\begin{tabular}{l r}
+\begin{table}[t]
+\centering
+\caption{Audio waveform inpainting results. Byte-quantized samples are reconstructed using periodic position matching. SNR measures signal quality; MAE measures amplitude error.}
+\label{tab:audio_gen}
+\begin{tabular}{l l c c c c}
 \toprule
-Metric & Value \\
+\textbf{Waveform} & \textbf{Mask} & \textbf{MAE} & \textbf{SNR (dB)} & \textbf{Accuracy} \\
 \midrule
-mixed\_10pct\_mae & 0.03819 \\
-mixed\_10pct\_snr & 9.205 \\
-mixed\_20pct\_mae & 0.07603 \\
-mixed\_20pct\_snr & 6.209 \\
-mixed\_30pct\_mae & 0.1131 \\
-mixed\_30pct\_snr & 4.512 \\
-sawtooth\_10pct\_mae & 0.05688 \\
-sawtooth\_10pct\_snr & 7.68 \\
-sawtooth\_20pct\_mae & 0.1109 \\
-sawtooth\_20pct\_snr & 5.073 \\
-sawtooth\_30pct\_mae & 0.1727 \\
-sawtooth\_30pct\_snr & 2.966 \\
-sine\_10pct\_mae & 0.08012 \\
-sine\_10pct\_snr & 6.471 \\
-sine\_20pct\_mae & 0.1648 \\
-sine\_20pct\_snr & 3.383 \\
-sine\_30pct\_mae & 0.2555 \\
-sine\_30pct\_snr & 1.362 \\
-square\_10pct\_mae & 0.08241 \\
-square\_10pct\_snr & 7.805 \\
-square\_20pct\_mae & 0.2121 \\
-square\_20pct\_snr & 3.687 \\
-square\_30pct\_mae & 0.3091 \\
-square\_30pct\_snr & 2.056 \\
+Sine & 10\% & 0.0672 & 9.7 & 1.2\% \\
+ & 20\% & 0.1298 & 6.8 & 0.6\% \\
+ & 30\% & 0.1974 & 5.0 & 0.2\% \\
+\addlinespace
+Square & 10\% & 0.1001 & 9.9 & 0.0\% \\
+ & 20\% & 0.1999 & 6.9 & 0.0\% \\
+ & 30\% & 0.2989 & 5.2 & 0.0\% \\
+\addlinespace
+Sawtooth & 10\% & 0.0503 & 10.0 & 0.0\% \\
+ & 20\% & 0.0957 & 7.2 & 0.0\% \\
+ & 30\% & 0.1484 & 5.4 & 0.4\% \\
+\addlinespace
+Mixed & 10\% & 0.0378 & 9.7 & 0.6\% \\
+ & 20\% & 0.0724 & 6.9 & 0.3\% \\
+ & 30\% & 0.1082 & 5.2 & 0.0\% \\
 \bottomrule
 \end{tabular}
+\end{table}

@@ -22,6 +22,8 @@ from . import (
     KernelImageGen,
     KernelAudioGen,
     KernelCocktailParty,
+    KernelScaling,
+    KernelCrossModal,
     CollisionExperiment,
     MNISTTrieRecallExperiment,
 )
@@ -40,6 +42,8 @@ EXPERIMENTS = {
     "image_gen": KernelImageGen,
     "audio_gen": KernelAudioGen,
     "cocktail_party": KernelCocktailParty,
+    "scaling": KernelScaling,
+    "cross_modal": KernelCrossModal,
     # Collision suite (concrete): tokenizer collision regime sweeps.
     "collision": CollisionExperiment,
     "image_collision": ImageCollisionExperiment,
@@ -58,6 +62,8 @@ ALL_EXPERIMENTS = [
     KernelImageGen,
     KernelAudioGen,
     KernelCocktailParty,
+    KernelScaling,
+    KernelCrossModal,
     CollisionExperiment,
     ImageCollisionExperiment,
     MNISTTrieRecallExperiment,

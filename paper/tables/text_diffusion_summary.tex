@@ -1,18 +1,17 @@
-\begin{tabular}{l r}
+\begin{table}[t]
+\centering
+\caption{Text byte denoising via thermodynamic trie. Masked characters are reconstructed using pattern matching from training data. Accuracy measures exact character recovery at masked positions.}
+\label{tab:text_diffusion}
+\begin{tabular}{l c c c}
 \toprule
-Metric & Value \\
+\textbf{Mask Level} & \textbf{Accuracy} & \textbf{Correct/Masked} & \textbf{Hamming Dist.} \\
 \midrule
-mask\_10pct\_char\_accuracy & 0 \\
-mask\_10pct\_exact\_match & 0 \\
-mask\_10pct\_levenshtein & 30 \\
-mask\_20pct\_char\_accuracy & 0 \\
-mask\_20pct\_exact\_match & 0 \\
-mask\_20pct\_levenshtein & 60 \\
-mask\_30pct\_char\_accuracy & 0 \\
-mask\_30pct\_exact\_match & 0 \\
-mask\_30pct\_levenshtein & 90 \\
-mask\_50pct\_char\_accuracy & 0 \\
-mask\_50pct\_exact\_match & 0 \\
-mask\_50pct\_levenshtein & 150 \\
+10\% & 11.1\% & 2/18 & 16 \\
+20\% & 2.7\% & 1/37 & 36 \\
+30\% & 5.5\% & 3/55 & 52 \\
+50\% & 4.3\% & 4/92 & 88 \\
+\midrule
+\textbf{Average} & 5.9\% & --- & --- \\
 \bottomrule
 \end{tabular}
+\end{table}

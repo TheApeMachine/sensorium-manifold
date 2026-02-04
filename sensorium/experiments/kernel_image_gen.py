@@ -278,70 +278,187 @@ class KernelImageGen(Experiment):
         
         import matplotlib.pyplot as plt
         
-        # Summary table
-        summary = {}
-        for mask_frac, res in self.results.items():
-            key = f"mask_{int(mask_frac*100)}pct"
-            summary[f"{key}_psnr"] = res["psnr"]
-            summary[f"{key}_mae"] = res["mae"]
-            summary[f"{key}_mse"] = res["mse"]
+        # Generate formatted LaTeX table
+        self._generate_table()
         
-        self.write_kv_table("image_gen_summary", summary)
+        # Generate 3-panel figure
+        self._generate_figure()
         
-        # Figure: Grid of examples
-        n_examples = min(len(self.examples), 8)
-        if n_examples == 0:
-            print("Warning: No examples to visualize")
-            return
+        print(f"✓ Generated: paper/tables/image_gen_summary.tex")
+    
+    def _generate_table(self):
+        """Generate properly formatted LaTeX table."""
         
-        fig, axes = plt.subplots(n_examples, 4, figsize=(12, 3 * n_examples))
-        if n_examples == 1:
-            axes = axes.reshape(1, -1)
+        table_content = r"""\begin{table}[t]
+\centering
+\caption{MNIST inpainting via thermodynamic trie. The manifold learns pixel patterns from training images, then reconstructs masked regions in test images using dual-domain inference. PSNR (Peak Signal-to-Noise Ratio) measures reconstruction quality; MAE (Mean Absolute Error) measures pixel-level deviation.}
+\label{tab:image_gen}
+\begin{tabular}{l c c c c}
+\toprule
+\textbf{Metric} & \textbf{10\% Mask} & \textbf{20\% Mask} & \textbf{30\% Mask} & \textbf{50\% Mask} \\
+\midrule
+"""
         
-        for i, example in enumerate(self.examples[:n_examples]):
-            # Original
-            ax = axes[i, 0]
+        # Get results for each mask level
+        mask_levels = [0.1, 0.2, 0.3, 0.5]
+        
+        # PSNR row
+        psnrs = [f"{self.results[m]['psnr']:.1f}" if m in self.results else "---" for m in mask_levels]
+        table_content += f"PSNR (dB) & {' & '.join(psnrs)} \\\\\n"
+        
+        # MAE row  
+        maes = [f"{self.results[m]['mae']:.1f}" if m in self.results else "---" for m in mask_levels]
+        table_content += f"MAE (pixels) & {' & '.join(maes)} \\\\\n"
+        
+        # MSE row
+        mses = [f"{self.results[m]['mse']:.0f}" if m in self.results else "---" for m in mask_levels]
+        table_content += f"MSE & {' & '.join(mses)} \\\\\n"
+        
+        table_content += r"""\midrule
+\multicolumn{5}{l}{\textit{Dataset}} \\
+\quad Training images & \multicolumn{4}{c}{""" + str(self.train_images) + r"""} \\
+\quad Test images & \multicolumn{4}{c}{""" + str(self.test_images) + r"""} \\
+\quad Image size & \multicolumn{4}{c}{28$\times$28 = 784 pixels} \\
+\bottomrule
+\end{tabular}
+\end{table}
+"""
+        
+        table_path = self.artifact_path("tables", "image_gen_summary.tex")
+        table_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(table_path, "w") as f:
+            f.write(table_content)
+    
+    def _generate_figure(self):
+        """Generate 3-panel visualization."""
+        import matplotlib.pyplot as plt
+        
+        fig, axes = plt.subplots(1, 3, figsize=(14, 4))
+        
+        # =================================================================
+        # Panel A: Example reconstructions - different digits at 30% mask
+        # =================================================================
+        ax = axes[0]
+        
+        # Show 4 different digits at the same mask level (30%)
+        # This demonstrates the system works across different digit types
+        target_mask = 0.3
+        examples_at_level = [e for e in self.examples if e["mask_frac"] == target_mask]
+        
+        # If not enough at 30%, use all examples
+        if len(examples_at_level) < 4:
+            examples_at_level = self.examples[:4]
+        
+        n_examples = min(4, len(examples_at_level))
+        
+        # Create composite image: 2 rows x n_examples columns
+        composite = np.ones((28 * 2, 28 * n_examples + n_examples - 1, 3)) * 0.9
+        
+        for i, example in enumerate(examples_at_level[:n_examples]):
             original = np.array(list(example["original"])).reshape(28, 28)
-            ax.imshow(original, cmap='gray', vmin=0, vmax=255)
-            ax.set_title(f"Original (digit {example.get('label', '?')})")
-            ax.axis('off')
-            
-            # Masked
-            ax = axes[i, 1]
-            masked = np.array(list(example["masked"])).reshape(28, 28)
-            ax.imshow(masked, cmap='gray', vmin=0, vmax=255)
-            ax.set_title(f"Masked ({example['mask_frac']*100:.0f}%)")
-            ax.axis('off')
-            
-            # Reconstructed
-            ax = axes[i, 2]
             recon = np.array(list(example["reconstructed"])).reshape(28, 28)
-            ax.imshow(recon, cmap='gray', vmin=0, vmax=255)
-            ax.set_title(f"Reconstructed")
-            ax.axis('off')
             
-            # Error map
-            ax = axes[i, 3]
-            error = np.abs(original.astype(np.float32) - recon.astype(np.float32))
-            ax.imshow(error, cmap='hot', vmin=0, vmax=128)
-            ax.set_title(f"Error (MAE={example['mae']:.1f})")
-            ax.axis('off')
+            x_offset = i * 29
+            
+            # Top row: original
+            composite[:28, x_offset:x_offset+28, 0] = original / 255
+            composite[:28, x_offset:x_offset+28, 1] = original / 255
+            composite[:28, x_offset:x_offset+28, 2] = original / 255
+            
+            # Bottom row: reconstructed
+            composite[28:56, x_offset:x_offset+28, 0] = recon / 255
+            composite[28:56, x_offset:x_offset+28, 1] = recon / 255
+            composite[28:56, x_offset:x_offset+28, 2] = recon / 255
         
-        plt.suptitle('MNIST Inpainting via Universal Tokenizer\n'
-                    '(Left: Original, Middle-Left: Masked, Middle-Right: Reconstructed, Right: Error)',
-                    fontsize=14, fontweight='bold')
+        ax.imshow(composite)
+        ax.set_xticks([14 + i * 29 for i in range(n_examples)])
+        labels = [f"d={examples_at_level[i].get('label', '?')}" for i in range(n_examples)]
+        ax.set_xticklabels(labels, fontsize=9)
+        ax.set_xlabel(f"Digit (at {int(target_mask*100)}% mask)", fontsize=10)
+        ax.set_yticks([14, 42])
+        ax.set_yticklabels(["Original", "Reconstructed"], fontsize=9)
+        ax.spines['top'].set_visible(False)
+        ax.spines['right'].set_visible(False)
+        ax.text(0.02, 0.98, 'A', transform=ax.transAxes, fontsize=14, 
+               fontweight='bold', va='top')
+        
+        # =================================================================
+        # Panel B: PSNR vs mask fraction
+        # =================================================================
+        ax = axes[1]
+        
+        mask_fracs = sorted(self.results.keys())
+        psnrs = [self.results[m]["psnr"] for m in mask_fracs]
+        maes = [self.results[m]["mae"] for m in mask_fracs]
+        
+        color1 = '#336699'
+        ax.plot([m * 100 for m in mask_fracs], psnrs, 'o-', color=color1, 
+               linewidth=2, markersize=8, label='PSNR')
+        ax.set_xlabel("Mask fraction (%)", fontsize=10)
+        ax.set_ylabel("PSNR (dB)", fontsize=10, color=color1)
+        ax.tick_params(axis='y', labelcolor=color1)
+        ax.set_ylim(10, 25)
+        
+        # Secondary axis for MAE
+        ax2 = ax.twinx()
+        color2 = '#4C994C'
+        ax2.plot([m * 100 for m in mask_fracs], maes, 's--', color=color2,
+                linewidth=2, markersize=8, label='MAE')
+        ax2.set_ylabel("MAE (pixel intensity)", fontsize=10, color=color2)
+        ax2.tick_params(axis='y', labelcolor=color2)
+        ax2.set_ylim(0, 30)
+        
+        # Combined legend
+        lines1, labels1 = ax.get_legend_handles_labels()
+        lines2, labels2 = ax2.get_legend_handles_labels()
+        ax.legend(lines1 + lines2, labels1 + labels2, loc='upper right', fontsize=9)
+        
+        ax.spines['top'].set_visible(False)
+        ax.text(0.02, 0.98, 'B', transform=ax.transAxes, fontsize=14, 
+               fontweight='bold', va='top')
+        
+        # =================================================================
+        # Panel C: MAE breakdown by mask level (bar chart)
+        # =================================================================
+        ax = axes[2]
+        
+        colors = ['#e74c3c', '#f39c12', '#27ae60', '#3498db']
+        
+        mask_fracs = sorted(self.results.keys())
+        x_pos = np.arange(len(mask_fracs))
+        
+        # Show MAE as bars
+        maes = [self.results[m]["mae"] for m in mask_fracs]
+        bars = ax.bar(x_pos, maes, color=colors[:len(mask_fracs)], 
+                     edgecolor='black', linewidth=0.5, alpha=0.8)
+        
+        # Add value labels on bars
+        for bar, mae in zip(bars, maes):
+            ax.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.5,
+                   f"{mae:.1f}", ha='center', va='bottom', fontsize=9)
+        
+        ax.set_xticks(x_pos)
+        ax.set_xticklabels([f"{int(m*100)}%" for m in mask_fracs], fontsize=10)
+        ax.set_xlabel("Mask fraction", fontsize=10)
+        ax.set_ylabel("Mean Absolute Error", fontsize=10)
+        ax.set_ylim(0, max(maes) * 1.2)
+        ax.spines['top'].set_visible(False)
+        ax.spines['right'].set_visible(False)
+        ax.text(0.02, 0.98, 'C', transform=ax.transAxes, fontsize=14, 
+               fontweight='bold', va='top')
         
         plt.tight_layout()
         fig_path = self.artifact_path("figures", "image_gen.png")
         fig_path.parent.mkdir(parents=True, exist_ok=True)
-        plt.savefig(fig_path, dpi=150)
+        plt.savefig(fig_path, dpi=300, bbox_inches='tight')
         plt.close()
         
         print(f"✓ Generated: {fig_path}")
-        print(f"✓ Generated: paper/tables/image_gen_summary.tex")
 
     def run(self):
         """Run MNIST inpainting experiment."""
+        import time
+        
         print("[image_gen] Starting experiment...")
         
         # Load MNIST
@@ -356,6 +473,9 @@ class KernelImageGen(Experiment):
         print(f"[image_gen] Train: {len(train_images)}, Test: {len(test_images)}")
         
         # Train manifold on training images
+        grid_size = (32, 32, 32)
+        dt = 0.01
+        
         tokenizer_config = TokenizerConfig(
             hash_vocab_size=4096,
             hash_prime=31,
@@ -372,12 +492,12 @@ class KernelImageGen(Experiment):
                 dashboard=False,
                 generator=train_generator,
                 geometric=GeometricSimulationConfig(
-                    grid_size=(32, 32, 32),
-                    dt=0.01,
+                    grid_size=grid_size,
+                    dt=dt,
                 ),
                 spectral=SpectralSimulationConfig(
-                    grid_size=(32, 32, 32),
-                    dt=0.01,
+                    grid_size=grid_size,
+                    dt=dt,
                 ),
                 tokenizer=tokenizer_config,
                 position_init="random",
@@ -388,7 +508,9 @@ class KernelImageGen(Experiment):
             }
         )
         
+        start_time = time.time()
         state = manifold.run()
+        wall_time_ms = (time.time() - start_time) * 1000
         
         # Set up dual-domain inference
         geo_state = {
@@ -442,8 +564,8 @@ class KernelImageGen(Experiment):
                 all_mses.append(mse)
                 all_psnrs.append(psnr)
                 
-                # Save examples (first 2 per mask level)
-                if len([e for e in self.examples if e["mask_frac"] == mask_frac]) < 2:
+                # Save examples (up to 5 per mask level to show variety)
+                if len([e for e in self.examples if e["mask_frac"] == mask_frac]) < 5:
                     self.examples.append({
                         "original": img,
                         "masked": bytes(masked),
@@ -464,5 +586,27 @@ class KernelImageGen(Experiment):
             print(f"[image_gen] Mask {mask_frac*100:.0f}%: "
                   f"MAE={np.mean(all_maes):.2f}, PSNR={np.mean(all_psnrs):.2f}dB")
         
+        # Get carrier stats
+        carriers = manifold.carriers or {}
+        amplitudes = carriers.get("amplitudes")
+        n_carriers = int((amplitudes > 1e-6).sum().item()) if amplitudes is not None else 0
+        crystallized = carriers.get("crystallized")
+        n_crystallized = int(crystallized.sum().item()) if crystallized is not None else 0
+        n_particles = len(geo_state["token_ids"]) if geo_state.get("token_ids") is not None else 0
+        
         self.observe(state)
+        
+        # Write simulation stats
+        self.write_simulation_stats(
+            "image_gen",
+            n_particles=n_particles,
+            n_carriers=n_carriers,
+            n_crystallized=n_crystallized,
+            grid_size=grid_size,
+            dt=dt,
+            n_steps=1,
+            wall_time_ms=wall_time_ms,
+        )
+        print(f"✓ Generated: paper/tables/image_gen_stats.tex")
+        
         print("[image_gen] Experiment complete.")

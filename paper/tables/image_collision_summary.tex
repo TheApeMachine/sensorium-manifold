@@ -2,16 +2,18 @@
 \centering
 \caption{Image-based hash collision compression metrics and inference performance. Higher collision rates lead to increased spatial clustering, energy accumulation, and compression. Inference accuracy measures prediction of missing pixels using learned spatial structure.}
 \label{tab:image_collision}
-\begin{tabular}{lccccccc}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{lcccccc}
 \toprule
 \textbf{Collision} & \textbf{Compression} & \textbf{Entropy} & \textbf{Spatial} & \textbf{Energy} & \textbf{Prediction} & \textbf{Reconstruction} \\
-\textbf{Rate} & \textbf{Ratio} & \textbf{(bits)} & \textbf{Clustering} & \textbf{Accumulation} & \textbf{Accuracy} & \textbf{Error} \\
+\textbf{Rate} & \textbf{Ratio} & \textbf{(bits)} & \textbf{Clustering} & \textbf{Accum.} & \textbf{Accuracy} & \textbf{Error} \\
 \midrule
-0.1 & 0.1044 & 11.75 & 0.0464 & 1.0000 & 0.178 & 0.305 \\
-0.3 & 0.1043 & 11.37 & 0.0478 & 1.0000 & 0.197 & 0.317 \\
-0.5 & 0.1034 & 10.94 & 0.0503 & 1.0000 & 0.155 & 0.361 \\
-0.7 & 0.0983 & 10.46 & 0.0553 & 1.0000 & 0.172 & 0.311 \\
-0.9 & 0.0677 & 9.85 & 0.0918 & 1.0000 & 0.155 & 0.301 \\
+0.1 & 0.1044 & 11.75 & 0.0464 & 1.0000 & 0.185 & 0.310 \\
+0.3 & 0.1043 & 11.37 & 0.0478 & 1.0000 & 0.199 & 0.310 \\
+0.5 & 0.1034 & 10.94 & 0.0503 & 1.0000 & 0.142 & 0.368 \\
+0.7 & 0.0983 & 10.46 & 0.0553 & 1.0000 & 0.149 & 0.311 \\
+0.9 & 0.0677 & 9.85 & 0.0918 & 1.0000 & 0.174 & 0.294 \\
 \bottomrule
-\end{tabular}
+\end{tabular}%
+}
 \end{table}

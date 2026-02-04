@@ -18,6 +18,8 @@ from .kernel_mnist_bytes import KernelMNISTBytes
 from .kernel_image_gen import KernelImageGen
 from .kernel_audio_gen import KernelAudioGen
 from .kernel_cocktail_party import KernelCocktailParty
+from .kernel_scaling import KernelScaling
+from .kernel_cross_modal import KernelCrossModal
 from .collision import CollisionExperiment
 from .image_collision import ImageCollisionExperiment
 from .mnist_trie_recall import MNISTTrieRecallExperiment
@@ -37,5 +39,7 @@ def __main__():
         KernelCocktailParty,
         CollisionExperiment,
         MNISTTrieRecallExperiment,
+        KernelScaling,
+        KernelCrossModal,
     ]:
         experiment(experiment_name=experiment.__name__).run()

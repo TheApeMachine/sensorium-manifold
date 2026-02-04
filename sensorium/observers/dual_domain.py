@@ -98,16 +98,18 @@ class DualDomainInference:
         self.device = self.positions.device if self.positions is not None else torch.device("cpu")
         
         # Get number of active carriers
-        num_carriers_tensor = spectral_state.get("num_carriers")
-        if num_carriers_tensor is not None:
-            if isinstance(num_carriers_tensor, torch.Tensor):
-                self.num_carriers = int(num_carriers_tensor.item())
-            else:
-                self.num_carriers = int(num_carriers_tensor)
+        # Note: The num_carriers tensor may be incorrect due to accumulation bugs
+        # in the physics implementation. Use amplitude-based counting instead.
+        if self.carrier_amps is not None:
+            # Count carriers with non-trivial amplitude
+            self.num_carriers = int((self.carrier_amps > 1e-6).sum().item())
         else:
-            # Fallback: count non-zero amplitudes
-            if self.carrier_amps is not None:
-                self.num_carriers = int((self.carrier_amps > 1e-6).sum().item())
+            num_carriers_tensor = spectral_state.get("num_carriers")
+            if num_carriers_tensor is not None:
+                if isinstance(num_carriers_tensor, torch.Tensor):
+                    self.num_carriers = int(num_carriers_tensor.item())
+                else:
+                    self.num_carriers = int(num_carriers_tensor)
             else:
                 self.num_carriers = 0
     
@@ -407,6 +409,133 @@ class DualDomainInference:
             scores[byte_val] = float(np.sum(coupling * weights))
         
         return scores
+    
+    def predict_next_byte(
+        self,
+        context_bytes: bytes,
+        context_start_position: int,
+        segment_size: Optional[int] = None,
+    ) -> Tuple[np.ndarray, List[Tuple[int, float]]]:
+        """Predict the next byte by finding associated particles and dehashing.
+        
+        The key insight: particles/oscillators ARE bytes. To predict:
+        1. Find training particles that match the context pattern
+        2. Look at what other particles are coupled to them (via carriers or proximity)
+        3. Among those, find particles at the "next" position
+        4. Dehash those particles to get candidate bytes
+        5. Vote by energy/coupling strength
+        
+        Args:
+            context_bytes: The context bytes (e.g., last N bytes before target)
+            context_start_position: Position of the first context byte
+            segment_size: If set, positions wrap every segment_size
+        
+        Returns:
+            (scores array of 256 values, list of (byte, score) top candidates)
+        """
+        scores = np.zeros(256, dtype=np.float32)
+        
+        if self.token_ids is None or self.token_ids.numel() == 0:
+            return scores + 1.0 / 256, []
+        
+        token_ids = self.token_ids.cpu().numpy()
+        energies = self.energies.cpu().numpy() if self.energies is not None else np.ones(len(token_ids))
+        n_particles = len(token_ids)
+        
+        # Step 1: Compute token IDs for context bytes
+        context_tids = []
+        for i, byte_val in enumerate(context_bytes):
+            pos = context_start_position + i
+            if segment_size:
+                pos = pos % segment_size
+            tid = (byte_val * self.prime + pos) & self.mask
+            context_tids.append(tid)
+        
+        # Step 2: Find training particles that match the context pattern
+        # Look for sequences where these token IDs appear consecutively
+        context_len = len(context_tids)
+        match_end_positions = []  # Positions where context pattern ends
+        
+        for start_idx in range(n_particles - context_len):
+            # Check if tokens at [start_idx : start_idx + context_len] match context_tids
+            match = True
+            for j, ctx_tid in enumerate(context_tids):
+                if token_ids[start_idx + j] != ctx_tid:
+                    match = False
+                    break
+            if match:
+                # The context ends at start_idx + context_len - 1
+                # The "next" particle would be at start_idx + context_len
+                next_idx = start_idx + context_len
+                if next_idx < n_particles:
+                    match_end_positions.append(next_idx)
+        
+        # Step 3: For each matching position, get the "next" particle and dehash it
+        if match_end_positions:
+            for next_idx in match_end_positions:
+                next_tid = int(token_ids[next_idx])
+                next_energy = float(energies[next_idx])
+                
+                # Dehash: what position was this particle at?
+                # We need to know the position to dehash properly
+                next_pos = next_idx  # Absolute position in sequence
+                if segment_size:
+                    next_pos = next_idx % segment_size
+                
+                # Dehash to get byte
+                byte_val = self.dehash_token_id(next_tid, next_pos)
+                if 0 <= byte_val < 256:
+                    scores[byte_val] += next_energy
+        
+        # Step 4: Also look at carrier-coupled particles
+        # Find particles that are coupled via carriers to the context
+        if self.num_carriers > 0 and len(match_end_positions) > 0:
+            # Get context particle indices (where context matched)
+            context_particle_indices = []
+            for end_pos in match_end_positions:
+                start_pos = end_pos - context_len
+                context_particle_indices.extend(range(start_pos, end_pos))
+            
+            if context_particle_indices:
+                context_indices = torch.tensor(
+                    list(set(context_particle_indices)), 
+                    device=self.device, 
+                    dtype=torch.int64
+                )
+                
+                # Find carriers coupled to context
+                context_query = self._geo_query_at(context_indices)
+                coupled_carriers = self.carriers_for_particles(context_query, k=5)
+                
+                if coupled_carriers.frequencies.numel() > 0:
+                    # Find particles coupled to those carriers
+                    coupled_particles = self.particles_for_carriers(coupled_carriers, k=20)
+                    
+                    # Check which of these are at "next" positions
+                    for idx_tensor in [coupled_particles.indices]:
+                        for idx in idx_tensor.cpu().numpy():
+                            # Is this particle at a position right after a context match?
+                            for end_pos in match_end_positions:
+                                if idx == end_pos:  # It's the "next" particle
+                                    tid = int(token_ids[idx])
+                                    pos = idx if segment_size is None else idx % segment_size
+                                    byte_val = self.dehash_token_id(tid, pos)
+                                    if 0 <= byte_val < 256:
+                                        energy = float(energies[idx])
+                                        # Add bonus for carrier coupling
+                                        scores[byte_val] += energy * 0.5
+        
+        # Normalize scores
+        if scores.sum() > 0:
+            scores = scores / scores.sum()
+        else:
+            scores = np.ones(256, dtype=np.float32) / 256
+        
+        # Get top candidates
+        top_indices = np.argsort(scores)[::-1][:10]
+        top_candidates = [(int(idx), float(scores[idx])) for idx in top_indices]
+        
+        return scores, top_candidates
     
     def dehash_token_id(self, token_id: int, position: int) -> int:
         """Reverse the hash to get the original byte value.

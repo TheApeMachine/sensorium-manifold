@@ -1,4 +1,4 @@
-\begin{thebibliography}{36}
+\begin{thebibliography}{37}
 \providecommand{\natexlab}[1]{#1}
 \providecommand{\url}[1]{\texttt{#1}}
 \expandafter\ifx\csname urlstyle\endcsname\relax
@@ -257,6 +257,11 @@ Xiao-Jing Wang.
   in cognition.
 \newblock \emph{Physiological Reviews}, 90\penalty0 (3):\penalty0 1195--1268,
   2010.
+
+\bibitem[Whitelam(2025)]{whitelam2025generative}
+Stephen Whitelam.
+\newblock Generative thermodynamic computing.
+\newblock \emph{arXiv preprint arXiv:2506.15121}, 2025.
 
 \bibitem[Widrich et~al.(2024)]{widrich2024hopfield}
 Michael Widrich et~al.

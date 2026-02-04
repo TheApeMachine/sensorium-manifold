@@ -246,27 +246,23 @@ class ImageCollisionExperiment(Experiment):
         pass
     
     def _create_hero_visualization(self, results: list):
-        """Create a compelling visualization that proves compression visually.
+        """Create a clean visualization without titles or text blocks.
         
-        This creates a multi-panel figure showing:
-        1. Spatial clustering heatmap (2D projection of 3D positions colored by token ID)
-        2. Energy accumulation plot (showing how collisions lead to energy concentration)
-        3. Trie structure visualization (hierarchical clustering tree)
-        4. Compression metrics summary (before/after comparison)
+        All titles/descriptions belong in LaTeX captions.
         """
         # Select representative results (low, medium, high collision rates)
         low_collision = results[0]  # 0.1
         mid_collision = results[2]  # 0.5
         high_collision = results[-1]  # 0.9
         
-        fig = plt.figure(figsize=(20, 12))
-        gs = fig.add_gridspec(3, 4, hspace=0.3, wspace=0.3)
+        fig = plt.figure(figsize=(16, 12))
+        gs = fig.add_gridspec(3, 3, hspace=0.25, wspace=0.25)
         
-        # Panel 1-3: Spatial clustering visualization for different collision rates
-        for idx, (result, title_rate) in enumerate([
-            (low_collision, "Low (0.1)"),
-            (mid_collision, "Medium (0.5)"),
-            (high_collision, "High (0.9)"),
+        # Row 1: 3D spatial clustering for different collision rates
+        for idx, (result, label) in enumerate([
+            (low_collision, "A"),
+            (mid_collision, "B"),
+            (high_collision, "C"),
         ]):
             state, metrics = result
             positions = state.get("positions")
@@ -276,7 +272,6 @@ class ImageCollisionExperiment(Experiment):
             if positions is None or token_ids is None:
                 continue
             
-            # Convert to numpy
             if isinstance(positions, torch.Tensor):
                 positions = positions.detach().cpu().numpy()
             if isinstance(token_ids, torch.Tensor):
@@ -292,50 +287,24 @@ class ImageCollisionExperiment(Experiment):
             colors = np.array([token_to_color[tid] for tid in token_ids])
             
             # Size by energy
-            sizes = (energies - energies.min()) / (energies.max() - energies.min() + 1e-10) * 100 + 10
+            sizes = (energies - energies.min()) / (energies.max() - energies.min() + 1e-10) * 80 + 10
             
-            # 3D scatter plot
-            scatter = ax.scatter(
+            ax.scatter(
                 positions[:, 0], positions[:, 1], positions[:, 2],
-                c=colors, s=sizes, cmap='viridis', alpha=0.6, edgecolors='black', linewidth=0.5
+                c=colors, s=sizes, cmap='viridis', alpha=0.6, edgecolors='none'
             )
             
-            ax.set_xlabel('X Position')
-            ax.set_ylabel('Y Position')
-            ax.set_zlabel('Z Position')
-            ax.set_title(f'Collision Rate: {title_rate}\n'
-                         f'Clustering: {metrics["spatial_clustering"]:.3f}, '
-                         f'Compression: {metrics["compression_ratio"]:.3f}')
+            ax.set_xlabel('X')
+            ax.set_ylabel('Y')
+            ax.set_zlabel('Z')
             ax.view_init(elev=20, azim=45)
+            ax.text2D(0.02, 0.98, label, transform=ax.transAxes, fontsize=14, fontweight='bold', va='top')
         
-        # Panel 4: Compression metrics comparison
-        ax = fig.add_subplot(gs[0, 3])
-        collision_rates = [r[1]["collision_rate"] for r in results]
-        compression_ratios = [r[1]["compression_ratio"] for r in results]
-        entropies = [r[1]["entropy"] for r in results]
-        
-        ax2 = ax.twinx()
-        line1 = ax.plot(collision_rates, compression_ratios, 'o-', linewidth=3, markersize=10, 
-                       color='#2E86AB', label='Compression Ratio')
-        line2 = ax2.plot(collision_rates, entropies, 's-', linewidth=3, markersize=10,
-                        color='#A23B72', label='Entropy')
-        
-        ax.set_xlabel('Collision Rate', fontsize=12, fontweight='bold')
-        ax.set_ylabel('Compression Ratio (lower = better)', fontsize=11, color='#2E86AB')
-        ax2.set_ylabel('Entropy (bits)', fontsize=11, color='#A23B72')
-        ax.set_title('Compression Metrics vs Collision Rate', fontsize=13, fontweight='bold')
-        ax.grid(True, alpha=0.3)
-        
-        # Combine legends
-        lines = line1 + line2
-        labels = [l.get_label() for l in lines]
-        ax.legend(lines, labels, loc='upper right')
-        
-        # Panel 5-7: Energy accumulation visualization
-        for idx, (result, title_rate) in enumerate([
-            (low_collision, "Low (0.1)"),
-            (mid_collision, "Medium (0.5)"),
-            (high_collision, "High (0.9)"),
+        # Row 2: Energy accumulation scatter plots
+        for idx, (result, label) in enumerate([
+            (low_collision, "D"),
+            (mid_collision, "E"),
+            (high_collision, "F"),
         ]):
             state, metrics = result
             token_ids = state.get("token_ids")
@@ -361,48 +330,27 @@ class ImageCollisionExperiment(Experiment):
                 token_counts[tid] += 1
                 token_energies[tid].append(energy)
             
-            # Plot: collision count vs total energy
             counts = list(token_counts.values())
             total_energies = [np.sum(token_energies[tid]) for tid in token_counts.keys()]
             
-            ax.scatter(counts, total_energies, alpha=0.6, s=50, c='#F18F01', edgecolors='black', linewidth=0.5)
-            ax.set_xlabel('Particles per Token (Collision Count)', fontsize=10)
-            ax.set_ylabel('Total Energy', fontsize=10)
-            ax.set_title(f'Energy Accumulation: {title_rate}\n'
-                        f'Correlation: {metrics["energy_accumulation"]:.3f}', fontsize=11)
-            ax.grid(True, alpha=0.3)
+            ax.scatter(counts, total_energies, alpha=0.6, s=40, c='#F18F01', edgecolors='black', linewidth=0.3)
+            ax.set_xlabel('Particles per token')
+            ax.set_ylabel('Total energy')
             
             # Add trend line
             if len(counts) > 1:
                 z = np.polyfit(counts, total_energies, 1)
                 p = np.poly1d(z)
-                ax.plot(sorted(counts), p(sorted(counts)), "r--", alpha=0.8, linewidth=2, label='Trend')
-                ax.legend()
+                ax.plot(sorted(counts), p(sorted(counts)), "r--", alpha=0.8, linewidth=2)
+            
+            ax.spines['top'].set_visible(False)
+            ax.spines['right'].set_visible(False)
+            ax.text(0.02, 0.98, label, transform=ax.transAxes, fontsize=14, fontweight='bold', va='top')
         
-        # Panel 8: Trie structure visualization (hierarchical clustering)
-        ax = fig.add_subplot(gs[1, 3])
-        
-        # Show how compression ratio changes with collision rate
-        ax.fill_between(collision_rates, compression_ratios, alpha=0.3, color='#2E86AB')
-        ax.plot(collision_rates, compression_ratios, 'o-', linewidth=3, markersize=12, color='#2E86AB')
-        ax.set_xlabel('Collision Rate', fontsize=12, fontweight='bold')
-        ax.set_ylabel('Compression Ratio', fontsize=12, fontweight='bold')
-        ax.set_title('Compression Efficiency\n(Lower = Better)', fontsize=13, fontweight='bold')
-        ax.grid(True, alpha=0.3)
-        
-        # Add annotation showing improvement
-        improvement = (compression_ratios[0] - compression_ratios[-1]) / compression_ratios[0] * 100
-        ax.annotate(f'{improvement:.1f}% reduction', 
-                   xy=(collision_rates[-1], compression_ratios[-1]),
-                   xytext=(collision_rates[-1] - 0.2, compression_ratios[-1] + 0.1),
-                   arrowprops=dict(arrowstyle='->', lw=2, color='red'),
-                   fontsize=11, fontweight='bold', color='red')
-        
-        # Panel 9-11: Before/After comparison (spatial distribution)
-        for idx, (result, title_rate) in enumerate([
-            (low_collision, "Low (0.1)"),
-            (mid_collision, "Medium (0.5)"),
-            (high_collision, "High (0.9)"),
+        # Row 3: 2D spatial projections and compression curve
+        for idx, (result, label) in enumerate([
+            (low_collision, "G"),
+            (mid_collision, "H"),
         ]):
             state, metrics = result
             positions = state.get("positions")
@@ -418,74 +366,61 @@ class ImageCollisionExperiment(Experiment):
             
             ax = fig.add_subplot(gs[2, idx])
             
-            # 2D projection (X-Y plane)
             unique_tokens = np.unique(token_ids)
             token_to_color = {tid: i / len(unique_tokens) for i, tid in enumerate(unique_tokens)}
             colors = np.array([token_to_color[tid] for tid in token_ids])
             
-            scatter = ax.scatter(positions[:, 0], positions[:, 1], c=colors, 
-                               cmap='viridis', alpha=0.6, s=20, edgecolors='black', linewidth=0.3)
-            ax.set_xlabel('X Position', fontsize=10)
-            ax.set_ylabel('Y Position', fontsize=10)
-            ax.set_title(f'Spatial Clustering: {title_rate}\n'
-                        f'Unique Tokens: {metrics["unique_tokens"]}/{metrics["total_particles"]}', 
-                        fontsize=11)
+            ax.scatter(positions[:, 0], positions[:, 1], c=colors, 
+                      cmap='viridis', alpha=0.6, s=15, edgecolors='none')
+            ax.set_xlabel('X position')
+            ax.set_ylabel('Y position')
             ax.set_aspect('equal')
-            ax.grid(True, alpha=0.3)
+            ax.spines['top'].set_visible(False)
+            ax.spines['right'].set_visible(False)
+            ax.text(0.02, 0.98, label, transform=ax.transAxes, fontsize=14, fontweight='bold', va='top')
         
-        # Panel 12: Summary statistics
-        ax = fig.add_subplot(gs[2, 3])
-        ax.axis('off')
+        # Panel I: Compression metrics curve
+        ax = fig.add_subplot(gs[2, 2])
+        collision_rates = [r[1]["collision_rate"] for r in results]
+        compression_ratios = [r[1]["compression_ratio"] for r in results]
+        entropies = [r[1]["entropy"] for r in results]
         
-        # Create summary text
-        summary_text = "Compression Summary\n" + "=" * 30 + "\n\n"
-        summary_text += f"Low Collision (0.1):\n"
-        summary_text += f"  • Compression: {low_collision[1]['compression_ratio']:.3f}\n"
-        summary_text += f"  • Entropy: {low_collision[1]['entropy']:.2f} bits\n"
-        summary_text += f"  • Clustering: {low_collision[1]['spatial_clustering']:.3f}\n\n"
+        ax2 = ax.twinx()
+        ax.plot(collision_rates, compression_ratios, 'o-', linewidth=2, markersize=8, 
+               color='#2E86AB', label='Compression')
+        ax2.plot(collision_rates, entropies, 's-', linewidth=2, markersize=8,
+                color='#A23B72', label='Entropy')
         
-        summary_text += f"High Collision (0.9):\n"
-        summary_text += f"  • Compression: {high_collision[1]['compression_ratio']:.3f}\n"
-        summary_text += f"  • Entropy: {high_collision[1]['entropy']:.2f} bits\n"
-        summary_text += f"  • Clustering: {high_collision[1]['spatial_clustering']:.3f}\n\n"
+        ax.set_xlabel('Collision rate')
+        ax.set_ylabel('Compression ratio', color='#2E86AB')
+        ax2.set_ylabel('Entropy (bits)', color='#A23B72')
+        ax.spines['top'].set_visible(False)
+        ax2.spines['top'].set_visible(False)
+        ax.text(0.02, 0.98, 'I', transform=ax.transAxes, fontsize=14, fontweight='bold', va='top')
         
-        improvement_compression = ((low_collision[1]['compression_ratio'] - high_collision[1]['compression_ratio']) / 
-                                   low_collision[1]['compression_ratio'] * 100)
-        improvement_entropy = ((low_collision[1]['entropy'] - high_collision[1]['entropy']) / 
-                             low_collision[1]['entropy'] * 100)
-        
-        summary_text += f"Improvement:\n"
-        summary_text += f"  • Compression: {improvement_compression:.1f}% better\n"
-        summary_text += f"  • Entropy: {improvement_entropy:.1f}% reduction"
-        
-        ax.text(0.1, 0.5, summary_text, fontsize=11, family='monospace',
-               verticalalignment='center', bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
-        
-        # Main title
-        fig.suptitle('Hash Collisions = Compression: Thermodynamic Trie Visualization\n'
-                    'Demonstrating Spatial Clustering, Energy Accumulation, and Information Compression',
-                    fontsize=16, fontweight='bold', y=0.98)
-        
-        # Save
+        plt.tight_layout()
         path = self.artifact_path("figures", "image_collision_hero.png")
         path.parent.mkdir(parents=True, exist_ok=True)
         plt.savefig(path, dpi=200, bbox_inches='tight')
         plt.close(fig)
     
     def _create_bifurcation_charts(self, results: list):
-        """Create bifurcation charts showing trie structure and branching patterns."""
-        fig = plt.figure(figsize=(20, 10))
-        gs = fig.add_gridspec(2, 3, hspace=0.4, wspace=0.3)
+        """Create bifurcation charts without titles (use LaTeX captions)."""
+        fig = plt.figure(figsize=(15, 10))
+        gs = fig.add_gridspec(2, 3, hspace=0.3, wspace=0.25)
         
         # Select representative results
         low_collision = results[0]  # 0.1
         mid_collision = results[2]  # 0.5
         high_collision = results[-1]  # 0.9
         
-        for idx, (result, title_rate) in enumerate([
-            (low_collision, "Low (0.1)"),
-            (mid_collision, "Medium (0.5)"),
-            (high_collision, "High (0.9)"),
+        labels_top = ['A', 'B', 'C']
+        labels_bottom = ['D', 'E', 'F']
+        
+        for idx, (result, _) in enumerate([
+            (low_collision, "0.1"),
+            (mid_collision, "0.5"),
+            (high_collision, "0.9"),
         ]):
             state, metrics = result
             positions = state.get("positions")
@@ -494,25 +429,21 @@ class ImageCollisionExperiment(Experiment):
             if positions is None or token_ids is None:
                 continue
             
-            # Convert to numpy
             if isinstance(positions, torch.Tensor):
                 positions = positions.detach().cpu().numpy()
             if isinstance(token_ids, torch.Tensor):
                 token_ids = token_ids.detach().cpu().numpy()
             
-            # Panel 1: Hierarchical clustering dendrogram (trie structure)
+            # Row 1: Hierarchical clustering dendrogram
             ax1 = fig.add_subplot(gs[0, idx])
             
-            # Sample subset for dendrogram (too many points makes it unreadable)
             unique_tokens = np.unique(token_ids)
             if len(unique_tokens) > 100:
-                # Sample representative tokens
                 sample_indices = np.linspace(0, len(unique_tokens)-1, 50, dtype=int)
                 sample_tokens = unique_tokens[sample_indices]
             else:
                 sample_tokens = unique_tokens
             
-            # Get positions for sampled tokens
             token_positions = {}
             for tid in sample_tokens:
                 mask = token_ids == tid
@@ -521,58 +452,54 @@ class ImageCollisionExperiment(Experiment):
             
             if len(token_positions) > 1:
                 pos_array = np.array(list(token_positions.values()))
-                # Compute linkage for hierarchical clustering
                 from scipy.cluster.hierarchy import linkage, dendrogram
                 linkage_matrix = linkage(pos_array, method='ward')
-                dendrogram(linkage_matrix, ax=ax1, leaf_rotation=90, leaf_font_size=6)
-                ax1.set_title(f'Bifurcation Tree: {title_rate}\n'
-                             f'Shows hierarchical clustering of token IDs', fontsize=11)
-                ax1.set_xlabel('Token ID (clustered)', fontsize=9)
-                ax1.set_ylabel('Distance', fontsize=9)
+                dendrogram(linkage_matrix, ax=ax1, leaf_rotation=90, leaf_font_size=5,
+                          no_labels=True, color_threshold=0)
+                ax1.set_xlabel('Token clusters')
+                ax1.set_ylabel('Distance')
             
-            # Panel 2: Spatial bifurcation (2D projection showing branching)
+            ax1.spines['top'].set_visible(False)
+            ax1.spines['right'].set_visible(False)
+            ax1.text(0.02, 0.98, labels_top[idx], transform=ax1.transAxes, 
+                    fontsize=14, fontweight='bold', va='top')
+            
+            # Row 2: Spatial bifurcation
             ax2 = fig.add_subplot(gs[1, idx])
             
-            # Color by token ID, show how particles branch
             unique_tokens_vis = np.unique(token_ids)
             if len(unique_tokens_vis) > 20:
-                # Group similar tokens for visualization
                 token_to_group = {tid: i % 20 for i, tid in enumerate(unique_tokens_vis)}
                 colors = np.array([token_to_group[tid] for tid in token_ids])
             else:
                 token_to_color = {tid: i / len(unique_tokens_vis) for i, tid in enumerate(unique_tokens_vis)}
                 colors = np.array([token_to_color[tid] for tid in token_ids])
             
-            # 2D projection (X-Y plane)
-            scatter = ax2.scatter(positions[:, 0], positions[:, 1], c=colors, 
-                                 cmap='tab20', alpha=0.6, s=15, edgecolors='black', linewidth=0.2)
+            ax2.scatter(positions[:, 0], positions[:, 1], c=colors, 
+                       cmap='tab20', alpha=0.6, s=12, edgecolors='none')
             
-            # Draw lines connecting particles with same token ID (showing clustering)
-            for tid in unique_tokens_vis[:10]:  # Limit to first 10 for readability
+            # Draw convex hulls for first few token groups
+            for tid in unique_tokens_vis[:10]:
                 mask = token_ids == tid
-                if np.sum(mask) > 1:
+                if np.sum(mask) > 2:
                     same_token_pos = positions[mask]
-                    # Draw convex hull or connecting lines
-                    if len(same_token_pos) > 2:
-                        try:
-                            hull = ConvexHull(same_token_pos[:, :2])
-                            for simplex in hull.simplices:
-                                ax2.plot(same_token_pos[simplex, 0], same_token_pos[simplex, 1], 
-                                        'k-', alpha=0.2, linewidth=0.5)
-                        except:
-                            pass
+                    try:
+                        hull = ConvexHull(same_token_pos[:, :2])
+                        for simplex in hull.simplices:
+                            ax2.plot(same_token_pos[simplex, 0], same_token_pos[simplex, 1], 
+                                    'k-', alpha=0.15, linewidth=0.5)
+                    except:
+                        pass
             
-            ax2.set_xlabel('X Position', fontsize=10)
-            ax2.set_ylabel('Y Position', fontsize=10)
-            ax2.set_title(f'Spatial Bifurcation: {title_rate}\n'
-                         f'Particles cluster by token ID (trie branches)', fontsize=11)
+            ax2.set_xlabel('X position')
+            ax2.set_ylabel('Y position')
             ax2.set_aspect('equal')
-            ax2.grid(True, alpha=0.3)
+            ax2.spines['top'].set_visible(False)
+            ax2.spines['right'].set_visible(False)
+            ax2.text(0.02, 0.98, labels_bottom[idx], transform=ax2.transAxes, 
+                    fontsize=14, fontweight='bold', va='top')
         
-        fig.suptitle('Bifurcation Charts: Trie Structure Visualization\n'
-                    'Showing how hash collisions create hierarchical branching patterns',
-                    fontsize=16, fontweight='bold', y=0.98)
-        
+        plt.tight_layout()
         path = self.artifact_path("figures", "image_collision_bifurcation.png")
         path.parent.mkdir(parents=True, exist_ok=True)
         plt.savefig(path, dpi=200, bbox_inches='tight')
