@@ -1,4 +1,4 @@
-\begin{thebibliography}{10}
+\begin{thebibliography}{36}
 \providecommand{\natexlab}[1]{#1}
 \providecommand{\url}[1]{\texttt{#1}}
 \expandafter\ifx\csname urlstyle\endcsname\relax
@@ -19,6 +19,25 @@ Jean-Baptiste Alayrac, Jeff Donahue, Pauline Luc, Antoine Miech, Iain Barr,
 \newblock \emph{Advances in Neural Information Processing Systems},
   35:\penalty0 23716--23736, 2022.
 
+\bibitem[Boyd et~al.(2022)Boyd, Patra, Jarzynski, and
+  Crutchfield]{boyd2022thermodynamic}
+Alexander~B. Boyd, Ayoti Patra, Christopher Jarzynski, and James~P.
+  Crutchfield.
+\newblock Thermodynamic machine learning through maximum work production.
+\newblock \emph{New Journal of Physics}, 24\penalty0 (8):\penalty0 083040,
+  2022.
+
+\bibitem[Bulatov et~al.(2024)Bulatov, Kuratov, and Burtsev]{bulatov2024armt}
+Aydar Bulatov, Yuri Kuratov, and Mikhail~S. Burtsev.
+\newblock Associative recurrent memory transformer.
+\newblock \emph{arXiv preprint arXiv:2407.04841}, 2024.
+
+\bibitem[Chen et~al.(2020)Chen, Zhang, Arjovsky, and
+  Bottou]{chen2020symplectic}
+Zhengdao Chen, Jianyu Zhang, Mart{\'\i}n Arjovsky, and L{\'e}on Bottou.
+\newblock Symplectic recurrent neural networks.
+\newblock In \emph{International Conference on Learning Representations}, 2020.
+
 \bibitem[Conte et~al.(2019)Conte, DeBenedictis, Ganesh, Hylton, Strachan,
   Williams, Alemi, Altenberg, Crooks, Crutchfield, del Rio, Deutsch, DeWeese,
   Douglas, Faggin, Frank, Fry, Harsha, Henry, Kish, Knight, Kumar, Li, Meaney,
@@ -38,15 +57,60 @@ Tom Conte, Erik DeBenedictis, Natesh Ganesh, Todd Hylton, John~Paul Strachan,
 \newblock Thermodynamic computing.
 \newblock \emph{arXiv preprint arXiv:1911.01968}, 2019.
 
+\bibitem[Du et~al.(2021)Du, Li, Tenenbaum, and Mordatch]{du2021improved}
+Yilun Du, Shuang Li, Joshua Tenenbaum, and Igor Mordatch.
+\newblock Improved contrastive divergence training of energy-based models.
+\newblock In \emph{International Conference on Machine Learning}, pages
+  2837--2848, 2021.
+
+\bibitem[Engel et~al.(2001)Engel, Fries, and Singer]{engel2001dynamic}
+Andreas~K. Engel, Pascal Fries, and Wolf Singer.
+\newblock Dynamic predictions: Oscillations and synchrony in top-down
+  processing.
+\newblock \emph{Nature Reviews Neuroscience}, 2\penalty0 (10):\penalty0
+  704--716, 2001.
+
+\bibitem[Friston(2010)]{friston2010free}
+Karl Friston.
+\newblock The free-energy principle: A unified brain theory?
+\newblock \emph{Nature Reviews Neuroscience}, 11\penalty0 (2):\penalty0
+  127--138, 2010.
+
 \bibitem[Gemini~Team(2023)]{team2023gemini}
 Google Gemini~Team.
 \newblock Gemini: A family of highly capable multimodal models.
 \newblock \emph{arXiv preprint arXiv:2312.11805}, 2023.
 
+\bibitem[Greydanus et~al.(2019)Greydanus, Dzamba, and
+  Yosinski]{greydanus2019hamiltonian}
+Sam Greydanus, Misko Dzamba, and Jason Yosinski.
+\newblock Hamiltonian neural networks.
+\newblock In \emph{Advances in Neural Information Processing Systems},
+  volume~32, 2019.
+
+\bibitem[Gu et~al.(2018)Gu, Bradbury, Xiong, Li, and
+  Socher]{gu2018nonautoregressive}
+Jiatao Gu, James Bradbury, Caiming Xiong, Victor O.~K. Li, and Richard Socher.
+\newblock Non-autoregressive neural machine translation.
+\newblock \emph{International Conference on Learning Representations}, 2018.
+
 \bibitem[Hebb(1949)]{hebb1949organization}
 Donald~O. Hebb.
 \newblock \emph{The Organization of Behavior: A Neuropsychological Theory}.
 \newblock Wiley, New York, 1949.
+
+\bibitem[Ho et~al.(2020)Ho, Jain, and Abbeel]{ho2020denoising}
+Jonathan Ho, Ajay Jain, and Pieter Abbeel.
+\newblock Denoising diffusion probabilistic models.
+\newblock \emph{Advances in Neural Information Processing Systems},
+  33:\penalty0 6840--6851, 2020.
+
+\bibitem[Hopfield(1982)]{hopfield1982neural}
+John~J. Hopfield.
+\newblock Neural networks and physical systems with emergent collective
+  computational abilities.
+\newblock \emph{Proceedings of the National Academy of Sciences}, 79\penalty0
+  (8):\penalty0 2554--2558, 1982.
 
 \bibitem[Ioffe and Szegedy(2015)]{ioffe2015batch}
 Sergey Ioffe and Christian Szegedy.
@@ -55,6 +119,19 @@ Sergey Ioffe and Christian Szegedy.
 \newblock In \emph{International Conference on Machine Learning}, pages
   448--456, 2015.
 
+\bibitem[Jin et~al.(2020)Jin, Zhang, Zhu, Tang, and
+  Karniadakis]{jin2020sympnets}
+Pengzhan Jin, Zhen Zhang, Aiqing Zhu, Yifa Tang, and George~Em Karniadakis.
+\newblock Sympnets: Intrinsic structure-preserving symplectic networks for
+  identifying hamiltonian systems.
+\newblock In \emph{Neural Networks}, volume 132, pages 166--179, 2020.
+
+\bibitem[Kuramoto(1975)]{kuramoto1975international}
+Yoshiki Kuramoto.
+\newblock Self-entrainment of a population of coupled non-linear oscillators.
+\newblock \emph{International Symposium on Mathematical Problems in Theoretical
+  Physics}, pages 420--422, 1975.
+
 \bibitem[LeCun et~al.(2006)LeCun, Chopra, Hadsell, Ranzato, and
   Huang]{lecun2006tutorial}
 Yann LeCun, Sumit Chopra, Raia Hadsell, Marc'Aurelio Ranzato, and Fu~Jie Huang.
@@ -62,6 +139,39 @@ Yann LeCun, Sumit Chopra, Raia Hadsell, Marc'Aurelio Ranzato, and Fu~Jie Huang.
 \newblock In G{\"o}khan Bakir, Thomas Hofmann, Bernhard Sch{\"o}lkopf,
   Alexander~J. Smola, Ben Taskar, and S.~V.~N. Vishwanathan, editors,
   \emph{Predicting Structured Data}, pages 191--246. MIT Press, 2006.
+
+\bibitem[Liu et~al.(2024{\natexlab{a}})Liu, Le, Chung, and
+  Bottou]{liu2024memorymosaics}
+Jianyu Liu, Quoc Le, Junyoung Chung, and Leon Bottou.
+\newblock Memory mosaics.
+\newblock \emph{arXiv preprint arXiv:2405.06394}, 2024{\natexlab{a}}.
+
+\bibitem[Liu et~al.(2024{\natexlab{b}})Liu, Hsieh, and Dong]{liu2024camelot}
+Zexue Liu, Cho-Jui Hsieh, and Yihe Dong.
+\newblock Camelot: Towards large language models with training-free
+  consolidated associative memory.
+\newblock \emph{arXiv preprint arXiv:2402.13449}, 2024{\natexlab{b}}.
+
+\bibitem[Lu et~al.(2024)Lu, Clark, Lee, Zhang, Khosla, Marten, Hoesein, and
+  Kembhavi]{lu2024unifiedio2}
+Jiasen Lu, Christopher Clark, Sangho Lee, Zichen Zhang, Savya Khosla, Ryan
+  Marten, Derek Hoesein, and Aniruddha Kembhavi.
+\newblock Unified-io 2: Scaling autoregressive multimodal models with vision,
+  language, audio, and action.
+\newblock \emph{Conference on Computer Vision and Pattern Recognition}, 2024.
+
+\bibitem[Miyato et~al.(2025)Miyato, Jaini, Huang, and Teh]{miyato2025akorn}
+Takeru Miyato, Priyank Jaini, Chin-Wei Huang, and Yee~Whye Teh.
+\newblock Artificial kuramoto oscillatory neurons.
+\newblock \emph{International Conference on Learning Representations}, 2025.
+\newblock Oral presentation at ICLR 2025.
+
+\bibitem[Nie et~al.(2024)Nie, Liu, Gong, Wang, Deng, Yuan, Wang, and
+  Xie]{nie2024scaling}
+Shen Nie, Fengqi Liu, Lujia Gong, Zebin Wang, Chao Deng, Zhenyu Yuan, Yue Wang,
+  and Saining Xie.
+\newblock Scaling up masked diffusion models on text.
+\newblock \emph{arXiv preprint arXiv:2410.18514}, 2024.
 
 \bibitem[Prigogine(1978)]{prigogine1978time}
 Ilya Prigogine.
@@ -85,10 +195,73 @@ Alec Radford, Jong~Wook Kim, Chris Hallacy, Aditya Ramesh, Gabriel Goh,
 \newblock In \emph{International Conference on Machine Learning}, pages
   8748--8763, 2021.
 
+\bibitem[Ramsauer et~al.(2021)Ramsauer, Sch{\"a}fl, Lehner, Seidl, Widrich,
+  Adler, Gruber, Holzleitner, Pavlovi{\'c}, Sandve, Greiff, Kreil, Kopp,
+  Klambauer, Brandstetter, and Hochreiter]{ramsauer2021hopfield}
+Hubert Ramsauer, Bernhard Sch{\"a}fl, Johannes Lehner, Philipp Seidl, Michael
+  Widrich, Thomas Adler, Lukas Gruber, Markus Holzleitner, Milena Pavlovi{\'c},
+  Geir~Kjetil Sandve, Victor Greiff, David Kreil, Michael Kopp, G{\"u}nter
+  Klambauer, Johannes Brandstetter, and Sepp Hochreiter.
+\newblock Hopfield networks is all you need.
+\newblock In \emph{International Conference on Learning Representations}, 2021.
+
 \bibitem[Rao and Ballard(1999)]{rao1999predictive}
 Rajesh P.~N. Rao and Dana~H. Ballard.
 \newblock Predictive coding in the visual cortex: A functional interpretation
   of some extra-classical receptive-field effects.
 \newblock \emph{Nature Neuroscience}, 2\penalty0 (1):\penalty0 79--87, 1999.
+
+\bibitem[Sahoo et~al.(2024)Sahoo, Arriola, Schiff, Gokaslan, Marroquin,
+  Kuleshov, Rush, and Chiang]{sahoo2024mdlm}
+Subham~Sekhar Sahoo, Marianne Arriola, Yair Schiff, Aaron Gokaslan, Edgar
+  Marroquin, Volodymyr Kuleshov, Alexander~M. Rush, and Wei-Ning Chiang.
+\newblock Simple and effective masked diffusion language models.
+\newblock \emph{Advances in Neural Information Processing Systems}, 2024.
+
+\bibitem[Santos et~al.(2024)Santos, Niculae, McCallum, and
+  Martins]{santos2024sparse}
+Saul Santos, Vlad Niculae, Andrew McCallum, and Andr{\'e} F.~T. Martins.
+\newblock Sparse and structured hopfield networks.
+\newblock In \emph{International Conference on Machine Learning}, 2024.
+
+\bibitem[Singer(1999)]{singer1999neuronal}
+Wolf Singer.
+\newblock Neuronal synchrony: A versatile code for the definition of relations?
+\newblock \emph{Neuron}, 24\penalty0 (1):\penalty0 49--65, 1999.
+
+\bibitem[Sohl-Dickstein et~al.(2015)Sohl-Dickstein, Weiss, Maheswaranathan, and
+  Ganguli]{sohl2015deep}
+Jascha Sohl-Dickstein, Eric Weiss, Niru Maheswaranathan, and Surya Ganguli.
+\newblock Deep unsupervised learning using nonequilibrium thermodynamics.
+\newblock \emph{International Conference on Machine Learning}, pages
+  2256--2265, 2015.
+
+\bibitem[Song et~al.(2021)Song, Sohl-Dickstein, Kingma, Kumar, Ermon, and
+  Poole]{song2021score}
+Yang Song, Jascha Sohl-Dickstein, Diederik~P. Kingma, Abhishek Kumar, Stefano
+  Ermon, and Ben Poole.
+\newblock Score-based generative modeling through stochastic differential
+  equations.
+\newblock \emph{International Conference on Learning Representations}, 2021.
+
+\bibitem[Strogatz(2000)]{strogatz2000kuramoto}
+Steven~H. Strogatz.
+\newblock From kuramoto to crawford: Exploring the onset of synchronization in
+  populations of coupled oscillators.
+\newblock \emph{Physica D: Nonlinear Phenomena}, 143\penalty0 (1-4):\penalty0
+  1--20, 2000.
+
+\bibitem[Wang(2010)]{wang2010neurophysiological}
+Xiao-Jing Wang.
+\newblock Neurophysiological and computational principles of cortical rhythms
+  in cognition.
+\newblock \emph{Physiological Reviews}, 90\penalty0 (3):\penalty0 1195--1268,
+  2010.
+
+\bibitem[Widrich et~al.(2024)]{widrich2024hopfield}
+Michael Widrich et~al.
+\newblock Modern hopfield networks meet encoded neural
+  representations---addressing practical considerations.
+\newblock In \emph{Advances in Neural Information Processing Systems}, 2024.
 
 \end{thebibliography}

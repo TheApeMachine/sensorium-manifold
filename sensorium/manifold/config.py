@@ -1,6 +1,9 @@
 from dataclasses import dataclass, field
 from pathlib import Path
 import torch
+from typing import Callable
+
+from optimizer.physics_units import UnitSystem
 
 
 @dataclass
@@ -13,11 +16,11 @@ class SimulationConfig:
     dt: float = 0.01
     poisson_iterations: int = 50         # Need 30-50 for proper pressure solving
     
-    # Fundamental physical constants (with correct relative magnitudes)
-    # Hierarchy: Gravity << Radiation << Thermal << Elastic
-    G: float = 0.001                     # Gravity is weakest (long-range, slow)
-    k_B: float = 0.1                     # Moderate thermal pressure
-    sigma_SB: float = 1e-5               # Radiation is a slow leak (real σ ≈ 5.67e-8)
+    # [CHOICE] unit system (simulation units → SI units)
+    # [FORMULA] x_SI = x_sim * unit_scale
+    # [REASON] enables deriving universal constants from CODATA instead of tuning
+    # [NOTES] Default is the identity mapping (1 sim unit == 1 SI unit).
+    unit_system: UnitSystem = field(default_factory=UnitSystem.si)
     
     # Material properties
     particle_radius: float = 0.5         # Particle radius
@@ -30,7 +33,11 @@ class SimulationConfig:
     
     # Simulation
     num_particles: int = 1000
-    num_steps: int = 500
+    num_carriers: int = 2
+    num_steps: int = 50000
+
+    # Reproducibility (integrity checks)
+    seed: int = 0
     
     # Device
     device: str = "mps" if torch.backends.mps.is_available() else "cpu"
@@ -38,7 +45,7 @@ class SimulationConfig:
     
     # Dashboard
     dashboard_enabled: bool = True
-    dashboard_update_interval: int = 10  # Update every N steps
+    dashboard_update_interval: int = 50  # Update every N steps
 
     # Optional: record the live dashboard to a video file (mp4/gif).
     # If set, the visualizer will append frames as it runs and finalize on exit.
@@ -58,3 +65,11 @@ class SimulationConfig:
     inject_interval_step: float = 5.0  # quantization step
     inject_particles_min: int = 30
     inject_particles_max: int = 100
+
+    # Scripted injection mode (deterministic, step-based)
+    # If set, the simulator will inject according to a JSON script instead of random timing.
+    injection_script_path: Path | None = None
+    injection_script_loop: bool = False
+
+    # Generator
+    generator: Callable = field(default_factory=lambda: None)

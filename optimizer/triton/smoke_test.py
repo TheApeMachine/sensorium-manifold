@@ -39,7 +39,7 @@ def main() -> None:
     assert out2["frequencies"].numel() >= 0
 
     # ---- grid physics smoke ----
-    pcfg = ManifoldPhysicsConfig(grid_size=(16, 16, 16), poisson_iterations=4, dt=0.01)
+    pcfg = ManifoldPhysicsConfig(grid_size=(16, 16, 16), dt=0.01)
     mp = ManifoldPhysics(pcfg, device=device)
 
     P = 256

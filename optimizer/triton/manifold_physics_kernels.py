@@ -128,6 +128,7 @@ def carrier_block_accum_kernel(
     out_force_i_ptr,  # fp32 [M]
     out_w_sum_ptr,  # fp32 [M]
     out_w_omega_sum_ptr,  # fp32 [M]
+    out_w_omega2_sum_ptr,  # fp32 [M]
     out_w_amp_sum_ptr,  # fp32 [M]
     # sizes
     N: tl.constexpr,
@@ -157,6 +158,7 @@ def carrier_block_accum_kernel(
     tl.atomic_add(out_force_i_ptr + k, tl.sum(w * zi, axis=0))
     tl.atomic_add(out_w_sum_ptr + k, tl.sum(w, axis=0))
     tl.atomic_add(out_w_omega_sum_ptr + k, tl.sum(w * omega_i, axis=0))
+    tl.atomic_add(out_w_omega2_sum_ptr + k, tl.sum(w * omega_i * omega_i, axis=0))
     tl.atomic_add(out_w_amp_sum_ptr + k, tl.sum(w * amp_i, axis=0))
 
 
@@ -184,6 +186,7 @@ def carrier_finalize_and_split_kernel(
     force_i_ptr,
     w_sum_ptr,
     w_omega_sum_ptr,
+    w_omega2_sum_ptr,
     w_amp_sum_ptr,
     N: tl.constexpr,
     max_carriers: tl.constexpr,
@@ -232,6 +235,7 @@ def carrier_finalize_and_split_kernel(
     force_i_raw = tl.load(force_i_ptr + k)
     w_sum = tl.load(w_sum_ptr + k)
     w_omega_sum = tl.load(w_omega_sum_ptr + k)
+    w_omega2_sum = tl.load(w_omega2_sum_ptr + k)
     w_amp_sum = tl.load(w_amp_sum_ptr + k)
 
     mean_omega = tl.where(w_sum > 1e-8, w_omega_sum / w_sum, omega_k)
@@ -249,6 +253,18 @@ def carrier_finalize_and_split_kernel(
     if recenter_alpha != 0.0:
         rc = tl.maximum(tl.minimum(recenter_alpha, 1.0), 0.0)
         omega_k = tl.where(state == STATE_CRYSTALLIZED, omega_k, omega_k * (1.0 - rc) + mean_omega * rc)
+
+    # [CHOICE] adaptive gate width (frequency spread of current supporters)
+    # [FORMULA] σ_k^2 = E_w[ω^2] - (E_w[ω])^2
+    # [REASON] restore “open/sharpen” behavior as an emergent property (not conflict-driven)
+    if recenter_alpha != 0.0:
+        rc = tl.maximum(tl.minimum(recenter_alpha, 1.0), 0.0)
+        Ew = tl.where(w_sum > 1e-8, w_omega_sum / w_sum, omega_k)
+        Ew2 = tl.where(w_sum > 1e-8, w_omega2_sum / w_sum, omega_k * omega_k)
+        var = tl.maximum(Ew2 - Ew * Ew, 0.0)
+        sigma_hat = tl.sqrt(var)
+        gate_w = tl.where(state == STATE_CRYSTALLIZED, gate_w, gate_w * (1.0 - rc) + sigma_hat * rc)
+    gate_w = tl.maximum(tl.minimum(gate_w, gate_width_max), gate_width_min)
 
     # metabolic shrink (skip for crystallized)
     inv_w = 1.0 / tl.maximum(w_sum, 1e-8)
@@ -584,6 +600,7 @@ def carrier_update_and_split(
     force_i = torch.zeros((current_carriers,), device=osc_phase.device, dtype=torch.float32)
     w_sum = torch.zeros((current_carriers,), device=osc_phase.device, dtype=torch.float32)
     w_omega_sum = torch.zeros((current_carriers,), device=osc_phase.device, dtype=torch.float32)
+    w_omega2_sum = torch.zeros((current_carriers,), device=osc_phase.device, dtype=torch.float32)
     w_amp_sum = torch.zeros((current_carriers,), device=osc_phase.device, dtype=torch.float32)
 
     # Pass 1: accumulate block partials into per-carrier sums
@@ -597,6 +614,7 @@ def carrier_update_and_split(
         force_i,
         w_sum,
         w_omega_sum,
+        w_omega2_sum,
         w_amp_sum,
         N=N,
         BLOCK_N=BLOCK_N,
@@ -629,6 +647,7 @@ def carrier_update_and_split(
         force_i,
         w_sum,
         w_omega_sum,
+        w_omega2_sum,
         w_amp_sum,
         N=N,
         max_carriers=max_carriers,

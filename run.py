@@ -49,6 +49,20 @@ def main():
                         help="Minimum particles per injection (default: 30)")
     parser.add_argument("--inject-particles-max", type=int, default=100,
                         help="Maximum particles per injection (default: 100)")
+
+    # Scripted injections (deterministic integrity checks)
+    parser.add_argument("--seed", type=int, default=0, help="Random seed for reproducible scripted runs")
+    parser.add_argument(
+        "--injection-script",
+        type=str,
+        default=None,
+        help="Path to JSON injection script (enables deterministic step-based injections)",
+    )
+    parser.add_argument(
+        "--script-loop",
+        action="store_true",
+        help="Loop the injection script forever (period = last_script_step + 1)",
+    )
     
     args = parser.parse_args()
     
@@ -76,6 +90,9 @@ def main():
         inject_interval_max=args.inject_max,
         inject_particles_min=args.inject_particles_min,
         inject_particles_max=args.inject_particles_max,
+        seed=int(args.seed),
+        injection_script_path=(None if args.injection_script is None else Path(args.injection_script)),
+        injection_script_loop=bool(args.script_loop),
     )
     
     result = run_simulation(config)

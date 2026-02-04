@@ -358,7 +358,7 @@ The physics simulation is implemented with fused GPU kernels for maximum perform
 ### Files
 
 - `optimizer/metal/manifold_physics.metal` — Metal shader implementations
-- `optimizer/metal/manifold_physics.py` — Python wrapper with PyTorch fallbacks
+- `optimizer/metal/manifold_physics.py` — Python wrapper (Metal-only; raises if Metal unavailable)
 - `optimizer/metal/manifold_physics_test.py` — Unit tests
 
 ### Key Optimizations
@@ -367,7 +367,7 @@ The physics simulation is implemented with fused GPU kernels for maximum perform
 2. **Trilinear interpolation**: Smooth field sampling, computed inline
 3. **Atomic scattering**: Particles contribute to fields in parallel
 4. **Structure of Arrays**: Coalesced memory access on GPU
-5. **PyTorch fallback**: Works without Metal compilation for development
+5. **No silent fallback**: If Metal compilation/dispatch is unavailable, raise immediately
 
 ### Usage
 
@@ -377,8 +377,7 @@ from optimizer.metal.manifold_physics import ManifoldPhysics, ManifoldPhysicsCon
 config = ManifoldPhysicsConfig(
     grid_size=(64, 64, 64),
     dt=0.01,
-    gravity_strength=1.0,
-    heat_diffusion=0.1,
+    unit_system=UnitSystem.si(),
 )
 physics = ManifoldPhysics(config, device="mps")
 

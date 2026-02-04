@@ -9,10 +9,12 @@ Currently implemented:
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Dict, Optional, TYPE_CHECKING
 
 import torch
+
+from optimizer.physics_units import PhysicalConstants, UnitSystem, assert_finite_constants
 
 from . import manifold_physics_kernels as k
 from . import manifold_grid_kernels as g
@@ -31,9 +33,11 @@ class ManifoldPhysicsConfig:
     dt: float = 0.01
     poisson_iterations: int = 50
 
-    G: float = 0.001
-    k_B: float = 0.1
-    sigma_SB: float = 1e-5
+    # [CHOICE] unit system (simulation units → SI units)
+    # [FORMULA] x_SI = x_sim * unit_scale
+    # [REASON] derive universal constants from CODATA + explicit base-unit mapping
+    # [NOTES] Default is the identity mapping (1 sim unit == 1 SI unit).
+    unit_system: UnitSystem = field(default_factory=UnitSystem.si)
 
     particle_radius: float = 0.5
     thermal_conductivity: float = 0.1
@@ -42,6 +46,11 @@ class ManifoldPhysicsConfig:
     emissivity: float = 0.5
     restitution: float = 0.8
     young_modulus: float = 1000.0
+
+    def physical_constants(self) -> PhysicalConstants:
+        c = PhysicalConstants.from_codata_si(self.unit_system)
+        assert_finite_constants(c)
+        return c
 
 
 class ManifoldPhysics:
@@ -81,7 +90,8 @@ class ManifoldPhysics:
 
     def solve_gravity(self) -> None:
         cfg = self.config
-        gravity_4pi = 4.0 * 3.14159265359 * float(cfg.G)
+        const = cfg.physical_constants()
+        gravity_4pi = 4.0 * 3.14159265359 * float(const.G)
         phi_tmp = torch.zeros_like(self.gravity_potential)
         for i in range(int(cfg.poisson_iterations)):
             if i % 2 == 0:
@@ -125,6 +135,7 @@ class ManifoldPhysics:
         masses: "Tensor",
     ) -> tuple["Tensor", "Tensor", "Tensor", "Tensor", "Tensor"]:
         cfg = self.config
+        const = cfg.physical_constants()
         # in-place updates
         g.gather_update_particles(
             gravity_potential=self.gravity_potential,
@@ -137,9 +148,9 @@ class ManifoldPhysics:
             masses=masses.to(device=self.device, dtype=self.dtype),
             dt=float(cfg.dt),
             grid_spacing=float(cfg.grid_spacing),
-            G=float(cfg.G),
-            k_B=float(cfg.k_B),
-            sigma_SB=float(cfg.sigma_SB),
+            G=float(const.G),
+            k_B=float(const.k_B),
+            sigma_SB=float(const.sigma_SB),
             particle_radius=float(cfg.particle_radius),
             thermal_conductivity=float(cfg.thermal_conductivity),
             specific_heat=float(cfg.specific_heat),
@@ -758,4 +769,96 @@ class SpectralCarrierPhysics:
             particle_energies = energy
 
         return out
+
+    # -------------------------------------------------------------------------
+    # Convergence predicates (wait-until conditions)
+    # -------------------------------------------------------------------------
+
+    def num_volatile(self) -> int:
+        """Count of carriers in volatile state (state=0)."""
+        if self.num_carriers == 0:
+            return 0
+        states = self.carrier_state[: self.num_carriers].detach().to("cpu")
+        return int((states == 0).sum().item())
+
+    def num_stable(self) -> int:
+        """Count of carriers in stable state (state=1)."""
+        if self.num_carriers == 0:
+            return 0
+        states = self.carrier_state[: self.num_carriers].detach().to("cpu")
+        return int((states == 1).sum().item())
+
+    def num_crystallized(self) -> int:
+        """Count of carriers in crystallized state (state=2)."""
+        if self.num_carriers == 0:
+            return 0
+        states = self.carrier_state[: self.num_carriers].detach().to("cpu")
+        return int((states == 2).sum().item())
+
+    def mean_conflict(self) -> float:
+        """Mean conflict across active carriers (0 = fully coherent)."""
+        if self.num_carriers == 0:
+            return 0.0
+        conf = self.carrier_conflict[: self.num_carriers].detach().to("cpu", dtype=torch.float32)
+        return float(conf.mean().item())
+
+    def max_conflict(self) -> float:
+        """Maximum conflict across active carriers."""
+        if self.num_carriers == 0:
+            return 0.0
+        conf = self.carrier_conflict[: self.num_carriers].detach().to("cpu", dtype=torch.float32)
+        return float(conf.max().item())
+
+    def mean_amplitude(self) -> float:
+        """Mean amplitude across active carriers."""
+        if self.num_carriers == 0:
+            return 0.0
+        cr = self.carrier_real[: self.num_carriers].detach().to("cpu", dtype=torch.float32)
+        ci = self.carrier_imag[: self.num_carriers].detach().to("cpu", dtype=torch.float32)
+        amp = torch.sqrt(cr * cr + ci * ci)
+        return float(amp.mean().item())
+
+    def carriers_stable(self, conflict_threshold: float = 0.15) -> bool:
+        """True if all carriers have low conflict (phase coherence is good)."""
+        if self.num_carriers == 0:
+            return False
+        return self.max_conflict() <= conflict_threshold
+
+    def has_crystallized(self, min_count: int = 1) -> bool:
+        """True if at least `min_count` carriers have crystallized."""
+        return self.num_crystallized() >= min_count
+
+    def all_stable_or_crystallized(self) -> bool:
+        """True if no carriers are volatile (all have passed stable threshold)."""
+        return self.num_volatile() == 0 and self.num_carriers > 0
+
+    def thinking_complete(
+        self,
+        *,
+        min_carriers: int = 1,
+        max_conflict: float = 0.20,
+        min_crystallized_frac: float = 0.0,
+    ) -> bool:
+        """Compound convergence check: carriers exist, conflict is low, optionally some crystallized."""
+        if self.num_carriers < min_carriers:
+            return False
+        if self.mean_conflict() > max_conflict:
+            return False
+        if min_crystallized_frac > 0.0:
+            frac = float(self.num_crystallized()) / float(self.num_carriers)
+            if frac < min_crystallized_frac:
+                return False
+        return True
+
+    def convergence_stats(self) -> dict:
+        """Return a dictionary of convergence-related statistics."""
+        return {
+            "num_carriers": self.num_carriers,
+            "num_volatile": self.num_volatile(),
+            "num_stable": self.num_stable(),
+            "num_crystallized": self.num_crystallized(),
+            "mean_conflict": self.mean_conflict(),
+            "max_conflict": self.max_conflict(),
+            "mean_amplitude": self.mean_amplitude(),
+        }
 

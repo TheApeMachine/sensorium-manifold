@@ -99,40 +99,53 @@ run-continuous: ## Run indefinitely with random file injections
 run-continuous-fast: ## Continuous mode with faster injections (5-20s)
 	$(ACTIVATE) && python run.py --continuous --particles 100 --inject-min 5 --inject-max 20
 
+run-script: ## Deterministic scripted injections (integrity check)
+	$(ACTIVATE) && python run.py --particles 200 --dashboard-video artifacts/dashboard_script.mp4 --dashboard-fps 30 --seed 0 --injection-script artifacts/injection_script_example.json
+
 # ============================================================================
-# EXPERIMENTS
+# EXPERIMENTS (Metal/MPS kernel-based)
 # ============================================================================
 
-experiments: ## Run all experiments at toy scale
-	@mkdir -p artifacts/experiments
-	$(ACTIVATE) && python -m thermo_manifold.experiments.harness --scale toy
+experiments: ## Run all kernel experiments
+	@mkdir -p paper/figures paper/tables
+	$(ACTIVATE) && python -m sensorium.experiments --experiment all
 
-experiments-medium: ## Run all experiments at medium scale
-	@mkdir -p artifacts/experiments
-	$(ACTIVATE) && python -m thermo_manifold.experiments.harness --scale medium
+experiments-v: ## Run all kernel experiments (verbose)
+	@mkdir -p paper/figures paper/tables
+	$(ACTIVATE) && python -m sensorium.experiments --experiment all
 
-experiments-full: ## Run all experiments at full scale (slow!)
-	@mkdir -p artifacts/experiments
-	$(ACTIVATE) && python -m thermo_manifold.experiments.harness --scale full
+exp-rule-shift: ## Run rule shift experiment only
+	$(ACTIVATE) && python -m sensorium.experiments --experiment rule_shift
 
-experiments-all: ## Run all experiments at all scales (very slow!)
-	@mkdir -p artifacts/experiments
-	$(ACTIVATE) && python -m thermo_manifold.experiments.harness --scale all
+exp-ablation: ## Run ablation study only
+	$(ACTIVATE) && python -m sensorium.experiments --experiment ablation
+
+exp-continuous: ## Run continuous simulation experiment
+	$(ACTIVATE) && python -m sensorium.experiments --experiment continuous
 
 exp-timeseries: ## Run time series experiment only
-	$(ACTIVATE) && python -m thermo_manifold.experiments.harness --experiment timeseries
+	$(ACTIVATE) && python -m sensorium.experiments --experiment timeseries
 
 exp-next-token: ## Run next token prediction experiment only
-	$(ACTIVATE) && python -m thermo_manifold.experiments.harness --experiment next_token
+	$(ACTIVATE) && python -m sensorium.experiments --experiment next_token
+
+exp-mnist: ## Run MNIST bytes experiment only
+	$(ACTIVATE) && python -m sensorium.experiments --experiment mnist_bytes
 
 exp-image: ## Run image generation experiment only
-	$(ACTIVATE) && python -m thermo_manifold.experiments.harness --experiment image_gen
+	$(ACTIVATE) && python -m sensorium.experiments --experiment image_gen
 
 exp-audio: ## Run audio generation experiment only
-	$(ACTIVATE) && python -m thermo_manifold.experiments.harness --experiment audio_gen
+	$(ACTIVATE) && python -m sensorium.experiments --experiment audio_gen
 
 exp-text-diffusion: ## Run text diffusion experiment only
-	$(ACTIVATE) && python -m thermo_manifold.experiments.harness --experiment text_diffusion
+	$(ACTIVATE) && python -m sensorium.experiments --experiment text_diffusion
+
+exp-cocktail: ## Run cocktail party (source separation) experiment
+	$(ACTIVATE) && python -m sensorium.experiments --experiment cocktail_party
+
+exp-collision: ## Run Universal Tokenizer TOY collision sweep
+	$(ACTIVATE) && python -m sensorium.experiments --experiment collision
 
 # ============================================================================
 # PAPER GENERATION
@@ -140,10 +153,10 @@ exp-text-diffusion: ## Run text diffusion experiment only
 
 paper: ## Run experiments and compile paper (single command)
 	@echo "============================================"
-	@echo "THERMODYNAMIC MANIFOLD - PAPER GENERATION"
+	@echo "SENSORIUM MANIFOLD - PAPER GENERATION"
 	@echo "============================================"
 	@mkdir -p paper/figures paper/tables
-	$(ACTIVATE) && python -m thermo_manifold.experiments.harness
+	$(ACTIVATE) && python -m sensorium.experiments --experiment all
 	@echo ""
 	@echo "Compiling LaTeX..."
 	cd paper && pdflatex -interaction=nonstopmode main.tex
@@ -157,7 +170,7 @@ paper: ## Run experiments and compile paper (single command)
 
 paper-experiments: ## Run experiments only (generate tables and figures)
 	@mkdir -p paper/figures paper/tables
-	$(ACTIVATE) && python -m thermo_manifold.experiments.harness
+	$(ACTIVATE) && python -m sensorium.experiments --experiment all
 
 paper-compile: ## Compile LaTeX only (assumes experiments already run)
 	cd paper && pdflatex -interaction=nonstopmode main.tex

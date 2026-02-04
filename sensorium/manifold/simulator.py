@@ -1,13 +1,16 @@
-from typing import Dict, Any
+from typing import Dict, Any, Optional, List
 import time
 from pathlib import Path
 from dataclasses import dataclass
 import torch
+import json
+import random
+import numpy as np
 from .config import SimulationConfig
 from .visualizer import SimulationDashboard
 from .carriers import CarrierState
 from .profiler import create_profiler
-from optimizer.manifold_physics import (
+from optimizer.metal.manifold_physics import (
     ManifoldPhysics,
     ManifoldPhysicsConfig,
     SpectralCarrierPhysics,
@@ -17,20 +20,78 @@ from optimizer.manifold_physics import (
 
 
 def run_simulation(config: SimulationConfig) -> Dict[str, Any]:
-    """Run an indefinite simulation with random file injections.
+    """Run an indefinite simulation with injections.
     
     Press Ctrl+C to stop.
     """
-    import random
+
+    # ---------------------------------------------------------------------
+    # Reproducibility for integrity checks
+    # ---------------------------------------------------------------------
+    seed = int(getattr(config, "seed", 0))
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+
+    # ---------------------------------------------------------------------
+    # Optional scripted injections (step-based, deterministic)
+    # ---------------------------------------------------------------------
+    @dataclass(frozen=True)
+    class InjectionEvent:
+        step: int
+        num_particles: int
+        pattern: str = "random"
+        energy_scale: float = 1.0
+        omega: Optional[float] = None  # if set, overrides excitation for injected particles
+        label: str = ""
+        seed: Optional[int] = None     # if set, reseeds before this injection (determinism)
+
+    def _load_injection_script(path: Path) -> List[InjectionEvent]:
+        raw = json.loads(path.read_text())
+        if not isinstance(raw, list):
+            raise ValueError("Injection script must be a JSON list")
+        events: List[InjectionEvent] = []
+        for i, e in enumerate(raw):
+            if not isinstance(e, dict):
+                raise ValueError(f"Injection event {i} must be an object")
+            events.append(
+                InjectionEvent(
+                    step=int(e["step"]),
+                    num_particles=int(e["num_particles"]),
+                    pattern=str(e.get("pattern", "random")),
+                    energy_scale=float(e.get("energy_scale", 1.0)),
+                    omega=(None if e.get("omega", None) is None else float(e["omega"])),
+                    label=str(e.get("label", "")),
+                    seed=(None if e.get("seed", None) is None else int(e["seed"])),
+                )
+            )
+        events.sort(key=lambda ev: ev.step)
+        return events
+
+    script_path = getattr(config, "injection_script_path", None)
+    script_events: List[InjectionEvent] = []
+    script_loop = bool(getattr(config, "injection_script_loop", False))
+    if script_path is not None:
+        script_path = Path(script_path)
+        if not script_path.exists():
+            raise FileNotFoundError(f"injection_script_path not found: {script_path}")
+        script_events = _load_injection_script(script_path)
+        if len(script_events) == 0:
+            raise ValueError(f"injection_script_path is empty: {script_path}")
     
     print("=" * 60)
-    print("THERMO-MANIFOLD CONTINUOUS SIMULATION")
+    print("THERMO-MANIFOLD SIMULATION")
     print("=" * 60)
     print(f"Device:        {config.device}")
     print(f"Grid:          {config.grid_size}")
     print(f"Initial:       {config.num_particles} particles")
-    print(f"Inject every:  {config.inject_interval_min}-{config.inject_interval_max}s")
-    print(f"Inject size:   {config.inject_particles_min}-{config.inject_particles_max} particles")
+    if script_events:
+        print(f"Inject mode:   SCRIPT ({len(script_events)} events){' loop' if script_loop else ''}")
+        print(f"Script:        {str(script_path)}")
+    else:
+        print(f"Inject mode:   RANDOM")
+        print(f"Inject every:  {config.inject_interval_min}-{config.inject_interval_max}s")
+        print(f"Inject size:   {config.inject_particles_min}-{config.inject_particles_max} particles")
     print(f"Dashboard:     {'ON' if config.dashboard_enabled else 'OFF'}")
     print("=" * 60)
     print("Press Ctrl+C to stop\n")
@@ -40,11 +101,7 @@ def run_simulation(config: SimulationConfig) -> Dict[str, Any]:
         grid_size=config.grid_size,
         grid_spacing=config.grid_spacing,
         dt=config.dt,
-        poisson_iterations=config.poisson_iterations,
-        # Fundamental constants
-        G=config.G,
-        k_B=config.k_B,
-        sigma_SB=config.sigma_SB,
+        unit_system=config.unit_system,
         # Material properties
         particle_radius=config.particle_radius,
         thermal_conductivity=config.thermal_conductivity,
@@ -77,20 +134,8 @@ def run_simulation(config: SimulationConfig) -> Dict[str, Any]:
         )
     
     # Initialize Metal-accelerated spectral carrier physics (entanglement layer)
-    spectral_cfg = SpectralCarrierConfig(
-        max_carriers=64,
-        coupling_scale=0.25,
-        carrier_reg=0.15,
-        temperature=0.01,
-        conflict_threshold=0.35,
-        offender_weight_floor=1e-3,
-        ema_alpha=0.10,
-        recenter_alpha=0.10,
-        gate_width_init=0.35,
-        gate_width_min=0.08,
-        gate_width_max=1.25,
-        seed_carriers=3,
-    )
+    # Keep spectral config minimal here; the dynamics should self-regulate.
+    spectral_cfg = SpectralCarrierConfig(max_carriers=64)
     carrier_physics = SpectralCarrierPhysics(
         config=spectral_cfg,
         grid_size=config.grid_size,
@@ -101,20 +146,21 @@ def run_simulation(config: SimulationConfig) -> Dict[str, Any]:
     
     # Initialize empty carriers for dashboard (will be populated on first carrier update)
     carriers = CarrierState.empty(config.device, config.dtype)
-    
-    # Schedule first injection
+
+    # Random injection scheduling (time-based)
     def next_injection_time() -> float:
-        """Get next injection time with quantized intervals."""
         min_t = config.inject_interval_min
         max_t = config.inject_interval_max
-        step = config.inject_interval_step
-        
-        # Quantize to step intervals
-        num_steps = int((max_t - min_t) / step) + 1
-        interval = min_t + random.randint(0, num_steps - 1) * step
+        step_s = config.inject_interval_step
+        num_steps = int((max_t - min_t) / step_s) + 1
+        interval = min_t + random.randint(0, num_steps - 1) * step_s
         return time.time() + interval
-    
+
     next_inject = next_injection_time()
+    script_idx = 0
+    script_epoch_start_step = 0
+    script_period = (script_events[-1].step + 1) if script_events else 0
+    last_prediction: Optional[Dict[str, Any]] = None
     
     print("Starting simulation...")
     start_time = time.time()
@@ -126,10 +172,51 @@ def run_simulation(config: SimulationConfig) -> Dict[str, Any]:
             
             # Check if it's time to inject a new file
             current_time = time.time()
-            if current_time >= next_inject:
+            do_inject = False
+            inject_event: Optional[InjectionEvent] = None
+
+            if script_events:
+                # Step-based scripted injection
+                # If looping, events repeat every `script_period` steps.
+                target_step = step - script_epoch_start_step
+                while script_idx < len(script_events) and target_step >= script_events[script_idx].step:
+                    if target_step == script_events[script_idx].step:
+                        do_inject = True
+                        inject_event = script_events[script_idx]
+                    script_idx += 1
+
+                if script_loop and script_idx >= len(script_events):
+                    # Start next epoch
+                    script_idx = 0
+                    script_epoch_start_step += script_period
+            else:
+                # Time-based random injections
+                do_inject = current_time >= next_inject
+
+            if do_inject:
                 # Generate and inject new file (Metal-accelerated)
-                num_new = random.randint(config.inject_particles_min, config.inject_particles_max)
-                file_data = generator.generate_file(num_particles=num_new)
+                if inject_event is None:
+                    num_new = random.randint(config.inject_particles_min, config.inject_particles_max)
+                    pattern = None
+                    energy_scale = 1.0
+                    omega = None
+                    label = ""
+                    ev_seed = None
+                else:
+                    num_new = int(inject_event.num_particles)
+                    pattern = str(inject_event.pattern)
+                    energy_scale = float(inject_event.energy_scale)
+                    omega = inject_event.omega
+                    label = str(inject_event.label)
+                    ev_seed = inject_event.seed
+
+                if ev_seed is not None:
+                    # Per-event deterministic reseed (integrity scripts)
+                    random.seed(int(ev_seed))
+                    np.random.seed(int(ev_seed))
+                    torch.manual_seed(int(ev_seed))
+
+                file_data = generator.generate_file(num_particles=num_new, pattern=pattern, energy_scale=float(energy_scale))
                 
                 # Concatenate new particles with existing (tensors already on MPS)
                 state.positions = torch.cat([state.positions, file_data["positions"]])
@@ -142,12 +229,27 @@ def run_simulation(config: SimulationConfig) -> Dict[str, Any]:
                 two_pi = float(2.0 * torch.pi)
                 new_phase = torch.rand(num_new, device=config.device, dtype=config.dtype) * two_pi
                 state.osc_phase = torch.cat([state.osc_phase, new_phase])
+
+                # Token control: optionally override excitation (ω) for the injected particles.
+                if omega is not None:
+                    state.excitations[-num_new:] = float(omega)
                 
                 total_new_energy = file_data["energies"].sum().item()
                 
                 print(f"[{time.strftime('%H:%M:%S')}] INJECT #{file_data['file_id']}: "
                       f"+{num_new} particles ({file_data['pattern']}) "
                       f"E={total_new_energy:.1f} → Total: {len(state.positions)} particles")
+
+                # Prediction payload for dashboard integrity check.
+                # Prediction is intentionally simple and audit-friendly:
+                # we expect the injected ω* to dominate top-K energetic particles.
+                if omega is not None:
+                    last_prediction = {
+                        "omega": float(omega),
+                        "k": int(num_new),
+                        "label": (label if label else file_data.get("pattern", "")),
+                        "step_injected": int(step),
+                    }
                 
                 if dashboard:
                     dashboard.record_injection(
@@ -159,9 +261,10 @@ def run_simulation(config: SimulationConfig) -> Dict[str, Any]:
                     )
                 
                 # Schedule next injection
-                next_inject = next_injection_time()
-                secs_until = next_inject - time.time()
-                print(f"     Next injection in {secs_until:.0f}s")
+                if not script_events:
+                    next_inject = next_injection_time()
+                    secs_until = next_inject - time.time()
+                    print(f"     Next injection in {secs_until:.0f}s")
             
             # Physics step
             state.positions, state.velocities, state.energies, state.heats, state.excitations = \
@@ -202,7 +305,9 @@ def run_simulation(config: SimulationConfig) -> Dict[str, Any]:
                     energies=state.energies,
                     heats=state.heats,
                     excitations=state.excitations,
+                    masses=state.masses,
                     step_time_ms=step_time_ms,
+                    extra={"prediction": last_prediction} if last_prediction is not None else None,
                     carriers=carriers,
                     gravity_field=physics.gravity_potential,
                 )

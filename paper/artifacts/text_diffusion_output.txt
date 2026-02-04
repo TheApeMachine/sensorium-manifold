@@ -1,0 +1,20 @@
+Text Diffusion Results
+======================
+Accuracy: 0.000 (0/300 masked bytes correct)
+Mask fraction: 20%
+Total bytes: 1500
+
+--- Original (first 200 bytes) ---
+% !TEX program = pdflatex
+\documentclass[11pt,a4paper]{article}
+
+% ============================================================================
+% PACKAGES
+% ===========================================
+
+--- Reconstructed (first 200 bytes) ---
+% !TEX �ogram�= pdfl0t�x
+\doc0mentclass[11��,a4paper]{art�cle}
+
+ ============�===========p===�=============�/==�=======�/====-�=======��====�% P,CKGES
+%�==========�====,========�===========�======

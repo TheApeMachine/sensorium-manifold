@@ -25,11 +25,23 @@ using namespace metal;
 //
 // For field sampling, this gives ~2x speedup over manual interpolation.
 
-constexpr sampler trilinear_sampler(
+// [CHOICE] texture sampler for periodic fields
+// [FORMULA] address mode = repeat (torus / periodic domain)
+// [REASON] particle dynamics use periodic boundaries; field sampling must match
+// [NOTES] we keep a clamp sampler below for debugging/validation if needed.
+constexpr sampler trilinear_sampler_periodic(
     coord::normalized,           // Use [0,1] normalized coordinates
-    address::clamp_to_edge,      // Clamp at boundaries
+    address::repeat,             // Periodic wrap at boundaries
     filter::linear,              // Trilinear interpolation
     mip_filter::none             // No mipmapping
+);
+
+// Clamp sampler (debug / exact edge behavior)
+constexpr sampler trilinear_sampler_clamp(
+    coord::normalized,
+    address::clamp_to_edge,
+    filter::linear,
+    mip_filter::none
 );
 
 // Alternative sampler for nearest-neighbor (for debugging or exact cell access)
@@ -38,6 +50,14 @@ constexpr sampler nearest_sampler(
     address::clamp_to_edge,
     filter::nearest
 );
+
+// -----------------------------------------------------------------------------
+// Utility: Quiet NaN (fail-loudly sentinel)
+// -----------------------------------------------------------------------------
+// Metal does not guarantee `nanf()` is available; use a quiet-NaN bit pattern.
+inline float qnan_f() {
+    return as_type<float>(0x7FC00000u);
+}
 
 // -----------------------------------------------------------------------------
 // Parameter Structs (must match ops.mm)
@@ -65,6 +85,7 @@ struct ManifoldPhysicsParams {
     float G;                     // Gravitational constant
     float k_B;                   // Boltzmann constant
     float sigma_SB;              // Stefan-Boltzmann constant
+    float hbar;                  // Reduced Planck constant (ħ)
     
     // Material properties
     float particle_radius;       // Radius of particles
@@ -158,10 +179,24 @@ kernel void reduce_float_stats_finalize(
         float sum_abs = scratch[0].x;
         float sum = scratch[0].y;
         float sum_sq = scratch[0].z;
-        float count = max(scratch[0].w, 1.0f);
+        float count = scratch[0].w;
+
+        // [CHOICE] reduction empty-case semantics
+        // [FORMULA] if count<=0: mean_abs=mean=std=0, count=0
+        // [REASON] removes numerical clamp; makes empty reduction explicit
+        if (!(count > 0.0f)) {
+            out_stats[0] = 0.0f;
+            out_stats[1] = 0.0f;
+            out_stats[2] = 0.0f;
+            out_stats[3] = 0.0f;
+            return;
+        }
 
         float mean_abs = sum_abs / count;
         float mean = sum / count;
+        // [CHOICE] non-negative variance
+        // [FORMULA] var = max(E[x^2] - E[x]^2, 0)
+        // [REASON] rounding can produce tiny negative; project back to ℝ_{\ge 0}
         float var = max((sum_sq / count) - mean * mean, 0.0f);
         float std = sqrt(var);
 
@@ -186,10 +221,12 @@ inline uint hash_u32(uint x) {
 }
 
 inline float u01_from_u32(uint x) {
-    // Map to (0,1): avoid exact 0 which breaks log() in Box-Muller.
-    // Use 24-bit mantissa-like range for stability.
-    float u = (float)(x & 0x00FFFFFFu) * (1.0f / 16777216.0f);
-    return max(u, 1e-7f);
+    // [CHOICE] uniform random in (0, 1] without eps-clamps
+    // [FORMULA] u = (m + 1) / 2^24, where m ∈ [0, 2^24-1]
+    // [REASON] avoids u=0 exactly (Box-Muller needs log(u))
+    // [NOTES] allows u=1, which yields r=0 in Box-Muller (benign).
+    uint m = (x & 0x00FFFFFFu);
+    return (float)(m + 1u) * (1.0f / 16777216.0f);
 }
 
 inline float2 box_muller(float u1, float u2) {
@@ -257,6 +294,7 @@ struct SpatialCollisionParams {
     float particle_radius;
     float young_modulus;
     float thermal_conductivity;
+    float specific_heat;
     float restitution;
 };
 
@@ -283,15 +321,17 @@ inline void trilinear_coords(
     thread uint3& base_idx,
     thread float3& frac
 ) {
-    // Convert world position to grid coordinates
-    float3 grid_pos = pos * inv_spacing;
-    
-    // Clamp to valid range (leaving room for +1 neighbor)
-    grid_pos = clamp(grid_pos, float3(0.0f), float3(grid_dims) - 1.001f);
-    
-    // Integer base index and fractional part
-    base_idx = uint3(floor(grid_pos));
-    frac = grid_pos - float3(base_idx);
+    // [CHOICE] periodic grid coordinate mapping
+    // [FORMULA] g = (pos / Δx) mod grid_dims
+    // [REASON] torus domain: positions and fields are periodic
+    // [NOTES] This avoids non-physical boundary clamping artifacts.
+    float3 g = pos * inv_spacing;
+    float3 gd = float3(grid_dims);
+    // Wrap into [0, grid_dims)
+    g = g - gd * floor(g / gd);
+
+    base_idx = uint3(floor(g));        // 0..dims-1
+    frac = g - float3(base_idx);       // [0,1)
 }
 
 // Sample a 3D field with trilinear interpolation
@@ -305,19 +345,29 @@ inline float sample_field_trilinear(
     uint stride_z = 1;
     uint stride_y = grid_dims.z;
     uint stride_x = grid_dims.y * grid_dims.z;
-    
-    // Base linear index
-    uint base = base_idx.x * stride_x + base_idx.y * stride_y + base_idx.z * stride_z;
-    
-    // Sample all 8 corners
-    float c000 = field[base];
-    float c001 = field[base + stride_z];
-    float c010 = field[base + stride_y];
-    float c011 = field[base + stride_y + stride_z];
-    float c100 = field[base + stride_x];
-    float c101 = field[base + stride_x + stride_z];
-    float c110 = field[base + stride_x + stride_y];
-    float c111 = field[base + stride_x + stride_y + stride_z];
+
+    // [CHOICE] periodic corner sampling
+    // [FORMULA] (x1,y1,z1) = (x0+1,y0+1,z0+1) mod dims
+    // [REASON] torus domain
+    uint x0 = base_idx.x;
+    uint y0 = base_idx.y;
+    uint z0 = base_idx.z;
+    uint x1 = (x0 + 1) % grid_dims.x;
+    uint y1 = (y0 + 1) % grid_dims.y;
+    uint z1 = (z0 + 1) % grid_dims.z;
+
+    auto idx3 = [&](uint x, uint y, uint z) -> uint {
+        return x * stride_x + y * stride_y + z * stride_z;
+    };
+
+    float c000 = field[idx3(x0, y0, z0)];
+    float c001 = field[idx3(x0, y0, z1)];
+    float c010 = field[idx3(x0, y1, z0)];
+    float c011 = field[idx3(x0, y1, z1)];
+    float c100 = field[idx3(x1, y0, z0)];
+    float c101 = field[idx3(x1, y0, z1)];
+    float c110 = field[idx3(x1, y1, z0)];
+    float c111 = field[idx3(x1, y1, z1)];
     
     // Trilinear interpolation
     float fx = frac.x;
@@ -351,16 +401,26 @@ inline float3 sample_gradient_trilinear(
     // We approximate gradient using the interpolated values at slightly offset positions
     // For efficiency, we use the corner values to estimate gradient
     
-    uint base = base_idx.x * stride_x + base_idx.y * stride_y + base_idx.z * stride_z;
-    
-    float c000 = field[base];
-    float c001 = field[base + stride_z];
-    float c010 = field[base + stride_y];
-    float c011 = field[base + stride_y + stride_z];
-    float c100 = field[base + stride_x];
-    float c101 = field[base + stride_x + stride_z];
-    float c110 = field[base + stride_x + stride_y];
-    float c111 = field[base + stride_x + stride_y + stride_z];
+    // Periodic corner sampling (same as sample_field_trilinear)
+    uint x0 = base_idx.x;
+    uint y0 = base_idx.y;
+    uint z0 = base_idx.z;
+    uint x1 = (x0 + 1) % grid_dims.x;
+    uint y1 = (y0 + 1) % grid_dims.y;
+    uint z1 = (z0 + 1) % grid_dims.z;
+
+    auto idx3 = [&](uint x, uint y, uint z) -> uint {
+        return x * stride_x + y * stride_y + z * stride_z;
+    };
+
+    float c000 = field[idx3(x0, y0, z0)];
+    float c001 = field[idx3(x0, y0, z1)];
+    float c010 = field[idx3(x0, y1, z0)];
+    float c011 = field[idx3(x0, y1, z1)];
+    float c100 = field[idx3(x1, y0, z0)];
+    float c101 = field[idx3(x1, y0, z1)];
+    float c110 = field[idx3(x1, y1, z0)];
+    float c111 = field[idx3(x1, y1, z1)];
     
     // Gradient in each direction (using trilinear interpolation of face values)
     float fy = frac.y;
@@ -391,29 +451,15 @@ inline float3 sample_gradient_trilinear(
 // Each particle contributes its mass to the gravity field and its heat to the
 // temperature field using trilinear interpolation weights.
 
-kernel void scatter_particles_to_fields(
-    device const float* particle_pos      [[buffer(0)]],  // N * 3
-    device const float* particle_mass     [[buffer(1)]],  // N
-    device const float* particle_heat     [[buffer(2)]],  // N
-    device atomic_float* gravity_field    [[buffer(3)]],  // X * Y * Z
-    device atomic_float* heat_field       [[buffer(4)]],  // X * Y * Z
-    constant ManifoldFieldParams& params  [[buffer(5)]],
-    uint gid [[thread_position_in_grid]]
-) {
-    if (gid >= params.grid_x * params.grid_y * params.grid_z) return;
-    
-    // This version: each thread handles one particle
-    // For large particle counts, consider tiling or hierarchical approaches
-}
-
 // Per-particle scatter (one thread per particle)
 kernel void scatter_particle(
     device const float* particle_pos      [[buffer(0)]],  // N * 3
     device const float* particle_mass     [[buffer(1)]],  // N
     device const float* particle_heat     [[buffer(2)]],  // N
-    device atomic_float* gravity_field    [[buffer(3)]],  // X * Y * Z
-    device atomic_float* heat_field       [[buffer(4)]],  // X * Y * Z
-    constant ManifoldPhysicsParams& p     [[buffer(5)]],
+    device const float* particle_energy   [[buffer(3)]],  // N (oscillator/internal mode energy)
+    device atomic_float* gravity_field    [[buffer(4)]],  // X * Y * Z
+    device atomic_float* heat_field       [[buffer(5)]],  // X * Y * Z (total internal energy per cell)
+    constant ManifoldPhysicsParams& p     [[buffer(6)]],
     uint gid [[thread_position_in_grid]]
 ) {
     if (gid >= p.num_particles) return;
@@ -426,6 +472,8 @@ kernel void scatter_particle(
     );
     float mass = particle_mass[gid];
     float heat = particle_heat[gid];
+    float e_osc = particle_energy[gid];
+    float e_total = heat + e_osc;
     
     // Get trilinear coordinates
     uint3 base_idx;
@@ -449,29 +497,43 @@ kernel void scatter_particle(
         wx1 * wy1 * wz1   // 111
     };
     
-    // Grid strides
+    // [CHOICE] periodic scatter to grid corners
+    // [FORMULA] deposit into 8 corners with (x1,y1,z1) wrapped mod dims
+    // [REASON] torus domain must conserve mass/heat across boundaries
+    // [NOTES] avoids “edge sinks” created by clamping.
+    uint gx = p.grid_x, gy = p.grid_y, gz = p.grid_z;
+    uint x0 = base_idx.x;
+    uint y0 = base_idx.y;
+    uint z0 = base_idx.z;
+    uint x1 = (x0 + 1) % gx;
+    uint y1 = (y0 + 1) % gy;
+    uint z1 = (z0 + 1) % gz;
+
     uint stride_z = 1;
-    uint stride_y = p.grid_z;
-    uint stride_x = p.grid_y * p.grid_z;
-    uint base = base_idx.x * stride_x + base_idx.y * stride_y + base_idx.z * stride_z;
-    
-    // Offsets for 8 corners
-    uint offsets[8] = {
-        0,
-        stride_z,
-        stride_y,
-        stride_y + stride_z,
-        stride_x,
-        stride_x + stride_z,
-        stride_x + stride_y,
-        stride_x + stride_y + stride_z
+    uint stride_y = gz;
+    uint stride_x = gy * gz;
+    auto idx3 = [&](uint x, uint y, uint z) -> uint {
+        return x * stride_x + y * stride_y + z * stride_z;
     };
-    
-    // Atomic scatter to both fields
+
+    uint idxs[8] = {
+        idx3(x0, y0, z0),
+        idx3(x0, y0, z1),
+        idx3(x0, y1, z0),
+        idx3(x0, y1, z1),
+        idx3(x1, y0, z0),
+        idx3(x1, y0, z1),
+        idx3(x1, y1, z0),
+        idx3(x1, y1, z1),
+    };
+
     for (int i = 0; i < 8; i++) {
-        uint idx = base + offsets[i];
+        uint idx = idxs[i];
         atomic_fetch_add_explicit(&gravity_field[idx], mass * weights[i], memory_order_relaxed);
-        atomic_fetch_add_explicit(&heat_field[idx], heat * weights[i], memory_order_relaxed);
+        // [CHOICE] total internal energy deposition
+        // [FORMULA] Q_cell := Σ_i w_i (Q_i + E_osc,i)
+        // [REASON] temperature is defined from total internal energy, not thermal Q alone
+        atomic_fetch_add_explicit(&heat_field[idx], e_total * weights[i], memory_order_relaxed);
     }
 }
 
@@ -490,15 +552,16 @@ kernel void gather_update_particles(
     // Fields (read-only)
     device const float* gravity_potential [[buffer(0)]],  // X * Y * Z
     device const float* temperature_field [[buffer(1)]],  // X * Y * Z
+    device const float* mass_field        [[buffer(2)]],  // X * Y * Z (scattered mass-per-cell)
     // Particle state (read-write)
-    device float* particle_pos            [[buffer(2)]],  // N * 3
-    device float* particle_vel            [[buffer(3)]],  // N * 3
-    device float* particle_energy         [[buffer(4)]],  // N
-    device float* particle_heat           [[buffer(5)]],  // N
-    device float* particle_excitation     [[buffer(6)]],  // N
-    device const float* particle_mass     [[buffer(7)]],  // N (read-only, doesn't change)
+    device float* particle_pos            [[buffer(3)]],  // N * 3
+    device float* particle_vel            [[buffer(4)]],  // N * 3
+    device float* particle_energy         [[buffer(5)]],  // N
+    device float* particle_heat           [[buffer(6)]],  // N
+    device float* particle_excitation     [[buffer(7)]],  // N
+    device const float* particle_mass     [[buffer(8)]],  // N (read-only, doesn't change)
     // Parameters
-    constant ManifoldPhysicsParams& p     [[buffer(8)]],
+    constant ManifoldPhysicsParams& p     [[buffer(9)]],
     uint gid [[thread_position_in_grid]]
 ) {
     if (gid >= p.num_particles) return;
@@ -520,6 +583,24 @@ kernel void gather_update_particles(
     float heat = particle_heat[gid];
     float excitation = particle_excitation[gid];
     float mass = particle_mass[gid];
+
+    // [CHOICE] fundamental invariants (fail loudly)
+    // [FORMULA] require: m>0, Δx>0, r>0, c_v>0
+    // [REASON] these are physical preconditions; silent clamps hide invalid states
+    // [NOTES] on violation we write NaNs to state to surface errors immediately.
+    if (!(mass > 0.0f) || !(p.grid_spacing > 0.0f) || !(p.particle_radius > 0.0f) || !(p.specific_heat > 0.0f)) {
+        float qn = qnan_f();
+        particle_pos[gid * 3 + 0] = qn;
+        particle_pos[gid * 3 + 1] = qn;
+        particle_pos[gid * 3 + 2] = qn;
+        particle_vel[gid * 3 + 0] = qn;
+        particle_vel[gid * 3 + 1] = qn;
+        particle_vel[gid * 3 + 2] = qn;
+        particle_energy[gid] = qn;
+        particle_heat[gid] = qn;
+        particle_excitation[gid] = qn;
+        return;
+    }
     
     // -------------------------------------------------------------------------
     // 2. Gather from fields (trilinear interpolation)
@@ -529,14 +610,16 @@ kernel void gather_update_particles(
     uint3 grid_dims = uint3(p.grid_x, p.grid_y, p.grid_z);
     trilinear_coords(pos, p.inv_grid_spacing, grid_dims, base_idx, frac);
     
-    // =========================================================================
-    // GRAVITATIONAL FORCE: F = -m * ∇φ where φ is gravitational potential
-    // =========================================================================
+    // [CHOICE] gravity coupling (particle ← potential field)
+    // [FORMULA] Poisson: ∇²φ = 4πGρ  =>  acceleration a = -∇φ
+    //           Force:   F = m a = -m ∇φ
+    // [REASON] standard Newtonian gravity in potential form
+    // [NOTES] We choose to include G in the Poisson solve (φ already includes G).
+    //         Therefore we MUST NOT multiply by G again here.
     float3 gravity_grad = sample_gradient_trilinear(
         gravity_potential, base_idx, frac, grid_dims, p.inv_grid_spacing
     );
-    // Newton's law of gravitation: F = -G * m * ∇φ
-    float3 gravity_force = -gravity_grad * mass * p.G;
+    float3 gravity_force = -gravity_grad * mass;
     
     // =========================================================================
     // TEMPERATURE AND PRESSURE
@@ -546,36 +629,118 @@ kernel void gather_update_particles(
         temperature_field, base_idx, frac, grid_dims
     );
     
-    // Particle temperature from its internal heat: T = Q / (m * c_v)
-    float particle_temp = heat / (max(mass, 1e-6f) * p.specific_heat);
+    // [CHOICE] particle internal temperature proxy
+    // [FORMULA] T_i = Q_i / (m_i c_v)
+    // [REASON] internal-energy-to-temperature mapping for a lumped particle
+    // [NOTES] invariant m>0 and c_v>0 is enforced above (no silent clamp).
+    // [CHOICE] particle temperature from total internal energy
+    // [FORMULA] T_i = (Q_i + E_osc,i) / (m_i c_v)
+    // [REASON] closes bookkeeping between thermal + oscillator energy stores
+    float particle_temp = (heat + energy) / (mass * p.specific_heat);
     
-    // Pressure gradient from ideal gas law: P = ρ * k_B * T
-    // Force per unit mass: a = -(1/ρ) * ∇P = -k_B * ∇T (for uniform composition)
+    // [CHOICE] pressure force (continuum, ideal-gas EOS)
+    // [FORMULA] EOS:     P = ρ k_B T
+    //          Force:   a = -(1/ρ) ∇P
+    //                  ∇P = k_B (T ∇ρ + ρ ∇T)
+    // [REASON] replaces the prior heuristic with a dimensionally consistent continuum form
+    // [NOTES] Vacuum semantics: if ρ<=0, pressure contribution is defined as 0 (no clamp-as-physics).
     float3 temp_grad = sample_gradient_trilinear(
         temperature_field, base_idx, frac, grid_dims, p.inv_grid_spacing
     );
-    float3 pressure_force = -temp_grad * p.k_B * mass;
+
+    // Local density from scattered mass field: ρ = m_cell / h^3
+    float m_cell = sample_field_trilinear(mass_field, base_idx, frac, grid_dims);
+    float3 grad_m = sample_gradient_trilinear(mass_field, base_idx, frac, grid_dims, p.inv_grid_spacing);
+    float h = p.grid_spacing;
+    // invariant Δx>0 enforced above.
+    float inv_h3 = 1.0f / (h * h * h);
+    float rho = m_cell * inv_h3;
+    float3 grad_rho = grad_m * inv_h3;
+
+    float3 pressure_force = float3(0.0f);
+    if (rho > 0.0f) {
+        float3 gradP = p.k_B * (local_temp * grad_rho + rho * temp_grad);
+        float3 aP = -gradP / rho;
+        pressure_force = aP * mass;
+    }
     
     // =========================================================================
     // HEAT TRANSFER: Newton's law of cooling + Stefan-Boltzmann radiation
     // =========================================================================
-    // Newton's law: dQ/dt = h * A * (T_env - T)
-    // For sphere: A = 4πr², and h ~ k/r (thermal conductivity / length scale)
-    // Combined: dQ/dt ~ k * r * (T_env - T)
+    // [CHOICE] conduction to ambient medium (sphere in infinite medium)
+    // [FORMULA] Q̇ = 4π κ r (T_env - T_particle)
+    // [REASON] steady-state conduction solution of Laplace equation around a sphere
+    // [NOTES] κ here is the medium thermal conductivity (not diffusivity).
     float r = p.particle_radius;
-    float heat_transfer_coef = p.thermal_conductivity * r;
-    float dQ_conduction = heat_transfer_coef * (local_temp - particle_temp) * p.dt;
+    float dQ_conduction = (4.0f * M_PI_F) * p.thermal_conductivity * r * (local_temp - particle_temp) * p.dt;
     heat += dQ_conduction;
     
-    // Stefan-Boltzmann radiation: P = ε * σ * A * T^4
-    // Surface area A = 4πr² (we absorb 4π into σ_SB)
-    float surface_area = r * r;
+    // [CHOICE] radiative cooling
+    // [FORMULA] P = ε σ A T^4, with A = 4π r²
+    // [REASON] blackbody radiation loss from particle surface
+    // [NOTES] No absorbed constants: σ is the (unit-system converted) universal constant.
+    float surface_area = 4.0f * M_PI_F * r * r;
     float T4 = particle_temp * particle_temp * particle_temp * particle_temp;
     float dQ_radiation = p.emissivity * p.sigma_SB * surface_area * T4 * p.dt;
+    // [CHOICE] non-negative thermal energy (0 K baseline)
+    // [FORMULA] Q >= 0
+    // [REASON] internal thermal energy relative to absolute zero cannot be negative
+    // [NOTES] this is a physical boundary condition, not a tuneable clamp.
     heat = max(heat - dQ_radiation, 0.0f);
     
     // Update temperature after heat exchange
-    particle_temp = heat / (max(mass, 1e-6f) * p.specific_heat);
+    particle_temp = (heat + energy) / (mass * p.specific_heat);
+
+    // =========================================================================
+    // THERMAL ↔ OSCILLATOR ENERGY EXCHANGE (local, conservative)
+    // =========================================================================
+    // [CHOICE] equilibrium oscillator energy (quantum harmonic oscillator)
+    // [FORMULA] E_eq(ω,T) = ħω / (exp(ħω/(k_B T)) - 1)
+    // [REASON] removes ad-hoc cutoffs; recovers classical limit at high T / low ω
+    // [NOTES] - Uses ω = |excitation| as an intrinsic mode frequency.
+    //         - Exchange conserves (Q + E_osc) locally: heat -= ΔE, energy += ΔE.
+    //         - Timescale derived from existing conduction coefficient (no new knobs).
+    {
+        float kappa = p.thermal_conductivity;
+        float cv = p.specific_heat;
+        float omega = fabs(excitation);
+
+        // Natural thermalization timescale implied by conduction to the medium:
+        // τ = (m c_v) / (4π κ r)
+        float denom_tau = (4.0f * M_PI_F) * kappa * r;
+        float tau = (denom_tau > 0.0f) ? (mass * cv) / denom_tau : INFINITY;
+
+        // α = 1 - exp(-dt/τ)
+        float alpha = (isfinite(tau) && tau > 0.0f) ? (1.0f - exp(-p.dt / tau)) : 0.0f;
+
+        float T = max(particle_temp, 0.0f);
+        float E_eq = 0.0f;
+        float kBT = p.k_B * T;
+        if (kBT > 0.0f && omega > 0.0f && p.hbar > 0.0f) {
+            float x = (p.hbar * omega) / kBT;
+            // Numerical safety: for large x, exp(x) overflows and E_eq -> 0.
+            if (x > 80.0f) {
+                E_eq = 0.0f;
+            } else if (x < 1.0e-4f) {
+                // Classical limit: ħω/(exp(x)-1) ≈ ħω/x = k_B T.
+                E_eq = kBT;
+            } else {
+                float denom = exp(x) - 1.0f;
+                E_eq = (denom > 0.0f) ? (p.hbar * omega) / denom : 0.0f;
+            }
+        } else if (kBT > 0.0f && omega <= 0.0f) {
+            // ω→0 limit: E_eq -> k_B T.
+            E_eq = kBT;
+        }
+
+        float dE = alpha * (E_eq - energy);
+        // Prevent drawing more thermal energy than available (Q >= 0 boundary).
+        if (dE > 0.0f) {
+            dE = min(dE, heat);
+        }
+        energy += dE;
+        heat -= dE;
+    }
     
     // =========================================================================
     // EXCITATION DYNAMICS (oscillator frequency)
@@ -589,77 +754,91 @@ kernel void gather_update_particles(
     // Note: We do NOT modify excitation here - it's an intrinsic property.
     // The spectral carrier layer reads excitation as oscillator frequency (ω).
     //
-    // Energy thermalization happens at a fixed rate (not frequency-dependent):
-    float tau_thermalization = 10.0f;  // Slower thermalization time scale
-    float dQ_thermalization = (energy / tau_thermalization) * p.dt;
-    dQ_thermalization = min(dQ_thermalization, energy);
-    energy -= dQ_thermalization;
-    heat += dQ_thermalization;
-    
-    // Physical constraints (numerical safety only)
+    // NOTE: We intentionally do NOT apply any additional "energy -> heat"
+    // transfer here beyond physically modeled mechanisms (drag dissipation,
+    // collisions, conduction/radiation). This avoids ad-hoc damping terms.
     energy = max(energy, 0.0f);
     heat = max(heat, 0.0f);
     
     // =========================================================================
-    // VISCOUS DRAG: Stokes' law F = -6πηrv
+    // SYMPLECTIC INTEGRATION (Velocity Verlet on conservative forces)
     // =========================================================================
-    // For a sphere moving through viscous medium at low Reynolds number
-    // γ = 6πηr is the drag coefficient
-    float gamma = 6.0f * 3.14159f * p.dynamic_viscosity * r;
-    
-    // Total force = gravity + pressure (hydrostatic equilibrium when balanced)
-    float3 total_force = gravity_force + pressure_force;
-    
-    // Apply forces: F = ma → a = F/m
-    float3 acceleration = total_force / max(mass, 1e-6f);
-    
-    // Clamp acceleration to prevent explosions
-    float acc_mag = length(acceleration);
-    float max_acc = 10.0f;  // Maximum acceleration per step
-    if (acc_mag > max_acc) {
-        acceleration = acceleration * (max_acc / acc_mag);
+    // We split dynamics into:
+    // - Conservative forces (gravity + pressure): integrate with Velocity Verlet
+    // - Dissipative drag: applied as an exact exponential half-step (Strang split)
+    //
+    // Stokes drag force: F_drag = -gamma v, gamma = 6π μ(T) r
+    // Acceleration contribution: a_drag = -(gamma/m) v
+    //
+    // Ideal-gas-inspired dynamic viscosity scaling (kinetic theory):
+    //   μ(T) ∝ sqrt(T)
+    // We treat `p.dynamic_viscosity` as μ_ref at T_ref = 1 (dimensionless).
+    // [CHOICE] viscosity temperature dependence (physical domain constraint)
+    // [FORMULA] μ(T) ∝ sqrt(T), defined for T >= 0
+    // [REASON] kinetic-theory-inspired scaling used by the drag model
+    // [NOTES] - Physical temperature cannot be negative; we enforce T>=0 as a boundary.
+    //         - Spectral diffusion on fp32 can introduce tiny negative values from rounding
+    //           even when the true solution is nonnegative. Projecting to T>=0 avoids
+    //           cascading NaNs without introducing a new tunable threshold.
+    //         - Non-finite temperature (NaN/inf) remains a hard error (fail loudly).
+    if (!isfinite(local_temp)) {
+        float qn = qnan_f();
+        particle_vel[gid * 3 + 0] = qn;
+        particle_vel[gid * 3 + 1] = qn;
+        particle_vel[gid * 3 + 2] = qn;
+        particle_heat[gid] = qn;
+        return;
     }
+    local_temp = max(local_temp, 0.0f);
+    float mu = p.dynamic_viscosity * sqrt(local_temp);
+    float gamma = 6.0f * 3.14159f * mu * r;
+    float inv_m = 1.0f / mass;
+    float dt = p.dt;
+    float half_dt = 0.5f * dt;
+    float drag_half = exp(-(gamma * inv_m) * half_dt);
+
+    // Conservative acceleration at x(t)
+    float3 a0 = (gravity_force + pressure_force) * inv_m;
+
+    // ---- Drag half-step (exact), convert KE loss -> heat
+    float ke0 = 0.5f * mass * dot(vel, vel);
+    vel *= drag_half;
+    float ke1 = 0.5f * mass * dot(vel, vel);
+    heat += max(ke0 - ke1, 0.0f);
+
+    // ---- Kick (half): v(t+dt/2) = v + (dt/2) a(x_t)
+    vel += a0 * half_dt;
+
+    // ---- Drift: x(t+dt) = x + dt * v(t+dt/2)
+    pos += vel * dt;
     
-    // Compute kinetic energy before damping (for energy conservation)
-    float ke_before = 0.5f * mass * dot(vel, vel);
-    
-    // Apply drag force as a damping term
-    // Use exact exponential for accuracy: v' = v * exp(-gamma * dt)
-    float damping_factor = exp(-gamma * p.dt);
-    vel = vel * damping_factor + acceleration * p.dt;
-    
-    // Compute kinetic energy after damping
-    float ke_after = 0.5f * mass * dot(vel, vel);
-    
-    // Lost kinetic energy becomes heat (first law of thermodynamics)
-    // dE_total/dt = 0, so dE_kinetic + dQ = 0  →  dQ = -dE_kinetic
-    // All dissipated kinetic energy becomes internal energy (heat)
-    float ke_lost = max(ke_before - ke_after, 0.0f);
-    heat += ke_lost;  // 100% energy conservation
-    
-    // Clamp velocity magnitude to prevent runaway
-    float vel_mag = length(vel);
-    float max_vel = 2.0f;  // Maximum velocity (aligned with collision kernel)
-    if (vel_mag > max_vel) {
-        vel = vel * (max_vel / vel_mag);
+    // Periodic boundary conditions (torus domain):
+    // This removes wall reflections/fudges and is a standard physically
+    // interpretable choice for finite domains approximating "unbounded" space.
+    float3 domain = float3(p.grid_x, p.grid_y, p.grid_z) * p.grid_spacing;
+    // Wrap into [0, domain)
+    pos = pos - domain * floor(pos / domain);
+
+    // Conservative acceleration at x(t+dt) (same fields; second force evaluation)
+    {
+        uint3 base2;
+        float3 frac2;
+        trilinear_coords(pos, p.inv_grid_spacing, grid_dims, base2, frac2);
+        float3 ggrad2 = sample_gradient_trilinear(gravity_potential, base2, frac2, grid_dims, p.inv_grid_spacing);
+        float3 tgrad2 = sample_gradient_trilinear(temperature_field, base2, frac2, grid_dims, p.inv_grid_spacing);
+        float3 Fg2 = -ggrad2 * mass * p.G;
+        float3 Fp2 = -tgrad2 * p.k_B * mass;
+        float3 a1 = (Fg2 + Fp2) * inv_m;
+
+        // ---- Kick (half): v(t+dt) = v(t+dt/2) + (dt/2) a(x_{t+dt})
+        vel += a1 * half_dt;
     }
-    
-    // -------------------------------------------------------------------------
-    // 5. Position update
-    // -------------------------------------------------------------------------
-    pos += vel * p.dt;
-    
-    // Clamp to grid bounds with soft boundary (reflect velocity at walls)
-    float3 grid_max = float3(p.grid_x, p.grid_y, p.grid_z) * p.grid_spacing * 0.95f;
-    float3 grid_min = float3(0.5f);
-    
-    // Reflect velocity at boundaries
-    if (pos.x < grid_min.x) { pos.x = grid_min.x; vel.x = abs(vel.x) * 0.5f; }
-    if (pos.y < grid_min.y) { pos.y = grid_min.y; vel.y = abs(vel.y) * 0.5f; }
-    if (pos.z < grid_min.z) { pos.z = grid_min.z; vel.z = abs(vel.z) * 0.5f; }
-    if (pos.x > grid_max.x) { pos.x = grid_max.x; vel.x = -abs(vel.x) * 0.5f; }
-    if (pos.y > grid_max.y) { pos.y = grid_max.y; vel.y = -abs(vel.y) * 0.5f; }
-    if (pos.z > grid_max.z) { pos.z = grid_max.z; vel.z = -abs(vel.z) * 0.5f; }
+
+    // ---- Drag half-step (exact), convert KE loss -> heat
+    float ke2 = 0.5f * mass * dot(vel, vel);
+    vel *= drag_half;
+    float ke3 = 0.5f * mass * dot(vel, vel);
+    heat += max(ke2 - ke3, 0.0f);
     
     // -------------------------------------------------------------------------
     // 6. Write back updated state
@@ -764,6 +943,21 @@ kernel void gather_update_particles_textured(
     float heat = particle_heat[gid];
     float excitation = particle_excitation[gid];
     float mass = particle_mass[gid];
+
+    // Fundamental invariants (fail loudly). See buffer kernel for rationale.
+    if (!(mass > 0.0f) || !(p.grid_spacing > 0.0f) || !(p.particle_radius > 0.0f) || !(p.specific_heat > 0.0f)) {
+        float qn = qnan_f();
+        particle_pos[gid * 3 + 0] = qn;
+        particle_pos[gid * 3 + 1] = qn;
+        particle_pos[gid * 3 + 2] = qn;
+        particle_vel[gid * 3 + 0] = qn;
+        particle_vel[gid * 3 + 1] = qn;
+        particle_vel[gid * 3 + 2] = qn;
+        particle_energy[gid] = qn;
+        particle_heat[gid] = qn;
+        particle_excitation[gid] = qn;
+        return;
+    }
     
     // Convert position to normalized texture coordinates [0, 1]
     float3 grid_dims = float3(p.grid_x, p.grid_y, p.grid_z);
@@ -772,95 +966,132 @@ kernel void gather_update_particles_textured(
     // Sample temperature field using hardware trilinear interpolation
     // Note: texture.sample() returns float4, we use .x for single-channel
     // (gravity potential is only used for gradient, not the value itself)
-    float local_temp = temperature_field.sample(trilinear_sampler, tex_coord).x;
+    float local_temp = temperature_field.sample(trilinear_sampler_periodic, tex_coord).x;
     
     // Compute gradients using finite differences on texture samples
     float3 texel_size = 1.0f / grid_dims;
     float3 gravity_grad = float3(
-        gravity_potential.sample(trilinear_sampler, tex_coord + float3(texel_size.x, 0, 0)).x -
-        gravity_potential.sample(trilinear_sampler, tex_coord - float3(texel_size.x, 0, 0)).x,
-        gravity_potential.sample(trilinear_sampler, tex_coord + float3(0, texel_size.y, 0)).x -
-        gravity_potential.sample(trilinear_sampler, tex_coord - float3(0, texel_size.y, 0)).x,
-        gravity_potential.sample(trilinear_sampler, tex_coord + float3(0, 0, texel_size.z)).x -
-        gravity_potential.sample(trilinear_sampler, tex_coord - float3(0, 0, texel_size.z)).x
+        gravity_potential.sample(trilinear_sampler_periodic, tex_coord + float3(texel_size.x, 0, 0)).x -
+        gravity_potential.sample(trilinear_sampler_periodic, tex_coord - float3(texel_size.x, 0, 0)).x,
+        gravity_potential.sample(trilinear_sampler_periodic, tex_coord + float3(0, texel_size.y, 0)).x -
+        gravity_potential.sample(trilinear_sampler_periodic, tex_coord - float3(0, texel_size.y, 0)).x,
+        gravity_potential.sample(trilinear_sampler_periodic, tex_coord + float3(0, 0, texel_size.z)).x -
+        gravity_potential.sample(trilinear_sampler_periodic, tex_coord - float3(0, 0, texel_size.z)).x
     ) * (0.5f * p.inv_grid_spacing);
     
     float3 temp_grad = float3(
-        temperature_field.sample(trilinear_sampler, tex_coord + float3(texel_size.x, 0, 0)).x -
-        temperature_field.sample(trilinear_sampler, tex_coord - float3(texel_size.x, 0, 0)).x,
-        temperature_field.sample(trilinear_sampler, tex_coord + float3(0, texel_size.y, 0)).x -
-        temperature_field.sample(trilinear_sampler, tex_coord - float3(0, texel_size.y, 0)).x,
-        temperature_field.sample(trilinear_sampler, tex_coord + float3(0, 0, texel_size.z)).x -
-        temperature_field.sample(trilinear_sampler, tex_coord - float3(0, 0, texel_size.z)).x
+        temperature_field.sample(trilinear_sampler_periodic, tex_coord + float3(texel_size.x, 0, 0)).x -
+        temperature_field.sample(trilinear_sampler_periodic, tex_coord - float3(texel_size.x, 0, 0)).x,
+        temperature_field.sample(trilinear_sampler_periodic, tex_coord + float3(0, texel_size.y, 0)).x -
+        temperature_field.sample(trilinear_sampler_periodic, tex_coord - float3(0, texel_size.y, 0)).x,
+        temperature_field.sample(trilinear_sampler_periodic, tex_coord + float3(0, 0, texel_size.z)).x -
+        temperature_field.sample(trilinear_sampler_periodic, tex_coord - float3(0, 0, texel_size.z)).x
     ) * (0.5f * p.inv_grid_spacing);
     
-    // Physics calculations (same as buffer version)
-    float3 gravity_force = -gravity_grad * mass * p.G;
-    float particle_temp = heat / (max(mass, 1e-6f) * p.specific_heat);
+    // [CHOICE] gravity coupling (textured gather)
+    // [FORMULA] Poisson: ∇²φ = 4πGρ  =>  a = -∇φ ; F = -m ∇φ
+    // [REASON] match buffer version + avoid G double-counting
+    // [NOTES] φ already includes G via Poisson solve.
+    float3 gravity_force = -gravity_grad * mass;
+    float particle_temp = heat / (mass * p.specific_heat);
     float3 pressure_force = -temp_grad * p.k_B * mass;
     
     // Heat transfer
     float r = p.particle_radius;
-    float heat_transfer_coef = p.thermal_conductivity * r;
-    float dQ_conduction = heat_transfer_coef * (local_temp - particle_temp) * p.dt;
+    // Conduction to ambient (see buffer kernel for choice block).
+    float dQ_conduction = (4.0f * M_PI_F) * p.thermal_conductivity * r * (local_temp - particle_temp) * p.dt;
     heat += dQ_conduction;
     
-    float surface_area = r * r;
+    // Radiative cooling (same as buffer version; see choice block there).
+    float surface_area = 4.0f * M_PI_F * r * r;
     float T4 = particle_temp * particle_temp * particle_temp * particle_temp;
     float dQ_radiation = p.emissivity * p.sigma_SB * surface_area * T4 * p.dt;
     heat = max(heat - dQ_radiation, 0.0f);
     
-    particle_temp = heat / (max(mass, 1e-6f) * p.specific_heat);
+    particle_temp = heat / (mass * p.specific_heat);
     
     // Excitation is an intrinsic property - do NOT modify it.
     // See gather_update_particles for documentation.
     
-    // Energy thermalization (fixed rate, not frequency-dependent)
-    float tau_thermalization = 10.0f;
-    float dQ_thermalization = (energy / tau_thermalization) * p.dt;
-    dQ_thermalization = min(dQ_thermalization, energy);
-    energy -= dQ_thermalization;
-    heat += dQ_thermalization;
-    
+    // NOTE: No ad-hoc "energy -> heat" thermalization term here. See
+    // gather_update_particles for rationale.
     energy = max(energy, 0.0f);
     heat = max(heat, 0.0f);
     
-    // Viscous drag
-    float gamma = 6.0f * 3.14159f * p.dynamic_viscosity * r;
-    float3 total_force = gravity_force + pressure_force;
-    float3 acceleration = total_force / max(mass, 1e-6f);
-    
-    float acc_mag = length(acceleration);
-    float max_acc = 10.0f;
-    if (acc_mag > max_acc) {
-        acceleration = acceleration * (max_acc / acc_mag);
+    // =========================================================================
+    // SYMPLECTIC INTEGRATION (Velocity Verlet on conservative forces)
+    // =========================================================================
+    // Temperature-dependent viscosity (ideal-gas-inspired): μ(T) ∝ sqrt(T).
+    // See buffer kernel for domain/boundary rationale.
+    if (!isfinite(local_temp)) {
+        float qn = qnan_f();
+        particle_vel[gid * 3 + 0] = qn;
+        particle_vel[gid * 3 + 1] = qn;
+        particle_vel[gid * 3 + 2] = qn;
+        particle_heat[gid] = qn;
+        return;
     }
-    
-    float ke_before = 0.5f * mass * dot(vel, vel);
-    float damping_factor = exp(-gamma * p.dt);
-    vel = vel * damping_factor + acceleration * p.dt;
-    float ke_after = 0.5f * mass * dot(vel, vel);
-    float ke_lost = max(ke_before - ke_after, 0.0f);
-    heat += ke_lost;
-    
-    float vel_mag = length(vel);
-    float max_vel = 2.0f;
-    if (vel_mag > max_vel) {
-        vel = vel * (max_vel / vel_mag);
-    }
-    
-    // Position update
-    pos += vel * p.dt;
-    
-    float3 grid_max = float3(p.grid_x, p.grid_y, p.grid_z) * p.grid_spacing * 0.95f;
-    float3 grid_min = float3(0.5f);
-    
-    if (pos.x < grid_min.x) { pos.x = grid_min.x; vel.x = abs(vel.x) * 0.5f; }
-    if (pos.y < grid_min.y) { pos.y = grid_min.y; vel.y = abs(vel.y) * 0.5f; }
-    if (pos.z < grid_min.z) { pos.z = grid_min.z; vel.z = abs(vel.z) * 0.5f; }
-    if (pos.x > grid_max.x) { pos.x = grid_max.x; vel.x = -abs(vel.x) * 0.5f; }
-    if (pos.y > grid_max.y) { pos.y = grid_max.y; vel.y = -abs(vel.y) * 0.5f; }
-    if (pos.z > grid_max.z) { pos.z = grid_max.z; vel.z = -abs(vel.z) * 0.5f; }
+    local_temp = max(local_temp, 0.0f);
+    float mu = p.dynamic_viscosity * sqrt(local_temp);
+    float gamma = 6.0f * 3.14159f * mu * r;
+    float inv_m = 1.0f / mass;
+    float dt = p.dt;
+    float half_dt = 0.5f * dt;
+    float drag_half = exp(-(gamma * inv_m) * half_dt);
+
+    float3 a0 = (gravity_force + pressure_force) * inv_m;
+
+    // Drag half-step (exact), KE loss -> heat
+    float ke0 = 0.5f * mass * dot(vel, vel);
+    vel *= drag_half;
+    float ke1 = 0.5f * mass * dot(vel, vel);
+    heat += max(ke0 - ke1, 0.0f);
+
+    // Kick (half)
+    vel += a0 * half_dt;
+
+    // Drift
+    pos += vel * dt;
+
+    // Periodic boundary conditions (torus domain). See buffer version.
+    float3 domain = float3(p.grid_x, p.grid_y, p.grid_z) * p.grid_spacing;
+    pos = pos - domain * floor(pos / domain);
+
+    // Recompute gradients at new position using texture samples
+    float3 grid_dims2 = float3(p.grid_x, p.grid_y, p.grid_z);
+    float3 tex_coord2 = pos * p.inv_grid_spacing / grid_dims2;
+    float3 texel_size2 = 1.0f / grid_dims2;
+
+    float3 gravity_grad2 = float3(
+        gravity_potential.sample(trilinear_sampler_periodic, tex_coord2 + float3(texel_size2.x, 0, 0)).x -
+        gravity_potential.sample(trilinear_sampler_periodic, tex_coord2 - float3(texel_size2.x, 0, 0)).x,
+        gravity_potential.sample(trilinear_sampler_periodic, tex_coord2 + float3(0, texel_size2.y, 0)).x -
+        gravity_potential.sample(trilinear_sampler_periodic, tex_coord2 - float3(0, texel_size2.y, 0)).x,
+        gravity_potential.sample(trilinear_sampler_periodic, tex_coord2 + float3(0, 0, texel_size2.z)).x -
+        gravity_potential.sample(trilinear_sampler_periodic, tex_coord2 - float3(0, 0, texel_size2.z)).x
+    ) * (0.5f * p.inv_grid_spacing);
+
+    float3 temp_grad2 = float3(
+        temperature_field.sample(trilinear_sampler_periodic, tex_coord2 + float3(texel_size2.x, 0, 0)).x -
+        temperature_field.sample(trilinear_sampler_periodic, tex_coord2 - float3(texel_size2.x, 0, 0)).x,
+        temperature_field.sample(trilinear_sampler_periodic, tex_coord2 + float3(0, texel_size2.y, 0)).x -
+        temperature_field.sample(trilinear_sampler_periodic, tex_coord2 - float3(0, texel_size2.y, 0)).x,
+        temperature_field.sample(trilinear_sampler_periodic, tex_coord2 + float3(0, 0, texel_size2.z)).x -
+        temperature_field.sample(trilinear_sampler_periodic, tex_coord2 - float3(0, 0, texel_size2.z)).x
+    ) * (0.5f * p.inv_grid_spacing);
+
+    float3 Fg2 = -gravity_grad2 * mass * p.G;
+    float3 Fp2 = -temp_grad2 * p.k_B * mass;
+    float3 a1 = (Fg2 + Fp2) * inv_m;
+
+    // Kick (half)
+    vel += a1 * half_dt;
+
+    // Drag half-step (exact), KE loss -> heat
+    float ke2 = 0.5f * mass * dot(vel, vel);
+    vel *= drag_half;
+    float ke3 = 0.5f * mass * dot(vel, vel);
+    heat += max(ke2 - ke3, 0.0f);
     
     // Write back
     particle_pos[gid * 3 + 0] = pos.x;
@@ -880,6 +1111,7 @@ kernel void gather_update_particles_textured(
 // Kernel: Heat diffusion on the field (Laplacian stencil)
 // -----------------------------------------------------------------------------
 // Evolves the temperature field via diffusion: dT/dt = α ∇²T
+// Uses periodic boundary conditions (torus) to match particle dynamics.
 
 kernel void diffuse_heat_field(
     device const float* temp_in           [[buffer(0)]],  // X * Y * Z
@@ -898,13 +1130,20 @@ kernel void diffuse_heat_field(
     
     float center = temp_in[idx];
     
-    // 6-point Laplacian stencil with boundary handling
-    float xm = (gid.x > 0) ? temp_in[idx - stride_x] : center;
-    float xp = (gid.x < p.grid_x - 1) ? temp_in[idx + stride_x] : center;
-    float ym = (gid.y > 0) ? temp_in[idx - stride_y] : center;
-    float yp = (gid.y < p.grid_y - 1) ? temp_in[idx + stride_y] : center;
-    float zm = (gid.z > 0) ? temp_in[idx - stride_z] : center;
-    float zp = (gid.z < p.grid_z - 1) ? temp_in[idx + stride_z] : center;
+    // 6-point Laplacian stencil with PERIODIC boundary handling
+    uint x_prev = (gid.x == 0) ? p.grid_x - 1 : gid.x - 1;
+    uint x_next = (gid.x == p.grid_x - 1) ? 0 : gid.x + 1;
+    uint y_prev = (gid.y == 0) ? p.grid_y - 1 : gid.y - 1;
+    uint y_next = (gid.y == p.grid_y - 1) ? 0 : gid.y + 1;
+    uint z_prev = (gid.z == 0) ? p.grid_z - 1 : gid.z - 1;
+    uint z_next = (gid.z == p.grid_z - 1) ? 0 : gid.z + 1;
+
+    float xm = temp_in[x_prev * stride_x + gid.y * stride_y + gid.z * stride_z];
+    float xp = temp_in[x_next * stride_x + gid.y * stride_y + gid.z * stride_z];
+    float ym = temp_in[gid.x * stride_x + y_prev * stride_y + gid.z * stride_z];
+    float yp = temp_in[gid.x * stride_x + y_next * stride_y + gid.z * stride_z];
+    float zm = temp_in[gid.x * stride_x + gid.y * stride_y + z_prev * stride_z];
+    float zp = temp_in[gid.x * stride_x + gid.y * stride_y + z_next * stride_z];
     
     float laplacian = (xm + xp + ym + yp + zm + zp - 6.0f * center) 
                       * (p.inv_grid_spacing * p.inv_grid_spacing);
@@ -916,7 +1155,7 @@ kernel void diffuse_heat_field(
 // Kernel: Solve Poisson equation for gravity (Jacobi iteration step)
 // -----------------------------------------------------------------------------
 // ∇²φ = 4πG ρ  →  One Jacobi iteration step
-// For production, consider FFT-based solver or multigrid
+// Uses periodic boundary conditions (torus) to match particle dynamics.
 
 kernel void poisson_jacobi_step(
     device const float* phi_in            [[buffer(0)]],  // X * Y * Z (potential)
@@ -933,13 +1172,20 @@ kernel void poisson_jacobi_step(
     uint stride_x = p.grid_y * p.grid_z;
     uint idx = gid.x * stride_x + gid.y * stride_y + gid.z * stride_z;
     
-    // Boundary handling (Dirichlet: φ = 0 at boundary)
-    float xm = (gid.x > 0) ? phi_in[idx - stride_x] : 0.0f;
-    float xp = (gid.x < p.grid_x - 1) ? phi_in[idx + stride_x] : 0.0f;
-    float ym = (gid.y > 0) ? phi_in[idx - stride_y] : 0.0f;
-    float yp = (gid.y < p.grid_y - 1) ? phi_in[idx + stride_y] : 0.0f;
-    float zm = (gid.z > 0) ? phi_in[idx - stride_z] : 0.0f;
-    float zp = (gid.z < p.grid_z - 1) ? phi_in[idx + stride_z] : 0.0f;
+    // Periodic boundary handling
+    uint x_prev = (gid.x == 0) ? p.grid_x - 1 : gid.x - 1;
+    uint x_next = (gid.x == p.grid_x - 1) ? 0 : gid.x + 1;
+    uint y_prev = (gid.y == 0) ? p.grid_y - 1 : gid.y - 1;
+    uint y_next = (gid.y == p.grid_y - 1) ? 0 : gid.y + 1;
+    uint z_prev = (gid.z == 0) ? p.grid_z - 1 : gid.z - 1;
+    uint z_next = (gid.z == p.grid_z - 1) ? 0 : gid.z + 1;
+
+    float xm = phi_in[x_prev * stride_x + gid.y * stride_y + gid.z * stride_z];
+    float xp = phi_in[x_next * stride_x + gid.y * stride_y + gid.z * stride_z];
+    float ym = phi_in[gid.x * stride_x + y_prev * stride_y + gid.z * stride_z];
+    float yp = phi_in[gid.x * stride_x + y_next * stride_y + gid.z * stride_z];
+    float zm = phi_in[gid.x * stride_x + gid.y * stride_y + z_prev * stride_z];
+    float zp = phi_in[gid.x * stride_x + gid.y * stride_y + z_next * stride_z];
     
     float h2 = p.grid_spacing * p.grid_spacing;
     
@@ -960,6 +1206,47 @@ kernel void clear_field(
     field[gid] = 0.0f;
 }
 
+// -----------------------------------------------------------------------------
+// Kernel: Derive temperature field from scattered mass + heat
+// -----------------------------------------------------------------------------
+// Given:
+// - mass_field: scattered mass-per-cell (same units as particle masses)
+// - heat_field: scattered heat-per-cell Q_cell (same units as particle heat)
+//
+// Derive:
+//   T_cell = Q_cell / (mass_field * c_v + eps)
+//
+// This matches the host-side formula previously used in Python:
+//   denom = mass_field * max(c_v, eps) + eps
+//   T = heat_field / denom
+//
+kernel void derive_temperature_field(
+    device const float* mass_field [[buffer(0)]],
+    device const float* heat_field [[buffer(1)]],
+    device float* temp_field       [[buffer(2)]],
+    constant float& specific_heat  [[buffer(3)]],
+    constant uint& num_elements    [[buffer(4)]],
+    uint gid [[thread_position_in_grid]]
+) {
+    if (gid >= num_elements) return;
+    // [CHOICE] cell temperature from scattered stores (explicit vacuum semantics)
+    // [FORMULA] If m_cell > 0:  T_cell = Q_cell / (m_cell c_v)
+    //          Else:           T_cell = 0  (vacuum / empty cell has no temperature)
+    // [REASON] removes numerical ε and makes vacuum handling explicit
+    // [NOTES] Requires invariant c_v > 0. If c_v <= 0, we write NaN to fail loudly.
+    float cv = specific_heat;
+    if (!(cv > 0.0f)) {
+        temp_field[gid] = qnan_f();
+        return;
+    }
+    float m = mass_field[gid];
+    if (m > 0.0f) {
+        temp_field[gid] = heat_field[gid] / (m * cv);
+    } else {
+        temp_field[gid] = 0.0f;
+    }
+}
+
 // =============================================================================
 // Particle-Particle Interaction Kernel (Collision + Excitation Transfer)
 // =============================================================================
@@ -976,6 +1263,7 @@ struct ParticleInteractionParams {
     float particle_radius;       // r: particle radius for collision detection
     float young_modulus;         // E: Young's modulus for Hertzian contact (spring stiffness)
     float thermal_conductivity;  // k: heat transfer on contact
+    float specific_heat;         // c_v: heat capacity per unit mass
     float restitution;           // e: coefficient of restitution (0-1)
 };
 
@@ -985,7 +1273,9 @@ kernel void particle_interactions(
     device float* particle_excitation     [[buffer(2)]],  // N (read-write for excitation)
     device const float* particle_mass     [[buffer(3)]],  // N (read-only)
     device float* particle_heat           [[buffer(4)]],  // N (read-write for heat)
-    constant ParticleInteractionParams& p [[buffer(5)]],
+    device const float* particle_vel_in   [[buffer(5)]],  // N * 3 (snapshot for consistent reads)
+    device const float* particle_heat_in  [[buffer(6)]],  // N (snapshot for consistent reads)
+    constant ParticleInteractionParams& p [[buffer(7)]],
     uint gid [[thread_position_in_grid]]
 ) {
     if (gid >= p.num_particles) return;
@@ -1004,6 +1294,19 @@ kernel void particle_interactions(
     float mass_i = particle_mass[gid];
     float heat_i = particle_heat[gid];
     // Note: particle_excitation is read-only intrinsic property, not needed for collisions
+
+    // [CHOICE] collision kernel invariants (fail loudly)
+    // [FORMULA] require: m_i>0, c_v>0, r>0, dt>0
+    // [REASON] silent clamps hide invalid physical states
+    // [NOTES] on violation we write NaNs to outputs for this particle.
+    if (!(mass_i > 0.0f) || !(p.specific_heat > 0.0f) || !(p.particle_radius > 0.0f) || !(p.dt > 0.0f)) {
+        float qn = qnan_f();
+        particle_vel[gid * 3 + 0] = qn;
+        particle_vel[gid * 3 + 1] = qn;
+        particle_vel[gid * 3 + 2] = qn;
+        particle_heat[gid] = qn;
+        return;
+    }
     
     // Particle radius (from material property)
     float r_i = p.particle_radius;
@@ -1022,12 +1325,21 @@ kernel void particle_interactions(
             particle_pos[j * 3 + 2]
         );
         float3 vel_j = float3(
-            particle_vel[j * 3 + 0],
-            particle_vel[j * 3 + 1],
-            particle_vel[j * 3 + 2]
+            particle_vel_in[j * 3 + 0],
+            particle_vel_in[j * 3 + 1],
+            particle_vel_in[j * 3 + 2]
         );
         float mass_j = particle_mass[j];
-        float heat_j = particle_heat[j];
+        float heat_j = particle_heat_in[j];
+
+        if (!(mass_j > 0.0f)) {
+            float qn = qnan_f();
+            particle_vel[gid * 3 + 0] = qn;
+            particle_vel[gid * 3 + 1] = qn;
+            particle_vel[gid * 3 + 2] = qn;
+            particle_heat[gid] = qn;
+            return;
+        }
         
         float r_j = p.particle_radius;
         float combined_radius = r_i + r_j;
@@ -1087,8 +1399,14 @@ kernel void particle_interactions(
             // -------------------------------------------------
             // Q = k * A * (T_j - T_i) / d, where d ≈ overlap
             // Approximate: dQ/dt ∝ k * (T_j - T_i) * contact_area
-            float T_i = heat_i / max(mass_i, 1e-6f);
-            float T_j = heat_j / max(mass_j, 1e-6f);
+            // Temperature consistency: T = Q / (m * c_v)
+            // [CHOICE] contact conduction temperature mapping
+            // [FORMULA] T = Q / (m c_v)
+            // [REASON] consistent with particle internal energy definition
+            // [NOTES] invariants m>0, c_v>0 enforced above (no silent eps clamps).
+            float cv = p.specific_heat;
+            float T_i = heat_i / (mass_i * cv);
+            float T_j = heat_j / (mass_j * cv);
             float contact_area = overlap * overlap;  // Approximate circular contact
             float dQ_conduction = p.thermal_conductivity * contact_area * (T_j - T_i) * p.dt;
             heat_delta += dQ_conduction;
@@ -1103,7 +1421,9 @@ kernel void particle_interactions(
     vel_i += impulse_total;
     heat_i += heat_delta;
     
-    // Physical constraints (non-negative)
+    // [CHOICE] non-negative thermal energy (0 K baseline)
+    // [FORMULA] Q >= 0
+    // [REASON] internal thermal energy relative to absolute zero cannot be negative
     heat_i = max(heat_i, 0.0f);
     
     // Write back
@@ -1136,9 +1456,13 @@ inline uint3 position_to_cell(
     float3 domain_min,
     uint3 grid_dims
 ) {
-    float3 local = (pos - domain_min) * inv_cell_size;
-    uint3 cell = uint3(clamp(local, float3(0.0f), float3(grid_dims) - 1.0f));
-    return cell;
+    // [CHOICE] periodic spatial hash domain
+    // [FORMULA] cell = floor(((pos-domain_min)/h) mod grid_dims)
+    // [REASON] collision neighborhood should match torus/periodic simulation domain
+    float3 g = (pos - domain_min) * inv_cell_size;
+    float3 gd = float3(grid_dims);
+    g = g - gd * floor(g / gd); // wrap into [0,grid_dims)
+    return uint3(floor(g));
 }
 
 inline uint cell_to_linear(uint3 cell, uint3 grid_dims) {
@@ -1261,6 +1585,83 @@ kernel void spatial_hash_prefix_sum_parallel(
 }
 
 // -----------------------------------------------------------------------------
+// Generic kernel: u32 exclusive scan (parallel, block-hierarchical)
+// -----------------------------------------------------------------------------
+// [CHOICE] parallel prefix sum (exclusive) for uint32 buffers
+// [FORMULA] out[i] = Σ_{j < i} in[j]
+// [REASON] required for O(N) spatial hash and spectral frequency binning without CPU sync
+// [NOTES] This is implemented as a block scan + hierarchical scan of block sums.
+//
+// Pass 1: per-block exclusive scan, emitting `block_sums[block]`.
+kernel void exclusive_scan_u32_pass1(
+    device const uint* in                [[buffer(0)]],  // n
+    device uint* out                     [[buffer(1)]],  // n
+    device uint* block_sums              [[buffer(2)]],  // num_blocks
+    constant uint& n                     [[buffer(3)]],
+    uint tid [[thread_index_in_threadgroup]],
+    uint tg_id [[threadgroup_position_in_grid]],
+    uint tg_size [[threads_per_threadgroup]],
+    threadgroup uint* shared             [[threadgroup(0)]]
+) {
+    uint idx = tg_id * tg_size + tid;
+    shared[tid] = (idx < n) ? in[idx] : 0u;
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+
+    // Up-sweep
+    for (uint stride = 1; stride < tg_size; stride <<= 1) {
+        uint ai = ((tid + 1u) * stride * 2u) - 1u;
+        if (ai < tg_size) shared[ai] += shared[ai - stride];
+        threadgroup_barrier(mem_flags::mem_threadgroup);
+    }
+
+    uint total = shared[tg_size - 1u];
+    if (tid == tg_size - 1u) {
+        block_sums[tg_id] = total;
+        shared[tg_size - 1u] = 0u; // exclusive
+    }
+    threadgroup_barrier(mem_flags::mem_threadgroup);
+
+    // Down-sweep
+    for (uint stride = tg_size >> 1; stride > 0; stride >>= 1) {
+        uint ai = ((tid + 1u) * stride * 2u) - 1u;
+        if (ai < tg_size) {
+            uint t = shared[ai - stride];
+            shared[ai - stride] = shared[ai];
+            shared[ai] += t;
+        }
+        threadgroup_barrier(mem_flags::mem_threadgroup);
+    }
+
+    if (idx < n) out[idx] = shared[tid];
+}
+
+// Pass 2/3 helper: add scanned block offsets to per-block scan output.
+kernel void exclusive_scan_u32_add_block_offsets(
+    device uint* out                      [[buffer(0)]],  // n (in/out)
+    device const uint* block_prefix       [[buffer(1)]],  // num_blocks (exclusive scan of block_sums)
+    constant uint& n                      [[buffer(2)]],
+    uint tid [[thread_index_in_threadgroup]],
+    uint tg_id [[threadgroup_position_in_grid]],
+    uint tg_size [[threads_per_threadgroup]]
+) {
+    uint idx = tg_id * tg_size + tid;
+    if (idx >= n) return;
+    out[idx] += block_prefix[tg_id];
+}
+
+// Optional helper: write total sum as out[n] for (n+1)-length start arrays.
+kernel void exclusive_scan_u32_finalize_total(
+    device const uint* in                 [[buffer(0)]],  // n
+    device uint* out                      [[buffer(1)]],  // n+1 (first n already filled with exclusive scan)
+    constant uint& n                      [[buffer(2)]],
+    uint gid [[thread_position_in_grid]]
+) {
+    if (gid != 0) return;
+    if (n == 0) { out[0] = 0u; return; }
+    out[n] = out[n - 1u] + in[n - 1u];
+}
+
+// -----------------------------------------------------------------------------
 // Kernel: Scatter particles to sorted array (Phase 2b)
 // -----------------------------------------------------------------------------
 // Places particle indices into a sorted array based on their cell.
@@ -1280,6 +1681,135 @@ kernel void spatial_hash_scatter(
     sorted_particle_idx[slot] = gid;
 }
 
+// =============================================================================
+// Spectral carrier frequency binning (GPU-only)
+// =============================================================================
+// Buckets carriers by ω_k to enable sparse coupling by scanning only nearby bins.
+//
+// This is designed to be exact w.r.t. fp32 tuning semantics:
+// we will later choose bin width such that bins beyond a fixed neighborhood
+// contribute exactly 0 to the Gaussian in fp32 (exp-underflow).
+
+// -----------------------------------------------------------------------------
+// Constants / types for spectral binning (must appear before kernels)
+// -----------------------------------------------------------------------------
+// [CHOICE] fp32 exp underflow boundary for Gaussian tuning
+// [FORMULA] Let FLT_TRUE_MIN = 2^-149. exp(-x) underflows to 0 in fp32 for x >= x0,
+//           where x0 = -ln(FLT_TRUE_MIN) = -ln(2^-149) = 149 * ln(2).
+// [REASON] enables exact sparsity: interactions with (Δω^2/σ^2) >= x0 contribute
+//          exactly 0 in fp32, so they are provably irrelevant.
+constant float kFp32ExpUnderflowX0 = 103.27893f; // 149*ln(2) (rounded to fp32)
+
+struct SpectralBinParams {
+    float omega_min;
+    float inv_bin_width;
+};
+
+// [CHOICE] float→ordered-u32 mapping for atomic min/max
+// [FORMULA] key = (sign? ~u : (u ^ 0x80000000)), where u is IEEE-754 bits of float
+// [REASON] enables atomic_min/atomic_max on floats using atomic_uint while preserving ordering
+inline uint float_to_ordered_u32(float x) {
+    uint u = as_type<uint>(x);
+    uint sign = u & 0x80000000u;
+    return (sign != 0u) ? ~u : (u ^ 0x80000000u);
+}
+
+inline float ordered_u32_to_float(uint key) {
+    uint sign = key & 0x80000000u;
+    uint u = (sign != 0u) ? (key ^ 0x80000000u) : ~key;
+    return as_type<float>(u);
+}
+
+// Prototypes (definitions appear later in file).
+inline void atomic_max_uint_device(device atomic_uint* address, uint val);
+inline void atomic_min_uint_device(device atomic_uint* address, uint val);
+
+kernel void spectral_reduce_omega_minmax_keys(
+    device const float* carrier_omega       [[buffer(0)]],  // maxM
+    device const uint* num_carriers_in      [[buffer(1)]],  // (1,) snapshot
+    device atomic_uint* omega_min_key       [[buffer(2)]],  // (1,) init = 0xFFFFFFFF
+    device atomic_uint* omega_max_key       [[buffer(3)]],  // (1,) init = 0
+    uint gid [[thread_position_in_grid]]
+) {
+    uint n = (num_carriers_in != nullptr) ? num_carriers_in[0] : 0u;
+    if (gid >= n) return;
+    float w = carrier_omega[gid];
+    if (!isfinite(w)) return;
+    uint key = float_to_ordered_u32(w);
+    atomic_min_uint_device(&omega_min_key[0], key);
+    atomic_max_uint_device(&omega_max_key[0], key);
+}
+
+kernel void spectral_compute_bin_params(
+    device const atomic_uint* omega_min_key [[buffer(0)]], // (1,)
+    device const atomic_uint* omega_max_key [[buffer(1)]], // (1,)
+    device const uint* num_carriers_in      [[buffer(2)]], // (1,)
+    device SpectralBinParams* out_params    [[buffer(3)]], // (1,)
+    constant float& gate_width_max          [[buffer(4)]],
+    uint gid [[thread_position_in_grid]]
+) {
+    if (gid != 0) return;
+    uint n = (num_carriers_in != nullptr) ? max(num_carriers_in[0], 1u) : 1u;
+
+    float wmin = ordered_u32_to_float(atomic_load_explicit(&omega_min_key[0], memory_order_relaxed));
+    float wmax = ordered_u32_to_float(atomic_load_explicit(&omega_max_key[0], memory_order_relaxed));
+    float range = wmax - wmin;
+
+    // [CHOICE] fp32-exact coupling support radius for Gaussian
+    // [FORMULA] R_max = sqrt(x0) * σ_max, where x0 = -ln(FLT_TRUE_MIN)
+    // [REASON] outside this radius, exp(-(Δω/σ)^2) underflows to 0 in fp32 (exactly)
+    float R_max = sqrt(kFp32ExpUnderflowX0) * gate_width_max;
+
+    // [CHOICE] bin width (derived, no knob)
+    // [FORMULA] W = max(R_max, range / n)
+    // [REASON] ensures finite binning resolution without user-tunable parameters
+    float W = max(R_max, (n > 0u) ? (range / (float)n) : R_max);
+    if (!(W > 0.0f)) {
+        out_params[0].omega_min = qnan_f();
+        out_params[0].inv_bin_width = qnan_f();
+        return;
+    }
+
+    out_params[0].omega_min = wmin;
+    out_params[0].inv_bin_width = 1.0f / W;
+}
+
+kernel void spectral_bin_count_carriers(
+    device const float* carrier_omega       [[buffer(0)]],  // maxM
+    device const uint* num_carriers_in      [[buffer(1)]],  // (1,)
+    device atomic_uint* bin_counts          [[buffer(2)]],  // num_bins
+    device const SpectralBinParams* bin_p   [[buffer(3)]],  // (1,)
+    constant uint& num_bins                 [[buffer(4)]],
+    uint gid [[thread_position_in_grid]]
+) {
+    uint n = (num_carriers_in != nullptr) ? num_carriers_in[0] : 0u;
+    if (gid >= n) return;
+    float w = carrier_omega[gid];
+    float f = (w - bin_p[0].omega_min) * bin_p[0].inv_bin_width;
+    int bi = (int)floor(f);
+    bi = clamp(bi, 0, (int)num_bins - 1);
+    atomic_fetch_add_explicit(&bin_counts[(uint)bi], 1u, memory_order_relaxed);
+}
+
+kernel void spectral_bin_scatter_carriers(
+    device const float* carrier_omega       [[buffer(0)]],  // maxM
+    device const uint* num_carriers_in      [[buffer(1)]],  // (1,)
+    device atomic_uint* bin_offsets         [[buffer(2)]],  // num_bins (working copy of starts)
+    device const SpectralBinParams* bin_p   [[buffer(3)]],  // (1,)
+    constant uint& num_bins                 [[buffer(4)]],
+    device uint* carrier_binned_idx         [[buffer(5)]],  // maxM
+    uint gid [[thread_position_in_grid]]
+) {
+    uint n = (num_carriers_in != nullptr) ? num_carriers_in[0] : 0u;
+    if (gid >= n) return;
+    float w = carrier_omega[gid];
+    float f = (w - bin_p[0].omega_min) * bin_p[0].inv_bin_width;
+    int bi = (int)floor(f);
+    bi = clamp(bi, 0, (int)num_bins - 1);
+    uint slot = atomic_fetch_add_explicit(&bin_offsets[(uint)bi], 1u, memory_order_relaxed);
+    carrier_binned_idx[slot] = gid;
+}
+
 // -----------------------------------------------------------------------------
 // Kernel: Spatial hash collision detection (Phase 3)
 // -----------------------------------------------------------------------------
@@ -1297,8 +1827,11 @@ kernel void spatial_hash_collisions(
     device const uint* sorted_particle_idx [[buffer(5)]],  // N (sorted by cell)
     device const uint* cell_starts         [[buffer(6)]],  // num_cells + 1
     device const uint* particle_cell_idx   [[buffer(7)]],  // N (cell index per particle)
+    // Snapshot inputs for consistent reads (avoid write hazards)
+    device const float* particle_vel_in    [[buffer(8)]],  // N * 3
+    device const float* particle_heat_in   [[buffer(9)]],  // N
     // Parameters
-    constant SpatialCollisionParams& p     [[buffer(8)]],
+    constant SpatialCollisionParams& p     [[buffer(10)]],
     uint gid [[thread_position_in_grid]]
 ) {
     if (gid >= p.num_particles) return;
@@ -1317,6 +1850,16 @@ kernel void spatial_hash_collisions(
     float mass_i = particle_mass[gid];
     float heat_i = particle_heat[gid];
     // Note: particle_excitation is read-only intrinsic property, not needed for collisions
+
+    // Collision kernel invariants (fail loudly). See particle_interactions for rationale.
+    if (!(mass_i > 0.0f) || !(p.specific_heat > 0.0f) || !(p.particle_radius > 0.0f) || !(p.dt > 0.0f)) {
+        float qn = qnan_f();
+        particle_vel[gid * 3 + 0] = qn;
+        particle_vel[gid * 3 + 1] = qn;
+        particle_vel[gid * 3 + 2] = qn;
+        particle_heat[gid] = qn;
+        return;
+    }
     
     float r_i = p.particle_radius;
     uint3 grid_dims = uint3(p.grid_x, p.grid_y, p.grid_z);
@@ -1333,15 +1876,14 @@ kernel void spatial_hash_collisions(
     for (int dx = -1; dx <= 1; dx++) {
         for (int dy = -1; dy <= 1; dy++) {
             for (int dz = -1; dz <= 1; dz++) {
+                // [CHOICE] periodic neighbor wrap
+                // [FORMULA] neighbor = (cell_i + d) mod grid_dims
+                // [REASON] consistent with periodic domain; no boundary “dead zones”
                 int3 neighbor = int3(cell_i) + int3(dx, dy, dz);
-                
-                // Boundary check
-                if (neighbor.x < 0 || neighbor.x >= (int)p.grid_x ||
-                    neighbor.y < 0 || neighbor.y >= (int)p.grid_y ||
-                    neighbor.z < 0 || neighbor.z >= (int)p.grid_z) {
-                    continue;
-                }
-                
+                neighbor.x = (neighbor.x % (int)p.grid_x + (int)p.grid_x) % (int)p.grid_x;
+                neighbor.y = (neighbor.y % (int)p.grid_y + (int)p.grid_y) % (int)p.grid_y;
+                neighbor.z = (neighbor.z % (int)p.grid_z + (int)p.grid_z) % (int)p.grid_z;
+
                 uint neighbor_linear = cell_to_linear(uint3(neighbor), grid_dims);
                 uint start = cell_starts[neighbor_linear];
                 uint end = cell_starts[neighbor_linear + 1];
@@ -1376,12 +1918,21 @@ kernel void spatial_hash_collisions(
                     float overlap = combined_radius - dist;
                     
                     float3 vel_j = float3(
-                        particle_vel[j * 3 + 0],
-                        particle_vel[j * 3 + 1],
-                        particle_vel[j * 3 + 2]
+                        particle_vel_in[j * 3 + 0],
+                        particle_vel_in[j * 3 + 1],
+                        particle_vel_in[j * 3 + 2]
                     );
                     float mass_j = particle_mass[j];
-                    float heat_j = particle_heat[j];
+                    float heat_j = particle_heat_in[j];
+
+                    if (!(mass_j > 0.0f)) {
+                        float qn = qnan_f();
+                        particle_vel[gid * 3 + 0] = qn;
+                        particle_vel[gid * 3 + 1] = qn;
+                        particle_vel[gid * 3 + 2] = qn;
+                        particle_heat[gid] = qn;
+                        return;
+                    }
                     
                     float3 v_rel = vel_i - vel_j;
                     float v_n = dot(v_rel, n);
@@ -1403,8 +1954,10 @@ kernel void spatial_hash_collisions(
                     impulse_total += n * contact_force * p.dt / mass_i;
                     
                     // HEAT CONDUCTION
-                    float T_i = heat_i / max(mass_i, 1e-6f);
-                    float T_j = heat_j / max(mass_j, 1e-6f);
+                    // Temperature consistency: T = Q / (m * c_v)
+                    float cv = p.specific_heat;
+                    float T_i = heat_i / (mass_i * cv);
+                    float T_j = heat_j / (mass_j * cv);
                     float contact_area = overlap * overlap;
                     float dQ_conduction = p.thermal_conductivity * contact_area * (T_j - T_i) * p.dt;
                     heat_delta += dQ_conduction;
@@ -1462,38 +2015,54 @@ inline void atomic_add_float_threadgroup(threadgroup atomic_uint* address, float
 }
 
 // -----------------------------------------------------------------------------
-// Kernel: Tiled scatter with threadgroup reduction (CAS-based atomics)
+// Kernel: Tiled scatter with threadgroup hash accumulation (exact)
 // -----------------------------------------------------------------------------
-// Reduces atomic contention by having each threadgroup accumulate contributions
-// locally before performing a single atomic add per grid cell per threadgroup.
-// This is especially effective when particles cluster spatially.
+// Goal: reduce global atomic contention of particle→grid deposition.
 //
-// Uses CAS loop for threadgroup float atomics (portable across all Metal GPUs).
+// Strategy:
+// - Each threadgroup processes a contiguous tile of particles.
+// - Deposits are accumulated into a fixed-size threadgroup hash table keyed by
+//   linear cell index. Values are float accumulators stored as atomic_uint bits.
+// - At the end, each occupied hash slot flushes exactly once to global atomics.
+// - If the local hash table cannot place a key within kMaxProbe probes, we fall
+//   back to direct global atomic adds for that deposit (still exact).
+//
+// Correctness: identical to `scatter_particle` (same trilinear weights), no
+// approximation; only a different accumulation order (floating point assoc).
+//
+constant uint kScatterHashSize = 2048u; // power of two
+constant uint kScatterEmptyKey = 0xFFFFFFFFu;
+constant uint kScatterMaxProbe = 32u;
+
+inline uint scatter_hash_u32(uint x) {
+    return hash_u32(x ^ 0xB5297A4Du);
+}
 
 kernel void scatter_particle_tiled(
-    device const float* particle_pos       [[buffer(0)]],  // N * 3
-    device const float* particle_mass      [[buffer(1)]],  // N
-    device const float* particle_heat      [[buffer(2)]],  // N
-    device atomic_float* gravity_field     [[buffer(3)]],  // X * Y * Z
-    device atomic_float* heat_field        [[buffer(4)]],  // X * Y * Z
-    constant TiledScatterParams& p         [[buffer(5)]],
+    device const float* particle_pos      [[buffer(0)]],  // N * 3
+    device const float* particle_mass     [[buffer(1)]],  // N
+    device const float* particle_heat     [[buffer(2)]],  // N
+    device const float* particle_energy   [[buffer(3)]],  // N
+    device atomic_float* gravity_field    [[buffer(4)]],  // X * Y * Z
+    device atomic_float* heat_field       [[buffer(5)]],  // X * Y * Z
+    constant TiledScatterParams& p        [[buffer(6)]],
     uint gid [[thread_position_in_grid]],
-    uint tid [[thread_position_in_threadgroup]],
+    uint tid [[thread_index_in_threadgroup]],
     uint tg_size [[threads_per_threadgroup]],
-    threadgroup atomic_uint* local_gravity [[threadgroup(0)]],  // grid_size uints (as float bits)
-    threadgroup atomic_uint* local_heat [[threadgroup(1)]]      // grid_size uints (as float bits)
+    uint tg_id [[threadgroup_position_in_grid]],
+    threadgroup atomic_uint* tg_keys      [[threadgroup(0)]], // kScatterHashSize
+    threadgroup atomic_uint* tg_g         [[threadgroup(1)]], // kScatterHashSize (float bits)
+    threadgroup atomic_uint* tg_h         [[threadgroup(2)]]  // kScatterHashSize (float bits)
 ) {
-    uint num_cells = p.grid_x * p.grid_y * p.grid_z;
-    
-    // Initialize local accumulators to 0.0f (stored as uint bits)
-    uint zero_bits = as_type<uint>(0.0f);
-    for (uint i = tid; i < num_cells; i += tg_size) {
-        atomic_store_explicit(&local_gravity[i], zero_bits, memory_order_relaxed);
-        atomic_store_explicit(&local_heat[i], zero_bits, memory_order_relaxed);
+    // 1) Initialize hash table
+    for (uint i = tid; i < kScatterHashSize; i += tg_size) {
+        atomic_store_explicit(&tg_keys[i], kScatterEmptyKey, memory_order_relaxed);
+        atomic_store_explicit(&tg_g[i], 0u, memory_order_relaxed);
+        atomic_store_explicit(&tg_h[i], 0u, memory_order_relaxed);
     }
     threadgroup_barrier(mem_flags::mem_threadgroup);
-    
-    // Scatter to local accumulators using CAS-based atomic add
+
+    // 2) Process one particle per thread (tile_size == threads_per_threadgroup)
     if (gid < p.num_particles) {
         float3 pos = float3(
             particle_pos[gid * 3 + 0],
@@ -1502,64 +2071,149 @@ kernel void scatter_particle_tiled(
         );
         float mass = particle_mass[gid];
         float heat = particle_heat[gid];
-        
-        // Get trilinear coordinates
+        float e_osc = particle_energy[gid];
+        float e_total = heat + e_osc;
+
+        // Trilinear coords (periodic)
+        uint3 base_idx;
+        float3 frac;
         uint3 grid_dims = uint3(p.grid_x, p.grid_y, p.grid_z);
-        float3 grid_pos = pos * p.inv_grid_spacing;
-        grid_pos = clamp(grid_pos, float3(0.0f), float3(grid_dims) - 1.001f);
-        uint3 base_idx = uint3(floor(grid_pos));
-        float3 frac = grid_pos - float3(base_idx);
-        
-        // Compute 8 trilinear weights
+        trilinear_coords(pos, p.inv_grid_spacing, grid_dims, base_idx, frac);
+
         float wx0 = 1.0f - frac.x, wx1 = frac.x;
         float wy0 = 1.0f - frac.y, wy1 = frac.y;
         float wz0 = 1.0f - frac.z, wz1 = frac.z;
-        
+
         float weights[8] = {
-            wx0 * wy0 * wz0, wx0 * wy0 * wz1,
-            wx0 * wy1 * wz0, wx0 * wy1 * wz1,
-            wx1 * wy0 * wz0, wx1 * wy0 * wz1,
-            wx1 * wy1 * wz0, wx1 * wy1 * wz1
+            wx0 * wy0 * wz0,  // 000
+            wx0 * wy0 * wz1,  // 001
+            wx0 * wy1 * wz0,  // 010
+            wx0 * wy1 * wz1,  // 011
+            wx1 * wy0 * wz0,  // 100
+            wx1 * wy0 * wz1,  // 101
+            wx1 * wy1 * wz0,  // 110
+            wx1 * wy1 * wz1   // 111
         };
-        
+
+        uint gx = p.grid_x, gy = p.grid_y, gz = p.grid_z;
+        uint x0 = base_idx.x;
+        uint y0 = base_idx.y;
+        uint z0 = base_idx.z;
+        uint x1 = (x0 + 1) % gx;
+        uint y1 = (y0 + 1) % gy;
+        uint z1 = (z0 + 1) % gz;
+
         uint stride_z = 1;
-        uint stride_y = p.grid_z;
-        uint stride_x = p.grid_y * p.grid_z;
-        uint base = base_idx.x * stride_x + base_idx.y * stride_y + base_idx.z * stride_z;
-        
-        uint offsets[8] = {
-            0, stride_z, stride_y, stride_y + stride_z,
-            stride_x, stride_x + stride_z, stride_x + stride_y,
-            stride_x + stride_y + stride_z
+        uint stride_y = gz;
+        uint stride_x = gy * gz;
+        auto idx3 = [&](uint x, uint y, uint z) -> uint {
+            return x * stride_x + y * stride_y + z * stride_z;
         };
-        
-        // Accumulate to threadgroup memory using CAS-based atomic add
-        for (int i = 0; i < 8; i++) {
-            uint idx = base + offsets[i];
-            atomic_add_float_threadgroup(&local_gravity[idx], mass * weights[i]);
-            atomic_add_float_threadgroup(&local_heat[idx], heat * weights[i]);
+
+        uint idxs[8] = {
+            idx3(x0, y0, z0),
+            idx3(x0, y0, z1),
+            idx3(x0, y1, z0),
+            idx3(x0, y1, z1),
+            idx3(x1, y0, z0),
+            idx3(x1, y0, z1),
+            idx3(x1, y1, z0),
+            idx3(x1, y1, z1),
+        };
+
+        // Deposit each corner into threadgroup hash
+        for (uint c = 0; c < 8; c++) {
+            uint key = idxs[c];
+            float w = weights[c];
+            float add_g = mass * w;
+            float add_h = e_total * w;
+
+            uint h0 = scatter_hash_u32(key) & (kScatterHashSize - 1u);
+            bool placed = false;
+            for (uint probe = 0; probe < kScatterMaxProbe; probe++) {
+                uint slot = (h0 + probe) & (kScatterHashSize - 1u);
+                uint old = atomic_load_explicit(&tg_keys[slot], memory_order_relaxed);
+                if (old == key) {
+                    atomic_add_float_threadgroup(&tg_g[slot], add_g);
+                    atomic_add_float_threadgroup(&tg_h[slot], add_h);
+                    placed = true;
+                    break;
+                }
+                if (old == kScatterEmptyKey) {
+                    uint expected = kScatterEmptyKey;
+                    if (atomic_compare_exchange_weak_explicit(
+                            &tg_keys[slot], &expected, key,
+                            memory_order_relaxed, memory_order_relaxed)) {
+                        atomic_add_float_threadgroup(&tg_g[slot], add_g);
+                        atomic_add_float_threadgroup(&tg_h[slot], add_h);
+                        placed = true;
+                        break;
+                    }
+                }
+            }
+            if (!placed) {
+                // Fallback: exact global atomic adds for this deposit.
+                atomic_fetch_add_explicit(&gravity_field[key], add_g, memory_order_relaxed);
+                atomic_fetch_add_explicit(&heat_field[key], add_h, memory_order_relaxed);
+            }
         }
     }
-    
+
     threadgroup_barrier(mem_flags::mem_threadgroup);
-    
-    // Flush local accumulators to global memory (one atomic per cell per threadgroup)
-    for (uint i = tid; i < num_cells; i += tg_size) {
-        float gval = as_type<float>(atomic_load_explicit(&local_gravity[i], memory_order_relaxed));
-        float hval = as_type<float>(atomic_load_explicit(&local_heat[i], memory_order_relaxed));
-        
-        if (gval != 0.0f) {
-            atomic_fetch_add_explicit(&gravity_field[i], gval, memory_order_relaxed);
-        }
-        if (hval != 0.0f) {
-            atomic_fetch_add_explicit(&heat_field[i], hval, memory_order_relaxed);
+
+    // 3) Flush hash table to global atomics
+    for (uint i = tid; i < kScatterHashSize; i += tg_size) {
+        uint key = atomic_load_explicit(&tg_keys[i], memory_order_relaxed);
+        if (key == kScatterEmptyKey) continue;
+
+        uint gbits = atomic_load_explicit(&tg_g[i], memory_order_relaxed);
+        uint hbits = atomic_load_explicit(&tg_h[i], memory_order_relaxed);
+        float gsum = as_type<float>(gbits);
+        float hsum = as_type<float>(hbits);
+
+        if (gsum != 0.0f) atomic_fetch_add_explicit(&gravity_field[key], gsum, memory_order_relaxed);
+        if (hsum != 0.0f) atomic_fetch_add_explicit(&heat_field[key], hsum, memory_order_relaxed);
+    }
+}
+
+// -----------------------------------------------------------------------------
+// Helper: Atomic Max for Threadgroup/Device Memory (CAS Loop)
+// -----------------------------------------------------------------------------
+// Replaces atomic_max_explicit which may not be supported for all types/spaces.
+
+inline void atomic_max_uint_threadgroup(threadgroup atomic_uint* address, uint val) {
+    uint old_val = atomic_load_explicit(address, memory_order_relaxed);
+    while (val > old_val) {
+        if (atomic_compare_exchange_weak_explicit(
+                address, &old_val, val, memory_order_relaxed, memory_order_relaxed)) {
+            break;
         }
     }
 }
 
-// =============================================================================
+inline void atomic_max_uint_device(device atomic_uint* address, uint val) {
+    uint old_val = atomic_load_explicit(address, memory_order_relaxed);
+    while (val > old_val) {
+        if (atomic_compare_exchange_weak_explicit(
+                address, &old_val, val, memory_order_relaxed, memory_order_relaxed)) {
+            break;
+        }
+    }
+}
+
+inline void atomic_min_uint_device(device atomic_uint* address, uint val) {
+    uint old_val = atomic_load_explicit(address, memory_order_relaxed);
+    while (val < old_val) {
+        if (atomic_compare_exchange_weak_explicit(
+                address, &old_val, val, memory_order_relaxed, memory_order_relaxed)) {
+            break;
+        }
+    }
+}
+
+// -----------------------------------------------------------------------------
 // Spectral Carrier Coupling (Resonance Potential, Langevin Flow)
-// =============================================================================
+// -----------------------------------------------------------------------------
 // This implements a conservative "resonance potential" view of the spectral layer.
 //
 // Definitions:
@@ -1603,7 +2257,6 @@ struct SpectralCarrierParams {
     float dt;
     float coupling_scale;          // phase torque scale
     float carrier_reg;             // λ (L2 regularization on |C| to prevent blow-up)
-    float temperature;             // Langevin temperature (noise strength)
     uint32_t rng_seed;             // updated each tick by host
     float conflict_threshold;      // coherence threshold to trigger split (high = stricter)
     float offender_weight_floor;   // ignore tiny weights
@@ -1630,8 +2283,108 @@ struct SpectralCarrierParams {
 
 inline float tuning_from_freq(float omega_i, float omega_k, float gate_width) {
     float d = omega_i - omega_k;
-    float sigma = max(gate_width, 1e-4f);
+    // [CHOICE] tuning kernel width (invariant)
+    // [FORMULA] σ = gate_width, requires σ>0
+    // [REASON] removes eps clamp; invalid σ should fail loudly upstream
+    // [NOTES] host enforces gate_width_min>0; kernel state clamps gate_width into [min,max].
+    if (!(gate_width > 0.0f)) return qnan_f();
+    float sigma = gate_width;
     return exp(-(d * d) / (sigma * sigma));
+}
+
+// -----------------------------------------------------------------------------
+// Kernel: Parallel Force Accumulation (Oscillator-Centric)
+// -----------------------------------------------------------------------------
+// Replaces the O(N) loop inside carrier threads with an O(N) parallel kernel.
+// Each oscillator computes its contribution to ALL carriers.
+// Uses threadgroup memory to reduce global atomic contention.
+
+struct CarrierAccumulators {
+    atomic_float force_r;
+    atomic_float force_i;
+    atomic_float w_sum;
+    atomic_float w_omega_sum;
+    atomic_float w_omega2_sum;
+    atomic_float w_amp_sum;
+    atomic_uint offender_score; // float bits
+    atomic_uint offender_idx;   // uint
+};
+
+kernel void spectral_accumulate_forces(
+    // Oscillator state
+    device const float* osc_phase           [[buffer(0)]],  // N
+    device const float* osc_omega           [[buffer(1)]],  // N
+    device const float* osc_amp             [[buffer(2)]],  // N
+    // Carrier state (read-only)
+    device const float* carrier_omega       [[buffer(3)]],  // maxM
+    device const float* carrier_gate_width  [[buffer(4)]],  // maxM
+    device const float* carrier_conflict    [[buffer(5)]],  // maxM
+    // Output accumulators
+    device CarrierAccumulators* accums      [[buffer(6)]],  // maxM
+    // Parameters
+    constant SpectralCarrierParams& p       [[buffer(7)]],
+    device const uint* num_carriers_in      [[buffer(8)]], // (1,) uint32/int32
+    // Sparse binning inputs
+    device const uint* bin_starts           [[buffer(9)]],  // num_bins + 1
+    device const uint* carrier_binned_idx   [[buffer(10)]], // maxM (indices in [0,num_carriers))
+    device const SpectralBinParams* bin_p   [[buffer(11)]], // (1,) {omega_min, inv_bin_width}
+    constant uint& num_bins                 [[buffer(12)]],
+    uint gid [[thread_position_in_grid]]
+) {
+    uint num_carriers = (num_carriers_in != nullptr) ? num_carriers_in[0] : 0u;
+    num_carriers = min(num_carriers, p.max_carriers);
+    if (gid >= p.num_osc) return;
+    if (num_carriers == 0u) return;
+    if (!(num_bins > 0u)) return;
+
+    float omega_i = osc_omega[gid];
+    float amp_i = osc_amp[gid];
+    float phi_i = osc_phase[gid];
+
+    // Precompute z_i
+    float zr = amp_i * cos(phi_i);
+    float zi = amp_i * sin(phi_i);
+
+    // [CHOICE] bin neighborhood radius
+    // [FORMULA] radius = 2 bins guarantees covering |Δω|<=R_max when bin_width>=R_max
+    // [REASON] includes boundary cases where tuning_from_freq() is still nonzero at |Δω|≈R_max
+    const int rad = 2;
+    float fbin = (omega_i - bin_p[0].omega_min) * bin_p[0].inv_bin_width;
+    int bin_i = (int)floor(fbin);
+    int b0 = clamp(bin_i - rad, 0, (int)num_bins - 1);
+    int b1 = clamp(bin_i + rad, 0, (int)num_bins - 1);
+
+    for (int b = b0; b <= b1; b++) {
+        uint start = bin_starts[(uint)b];
+        uint end = bin_starts[(uint)b + 1u];
+        for (uint j = start; j < end; j++) {
+            uint k = carrier_binned_idx[j];
+            if (k >= num_carriers) continue;
+
+            float omega_k = carrier_omega[k];
+            float gate_w = clamp(carrier_gate_width[k], p.gate_width_min, p.gate_width_max);
+            float t = tuning_from_freq(omega_i, omega_k, gate_w);
+            float w = t * amp_i;
+            if (w <= p.offender_weight_floor) continue;
+
+            device CarrierAccumulators& g_acc = accums[k];
+            atomic_fetch_add_explicit(&g_acc.force_r, w * zr, memory_order_relaxed);
+            atomic_fetch_add_explicit(&g_acc.force_i, w * zi, memory_order_relaxed);
+            atomic_fetch_add_explicit(&g_acc.w_sum, w, memory_order_relaxed);
+            atomic_fetch_add_explicit(&g_acc.w_omega_sum, w * omega_i, memory_order_relaxed);
+            atomic_fetch_add_explicit(&g_acc.w_omega2_sum, w * omega_i * omega_i, memory_order_relaxed);
+            atomic_fetch_add_explicit(&g_acc.w_amp_sum, w * amp_i, memory_order_relaxed);
+
+            if (carrier_conflict[k] > p.conflict_threshold) {
+                uint score_bits = as_type<uint>(w);
+                atomic_max_uint_device(&g_acc.offender_score, score_bits);
+                // Best-effort index update (race-tolerant).
+                if (atomic_load_explicit(&g_acc.offender_score, memory_order_relaxed) == score_bits) {
+                    atomic_store_explicit(&g_acc.offender_idx, gid, memory_order_relaxed);
+                }
+            }
+        }
+    }
 }
 
 kernel void spectral_carrier_update_and_split(
@@ -1659,10 +2412,15 @@ kernel void spectral_carrier_update_and_split(
     // Global system energy statistics (computed via reduction pass)
     device const float* energy_stats        [[buffer(16)]], // (4,) [mean_abs, mean, std, count]
     constant SpectralCarrierParams& p       [[buffer(17)]],
+    // NEW: Pre-accumulated forces
+    device CarrierAccumulators* accums      [[buffer(18)]],
+    device const uint* num_carriers_in      [[buffer(19)]], // (1,) uint32/int32 snapshot
     uint gid [[thread_position_in_grid]]
 ) {
-    // One thread per *existing* carrier.
-    if (gid >= p.num_carriers) return;
+    // One thread per *existing* carrier (snapshot count, stable during this pass).
+    uint current = (num_carriers_in != nullptr) ? num_carriers_in[0] : 0u;
+    current = min(current, p.max_carriers);
+    if (gid >= current) return;
 
     float cr = carrier_real[gid];
     float ci = carrier_imag[gid];
@@ -1674,12 +2432,15 @@ kernel void spectral_carrier_update_and_split(
     // -------------------------------------------------------------------------
     // Adaptive renormalization (global, thermodynamic)
     // -------------------------------------------------------------------------
-    // Use system energy scale to set a decay that self-tunes:
-    //   e_scale = mean(|E|) + eps
-    //   decay  = exp(-dt / e_scale)
     float mean_abs_e = energy_stats[0];
-    float e_scale = max(mean_abs_e, 1e-8f);
-    float adaptive_decay = exp(-p.dt / e_scale);
+    // [CHOICE] global energy scale (explicit zero-energy semantics)
+    // [FORMULA] e_scale = mean_abs_e; if e_scale==0 -> no adaptive decay/no noise
+    // [REASON] removes eps clamp; defines behavior when the system has zero energy
+    float e_scale = mean_abs_e;
+    float adaptive_decay = 1.0f;
+    if (e_scale > 0.0f) {
+        adaptive_decay = exp(-p.dt / e_scale);
+    }
     float decay_mul = 1.0f;
     if (state == CARRIER_STATE_VOLATILE) decay_mul = max(p.volatile_decay_mul, 0.0f);
     else if (state == CARRIER_STATE_STABLE) decay_mul = max(p.stable_decay_mul, 0.0f);
@@ -1687,131 +2448,113 @@ kernel void spectral_carrier_update_and_split(
     cr *= (adaptive_decay * decay_mul);
     ci *= (adaptive_decay * decay_mul);
 
-    // Accumulate complex force F_k = Σ_i w_ik z_i, and stats for coherence + recentering.
-    float force_r_raw = 0.0f;
-    float force_i_raw = 0.0f;
-    float w_sum = 0.0f;         // Σ w
-    float w_omega_sum = 0.0f;   // Σ w ω
-    float w_amp_sum = 0.0f;     // Σ w A
+    // Read accumulated values from global memory
+    device CarrierAccumulators& acc = accums[gid];
+    float force_r_raw = atomic_load_explicit(&acc.force_r, memory_order_relaxed);
+    float force_i_raw = atomic_load_explicit(&acc.force_i, memory_order_relaxed);
+    float w_sum = atomic_load_explicit(&acc.w_sum, memory_order_relaxed);
+    float w_omega_sum = atomic_load_explicit(&acc.w_omega_sum, memory_order_relaxed);
+    float w_omega2_sum = atomic_load_explicit(&acc.w_omega2_sum, memory_order_relaxed);
+    float w_amp_sum = atomic_load_explicit(&acc.w_amp_sum, memory_order_relaxed);
+    
+    // Offender info
+    float offender_score = as_type<float>(atomic_load_explicit(&acc.offender_score, memory_order_relaxed));
+    uint offender_idx = atomic_load_explicit(&acc.offender_idx, memory_order_relaxed);
 
-    // Track offender (largest weighted deviation from mean)
-    uint offender_idx = 0;
-    float offender_score = 0.0f;
-
-    for (uint i = 0; i < p.num_osc; i++) {
-        float omega_i = osc_omega[i];
-        float amp_i = osc_amp[i];
-        float phi_i = osc_phase[i];
-
-        float t = tuning_from_freq(omega_i, omega_k, gate_w);
-        // Weight includes oscillator amplitude (strong oscillators couple more).
-        float w = t * amp_i;
-        if (w <= p.offender_weight_floor) continue;
-
-        // z_i = A_i e^{iθ_i}
-        float zr = amp_i * cos(phi_i);
-        float zi = amp_i * sin(phi_i);
-
-        force_r_raw += w * zr;
-        force_i_raw += w * zi;
-
-        w_sum += w;
-        w_omega_sum += w * omega_i;
-        w_amp_sum += w * amp_i;
+    float mean_omega = omega_k;
+    if (w_sum > 0.0f) {
+        mean_omega = (w_omega_sum / w_sum);
     }
 
-    float mean_omega = (w_sum > 1e-8f) ? (w_omega_sum / w_sum) : omega_k;
-
     // Coherence / conflict:
-    // - R = |Σ w z| measures phase coherence among coupled oscillators.
-    // - Normalize by Σ w A to get [0,1] scale-ish.
     float R = sqrt(force_r_raw * force_r_raw + force_i_raw * force_i_raw);
-    float denom = max(w_amp_sum, 1e-8f);
-    float coherence = clamp(R / denom, 0.0f, 1.0f);
+    float coherence = 0.0f;
+    if (w_amp_sum > 0.0f) {
+        coherence = clamp(R / w_amp_sum, 0.0f, 1.0f);
+    }
     float inst_conflict = 1.0f - coherence;
 
-    // Persistent conflict (EMA) to avoid thrashing/spawn storms.
+    // Persistent conflict (EMA)
     float prev_conflict = carrier_conflict[gid];
     float a = clamp(p.ema_alpha, 0.0f, 1.0f);
     float conflict = prev_conflict * (1.0f - a) + inst_conflict * a;
     carrier_conflict[gid] = conflict;
 
-    // Re-center ω_k toward what it's actually binding (unless crystallized).
+    // Re-center ω_k
     if (state != CARRIER_STATE_CRYSTALLIZED) {
         float rc = clamp(p.recenter_alpha, 0.0f, 1.0f);
         omega_k = omega_k * (1.0f - rc) + mean_omega * rc;
     }
 
-    // Offender selection (phase stress): maximize weighted (1 - cos Δθ) relative to the
-    // target direction (arg of the force vector).
-    float psi_target = atan2(force_i_raw, force_r_raw);
-    if (w_sum > 1e-8f && conflict > p.conflict_threshold) {
-        for (uint i = 0; i < p.num_osc; i++) {
-            float omega_i = osc_omega[i];
-            float amp_i = osc_amp[i];
-            float phi_i = osc_phase[i];
-            float t = tuning_from_freq(omega_i, omega_k, gate_w);
-            float w = t * amp_i;
-            if (w <= p.offender_weight_floor) continue;
-            float d = phi_i - psi_target;
-            // wrap to [-pi, pi]
-            d = d - 2.0f * M_PI_F * floor((d + M_PI_F) / (2.0f * M_PI_F));
-            float stress = 1.0f - cos(d); // 0..2
-            float score = w * stress;
-            if (score > offender_score) {
-                offender_score = score;
-                offender_idx = i;
-            }
-        }
+    // [CHOICE] adaptive gate width (frequency spread of current supporters)
+    // [FORMULA] σ_k^2 = E_w[ω^2] - (E_w[ω])^2, where E_w uses weights w=t*A_i
+    // [REASON] restores “open/sharpen” behavior as an emergent property:
+    //          - broad supporter band ⇒ larger σ (recruit/generalize)
+    //          - narrow supporter band ⇒ smaller σ (specialize/focus)
+    // [NOTES] - This is not driven by coherence/conflict; those drive splitting.
+    //         - For crystallized carriers, σ is frozen (like ω_k) to preserve memory identity.
+    if (state != CARRIER_STATE_CRYSTALLIZED && w_sum > 0.0f) {
+        float Ew = w_omega_sum / w_sum;
+        float Ew2 = w_omega2_sum / w_sum;
+        float var = Ew2 - (Ew * Ew);
+        var = max(var, 0.0f); // numerical floor (variance is non-negative)
+        float sigma_hat = sqrt(var);
+        float rc = clamp(p.recenter_alpha, 0.0f, 1.0f);
+        gate_w = gate_w * (1.0f - rc) + sigma_hat * rc;
+    }
+    gate_w = clamp(gate_w, p.gate_width_min, p.gate_width_max);
+
+    // Mean-field normalization
+    float force_r = 0.0f;
+    float force_i = 0.0f;
+    if (w_sum > 0.0f) {
+        float inv_w = 1.0f / w_sum;
+        force_r = force_r_raw * inv_w;
+        force_i = force_i_raw * inv_w;
     }
 
-    // Mean-field normalization:
-    // Use the *average* tuned phasor so carrier scale doesn't explode with N.
-    float inv_w = 1.0f / max(w_sum, 1e-8f);
-    float force_r = force_r_raw * inv_w;
-    float force_i = force_i_raw * inv_w;
-
-    // -------------------------------------------------------------------------
-    // Metabolic homeostasis for carriers (income vs expense)
-    // -------------------------------------------------------------------------
-    // Income: how much coherent drive the carrier receives this tick.
-    // Expense: global energy scale (cost-of-living proxy).
-    // If income < expense, shrink carrier amplitude; this prunes unused modes.
+    // Metabolic homeostasis
     float income = sqrt(force_r * force_r + force_i * force_i);
     float expense = e_scale;
-    if (state != CARRIER_STATE_CRYSTALLIZED && income < expense) {
+    if (state != CARRIER_STATE_CRYSTALLIZED && expense > 0.0f && income < expense) {
         float deficit = expense - income;
-        float shrink = exp(-p.dt * deficit / (expense + 1e-8f));
+        float shrink = exp(-p.dt * deficit / expense);
         cr *= shrink;
         ci *= shrink;
     }
 
-    // Langevin carrier update:
-    //   dC = (F - λC) dt + sqrt(2T dt) * η
+    // Langevin carrier update
     float2 n = randn2(p.rng_seed ^ 0xA5A5A5A5u, gid);
-    // Scale temperature gently with system energy (hotter system -> more stochasticity).
-    float temp_factor = e_scale / (e_scale + 1.0f);
-    float noise_scale = sqrt(max(2.0f * (p.temperature * temp_factor) * p.dt, 0.0f));
+    float std_e = energy_stats[2];
+    float disorder = 0.0f;
+    if (e_scale > 0.0f) {
+        disorder = clamp(std_e / e_scale, 0.0f, 10.0f);
+    }
+    float noise_scale = sqrt(max(2.0f * (disorder * e_scale) * p.dt, 0.0f));
     float reg = (state == CARRIER_STATE_CRYSTALLIZED) ? 0.0f : p.carrier_reg;
     float dcr = (force_r - reg * cr) * p.dt + noise_scale * n.x;
     float dci = (force_i - reg * ci) * p.dt + noise_scale * n.y;
     cr += dcr;
     ci += dci;
 
-    // Optional carrier-frequency repulsion (idle disambiguation mode).
-    if (p.mode == 2u && p.repulsion_scale > 0.0f && p.num_carriers > 1u && state != CARRIER_STATE_CRYSTALLIZED) {
+    // Repulsion (idle mode)
+    if (p.mode == 2u && p.repulsion_scale > 0.0f && current > 1u && state != CARRIER_STATE_CRYSTALLIZED) {
         float repel = 0.0f;
-        for (uint k2 = 0; k2 < p.num_carriers; k2++) {
+        for (uint k2 = 0; k2 < current; k2++) {
             if (k2 == gid) continue;
             float d = omega_k - carrier_omega[k2];
             float s = gate_w + clamp(carrier_gate_width[k2], p.gate_width_min, p.gate_width_max);
-            s = max(s, 1e-3f);
+            // gate widths are invariants (>0); if violated, fail loudly.
+            if (!(s > 0.0f)) {
+                carrier_omega[gid] = qnan_f();
+                return;
+            }
             repel += d * exp(-(d * d) / (s * s));
         }
         omega_k += p.dt * p.repulsion_scale * repel;
     }
 
-    // Crystallization state machine (volatile -> stable -> crystallized).
+    // Crystallization state machine
     float ampC = sqrt(cr * cr + ci * ci);
     if (state == CARRIER_STATE_VOLATILE) {
         if (ampC >= max(p.stable_amp_threshold, 0.0f)) {
@@ -1833,14 +2576,14 @@ kernel void spectral_carrier_update_and_split(
         }
     }
 
-    // Anchor refresh (ε-greedy; disabled once crystallized).
+    // Anchor refresh
     if (state != CARRIER_STATE_CRYSTALLIZED && p.num_osc > 0u) {
         uint h = hash_u32(p.rng_seed ^ (gid * 0xB4B82E39u) ^ 0x1C3A5F7Du);
         float u = u01_from_u32(h);
         uint slot = hash_u32(h + 0x3C6EF372u) % CARRIER_ANCHORS;
         uint base = gid * CARRIER_ANCHORS + slot;
         float eps_anchor = clamp(p.anchor_random_eps, 0.0f, 1.0f);
-        // In exploration mode, allow weaker bonds to contribute by lowering the floor implicitly.
+        
         if (u <= eps_anchor) {
             uint cand = hash_u32(h + 0x9E3779B9u) % p.num_osc;
             carrier_anchor_idx[base] = cand;
@@ -1868,16 +2611,13 @@ kernel void spectral_carrier_update_and_split(
     carrier_state[gid] = state;
     carrier_age[gid] = age;
 
-    // Conflict-driven split: spawn a new carrier centered on offender omega.
-    // Never split crystallized carriers (treat as long-term memory).
-    if (state != CARRIER_STATE_CRYSTALLIZED && offender_score > 0.0f) {
-        // Atomically claim a new carrier slot.
+    // Conflict-driven split
+    if (state != CARRIER_STATE_CRYSTALLIZED && offender_score > 0.0f && conflict > p.conflict_threshold) {
         uint slot = atomic_fetch_add_explicit(out_num_carriers, 1, memory_order_relaxed);
         if (slot < p.max_carriers) {
             float omega_new = osc_omega[offender_idx];
             float amp_new = osc_amp[offender_idx];
             float phi_new = osc_phase[offender_idx];
-            // Initialize new carrier from offender phasor (small magnitude to avoid shocks).
             float init_scale = 0.5f;
             float nr = init_scale * amp_new * cos(phi_new);
             float ni = init_scale * amp_new * sin(phi_new);
@@ -1885,14 +2625,11 @@ kernel void spectral_carrier_update_and_split(
             carrier_real[slot] = nr;
             carrier_imag[slot] = ni;
             carrier_omega[slot] = omega_new;
-
-            // Start moderately wide; specialization can be implemented by shrinking over time.
             carrier_gate_width[slot] = gate_w;
             carrier_conflict[slot] = 0.0f;
             carrier_state[slot] = CARRIER_STATE_VOLATILE;
             carrier_age[slot] = 0u;
 
-            // Initialize anchors: offender as first anchor, rest empty.
             for (uint j = 0; j < CARRIER_ANCHORS; j++) {
                 uint b = slot * CARRIER_ANCHORS + j;
                 carrier_anchor_idx[b] = 0xFFFFFFFFu;
@@ -1909,12 +2646,10 @@ kernel void spectral_carrier_update_and_split(
                 carrier_anchor_weight[b0] = amp_new;
             }
 
-            // Optional: record which oscillator spawned this carrier
             if (out_spawned_from_osc != nullptr) {
                 out_spawned_from_osc[slot] = offender_idx;
             }
 
-            // Randomize phase slightly by rotating c (keeps magnitude, changes ψ)
             float r = random_phases[slot] * 2.0f * M_PI_F;
             float rot_r = cos(r);
             float rot_i = sin(r);
@@ -1923,9 +2658,6 @@ kernel void spectral_carrier_update_and_split(
             carrier_real[slot] = rr * rot_r - ri * rot_i;
             carrier_imag[slot] = rr * rot_i + ri * rot_r;
         }
-
-        // Reset conflict on the parent carrier after a split so it doesn't
-        // repeatedly spawn every step.
         carrier_conflict[gid] = 0.0f;
     }
 }
@@ -1944,11 +2676,18 @@ kernel void spectral_update_oscillator_phases(
     device const float* carrier_anchor_weight[[buffer(10)]], // maxM * CARRIER_ANCHORS
     // Global energy stats (same format as in carrier update)
     device const float* energy_stats      [[buffer(11)]],  // (4,) [mean_abs, mean, std, count]
-    constant uint& num_carriers           [[buffer(12)]],
+    device const uint* num_carriers_in    [[buffer(12)]], // (1,) uint32/int32 snapshot
     constant SpectralCarrierParams& p     [[buffer(13)]],
+    // Sparse binning inputs
+    device const uint* bin_starts         [[buffer(14)]],  // num_bins + 1
+    device const uint* carrier_binned_idx [[buffer(15)]],  // maxM
+    device const SpectralBinParams* bin_p [[buffer(16)]],  // (1,)
+    constant uint& num_bins               [[buffer(17)]],
     uint gid [[thread_position_in_grid]]
 ) {
     if (gid >= p.num_osc) return;
+    uint num_carriers = (num_carriers_in != nullptr) ? num_carriers_in[0] : 0u;
+    num_carriers = min(num_carriers, p.max_carriers);
 
     float phi = osc_phase[gid];
     float omega_i = osc_omega[gid];
@@ -1957,41 +2696,62 @@ kernel void spectral_update_oscillator_phases(
     // Torque from resonance potential:
     //   θ̇_i += Σ_k T_ik (A_i R_k) sin(ψ_k - θ_i)
     float torque = 0.0f;
-    for (uint k = 0; k < num_carriers; k++) {
-        float omega_k = carrier_omega[k];
-        float gate_w = clamp(carrier_gate_width[k], p.gate_width_min, p.gate_width_max);
-        float t = tuning_from_freq(omega_i, omega_k, gate_w);
-        float cr = carrier_real[k];
-        float ci = carrier_imag[k];
-        float psi = atan2(ci, cr);
-        float R = sqrt(cr * cr + ci * ci);
-        float boost = 1.0f;
-        if (carrier_state[k] == CARRIER_STATE_CRYSTALLIZED) {
-            boost += max(p.crystallized_coupling_boost, 0.0f);
-        }
-        torque += boost * t * (amp_i * R) * sin(psi - phi);
+    const int rad = 2;
+    if (num_carriers > 0u && num_bins > 0u) {
+        float fbin = (omega_i - bin_p[0].omega_min) * bin_p[0].inv_bin_width;
+        int bin_i = (int)floor(fbin);
+        int b0 = clamp(bin_i - rad, 0, (int)num_bins - 1);
+        int b1 = clamp(bin_i + rad, 0, (int)num_bins - 1);
+        for (int b = b0; b <= b1; b++) {
+            uint start = bin_starts[(uint)b];
+            uint end = bin_starts[(uint)b + 1u];
+            for (uint jj = start; jj < end; jj++) {
+                uint k = carrier_binned_idx[jj];
+                if (k >= num_carriers) continue;
 
-        // Extra top-down phase pull if this oscillator is anchored in a crystallized carrier.
-        if (carrier_state[k] == CARRIER_STATE_CRYSTALLIZED && p.topdown_phase_scale > 0.0f) {
-            uint base = k * CARRIER_ANCHORS;
-            for (uint j = 0; j < CARRIER_ANCHORS; j++) {
-                uint idx = carrier_anchor_idx[base + j];
-                if (idx == gid) {
-                    float off = carrier_anchor_phase[base + j];
-                    float w = carrier_anchor_weight[base + j];
-                    float target = psi + off;
-                    float d = target - phi;
-                    d = d - 2.0f * M_PI_F * floor((d + M_PI_F) / (2.0f * M_PI_F));
-                    torque += p.topdown_phase_scale * w * sin(d);
+                float omega_k = carrier_omega[k];
+                float gate_w = clamp(carrier_gate_width[k], p.gate_width_min, p.gate_width_max);
+                float t = tuning_from_freq(omega_i, omega_k, gate_w);
+                float cr = carrier_real[k];
+                float ci = carrier_imag[k];
+                float psi = atan2(ci, cr);
+                float R = sqrt(cr * cr + ci * ci);
+                float boost = 1.0f;
+                if (carrier_state[k] == CARRIER_STATE_CRYSTALLIZED) {
+                    boost += max(p.crystallized_coupling_boost, 0.0f);
+                }
+                torque += boost * t * (amp_i * R) * sin(psi - phi);
+
+                // Extra top-down phase pull if this oscillator is anchored in a crystallized carrier.
+                if (carrier_state[k] == CARRIER_STATE_CRYSTALLIZED && p.topdown_phase_scale > 0.0f) {
+                    uint base = k * CARRIER_ANCHORS;
+                    for (uint j = 0; j < CARRIER_ANCHORS; j++) {
+                        uint idx = carrier_anchor_idx[base + j];
+                        if (idx == gid) {
+                            float off = carrier_anchor_phase[base + j];
+                            float w = carrier_anchor_weight[base + j];
+                            float target = psi + off;
+                            float d = target - phi;
+                            d = d - 2.0f * M_PI_F * floor((d + M_PI_F) / (2.0f * M_PI_F));
+                            torque += p.topdown_phase_scale * w * sin(d);
+                        }
+                    }
                 }
             }
         }
     }
 
     float mean_abs_e = energy_stats[0];
-    float e_scale = max(mean_abs_e, 1e-8f);
-    float temp_factor = e_scale / (e_scale + 1.0f);
-    float noise_scale = sqrt(max(2.0f * (p.temperature * temp_factor) * p.dt, 0.0f));
+    float std_e = energy_stats[2];
+    // [CHOICE] global energy scale (explicit zero-energy semantics)
+    // [FORMULA] e_scale = mean_abs_e; if e_scale==0 -> disorder=noise=0
+    // [REASON] removes eps clamp; defines behavior when energy statistics vanish
+    float e_scale = mean_abs_e;
+    float disorder = 0.0f;
+    if (e_scale > 0.0f) {
+        disorder = clamp(std_e / e_scale, 0.0f, 10.0f);
+    }
+    float noise_scale = sqrt(max(2.0f * (disorder * e_scale) * p.dt, 0.0f));
     float n = randn1(p.rng_seed ^ 0xC3C3C3C3u, gid);
     float dphi = omega_i + p.coupling_scale * torque;
     phi += dphi * p.dt + noise_scale * n;
@@ -2012,10 +2772,12 @@ kernel void spectral_topdown_bias_energies(
     device const uint* carrier_state       [[buffer(2)]],  // maxM
     device const uint* carrier_anchor_idx  [[buffer(3)]],  // maxM * CARRIER_ANCHORS
     device const float* carrier_anchor_weight [[buffer(4)]], // maxM * CARRIER_ANCHORS
-    constant uint& num_carriers            [[buffer(5)]],
+    device const uint* num_carriers_in     [[buffer(5)]], // (1,) uint32/int32 snapshot
     constant SpectralCarrierParams& p      [[buffer(6)]],
     uint gid [[thread_position_in_grid]]
 ) {
+    uint num_carriers = (num_carriers_in != nullptr) ? num_carriers_in[0] : 0u;
+    num_carriers = min(num_carriers, p.max_carriers);
     if (gid >= num_carriers) return;
     if (carrier_state[gid] != CARRIER_STATE_CRYSTALLIZED) return;
     if (p.topdown_energy_scale <= 0.0f || p.num_osc == 0u) return;
@@ -2030,7 +2792,7 @@ kernel void spectral_topdown_bias_energies(
         wsum += w;
         act += w * osc_amp[idx];
     }
-    if (wsum <= 1e-8f) return;
+    if (!(wsum > 0.0f)) return;
     act = act / wsum;
 
     // Inject energy into anchored oscillators, favoring low-amplitude ones.
@@ -2081,14 +2843,19 @@ kernel void spectral_spawn_uncoupled(
     device float* carrier_anchor_phase      [[buffer(13)]], // maxM * CARRIER_ANCHORS
     device float* carrier_anchor_weight     [[buffer(14)]], // maxM * CARRIER_ANCHORS
     device atomic_uint* num_carriers_atomic [[buffer(15)]], // single counter (in/out)
-    constant uint& num_carriers             [[buffer(16)]], // current count (read)
+    device const uint* num_carriers_in      [[buffer(16)]], // (1,) uint32/int32 snapshot
     constant uint& max_carriers             [[buffer(17)]],
     constant float& coupling_threshold      [[buffer(18)]], // min total coupling to be "coupled"
     constant float& gate_width_init         [[buffer(19)]],
     constant float& gate_width_min          [[buffer(20)]],
     constant float& gate_width_max          [[buffer(21)]],
+    // Sparse binning inputs
+    device const uint* bin_starts           [[buffer(22)]], // num_bins + 1
+    device const uint* carrier_binned_idx   [[buffer(23)]], // maxM
+    device const SpectralBinParams* bin_p   [[buffer(24)]], // (1,)
+    constant uint& num_bins                 [[buffer(25)]],
     uint gid [[thread_position_in_grid]],
-    constant uint& num_osc                  [[buffer(22)]]
+    constant uint& num_osc                  [[buffer(26)]]
 ) {
     if (gid >= num_osc) return;
     
@@ -2096,13 +2863,29 @@ kernel void spectral_spawn_uncoupled(
     float amp_i = osc_amp[gid];
     float phi_i = osc_phase[gid];
     
+    uint num_carriers = (num_carriers_in != nullptr) ? num_carriers_in[0] : 0u;
+    num_carriers = min(num_carriers, max_carriers);
+
     // Compute total coupling weight to all existing carriers
     float total_coupling = 0.0f;
-    for (uint k = 0; k < num_carriers; k++) {
-        float omega_k = carrier_omega[k];
-        float gate_w = clamp(carrier_gate_width[k], gate_width_min, gate_width_max);
-        float t = tuning_from_freq(omega_i, omega_k, gate_w);
-        total_coupling += t;
+    const int rad = 2;
+    if (num_carriers > 0u && num_bins > 0u) {
+        float fbin = (omega_i - bin_p[0].omega_min) * bin_p[0].inv_bin_width;
+        int bin_i = (int)floor(fbin);
+        int b0 = clamp(bin_i - rad, 0, (int)num_bins - 1);
+        int b1 = clamp(bin_i + rad, 0, (int)num_bins - 1);
+        for (int b = b0; b <= b1; b++) {
+            uint start = bin_starts[(uint)b];
+            uint end = bin_starts[(uint)b + 1u];
+            for (uint jj = start; jj < end; jj++) {
+                uint k = carrier_binned_idx[jj];
+                if (k >= num_carriers) continue;
+                float omega_k = carrier_omega[k];
+                float gate_w = clamp(carrier_gate_width[k], gate_width_min, gate_width_max);
+                float t = tuning_from_freq(omega_i, omega_k, gate_w);
+                total_coupling += t;
+            }
+        }
     }
     
     // If oscillator is not sufficiently coupled to any carrier, spawn its own

@@ -55,20 +55,39 @@
 % Physical quantities
 \newcommand{\sensorium}{\mathcal{S}}          % The manifold
 \newcommand{\particle}{p}                      % A particle
-\newcommand{\attractor}{a}                     % An attractor
+\newcommand{\carrier}{C}                       % Spectral carrier
 \newcommand{\energy}{E}                        % Energy
 \newcommand{\heat}{Q}                          % Heat (entropy carrier)
 \newcommand{\excitation}{\varepsilon}          % Excitation
 \newcommand{\baseline}{\mathcal{B}}            % Homeostatic baseline
 \newcommand{\ratio}{\rho}                      % Homeostatic ratio
-\newcommand{\bondgraph}{\mathcal{G}}           % Bond graph
-\newcommand{\mass}{m}                          % Mass (bond strength)
-\newcommand{\trace}{\tau}                      % Eligibility trace
+\newcommand{\carrierpop}{\mathcal{C}}         % Carrier population
+\newcommand{\mass}{m}                          % Mass (particle)
+\newcommand{\gatewidth}{\sigma}                % Carrier gate width
 \newcommand{\flux}{\Phi}                       % Energy flux
 \newcommand{\entropy}{S}                       % Entropy
 \newcommand{\pressure}{\Pi}                    % Metabolic pressure
 \newcommand{\temperature}{T}                   % Temperature (sampling)
 \newcommand{\diffusion}{D}                     % Diffusion coefficient
+
+% Energy bookkeeping (explicit stores)
+% Name: Kinetic energy (per particle)
+% Formula: E_kin = (1/2) m ||v||^2
+% Reason: separates directed motion from internal energy; used for conservation audits.
+\newcommand{\ekin}{E_{\text{kin}}}
+% Name: Oscillator (spectral) internal energy
+% Formula: E_osc >= 0 (tracked state)
+% Reason: amplitude A = sqrt(E_osc) and Planck equilibrium require an explicit oscillator store.
+\newcommand{\eosc}{E_{\text{osc}}}
+% Name: Total internal energy (thermal + oscillator)
+% Formula: U = Q + E_osc
+% Reason: temperature is derived from total internal energy; avoids one-way “heat-only” excitation.
+\newcommand{\eint}{U}
+
+% NOTE (LaTeX): Avoid double subscripts like E_{kin}_i by writing E_{kin,i}.
+\newcommand{\ekinI}[1]{E_{\text{kin},#1}}
+\newcommand{\eoscI}[1]{E_{\text{osc},#1}}
+\newcommand{\eintI}[1]{U_{#1}}
 
 % ============================================================================
 % TITLE
@@ -100,9 +119,9 @@
 \begin{abstract}
 We introduce the \emph{Sensorium Manifold}, a thermodynamic computing substrate that replaces the autoregressive paradigm with global energy minimization. Current AI models rely on serial token generation and backpropagation-based optimization. We propose a system governed by \emph{Hamiltonian dynamics}, where data is represented as a field of coupled oscillators and learning is the emergence of resonant modes (carriers).
 
-We introduce the \emph{Universal Tokenizer}, a modality-agnostic input mechanism that maps raw bytes and sequence indices to unique attractor IDs via hashing. This treats all data---text, image, audio---as a single branching stream where ``collision is compression.'' Structure emerges not through architectural bias, but through the physical bifurcation of energy flows.
+We introduce the \emph{Universal Tokenizer}, a modality-agnostic input mechanism that maps raw bytes and sequence indices to unique oscillator frequencies via hashing. This treats all data---text, image, audio---as a single branching stream where ``collision is compression.'' Structure emerges not through architectural bias, but through the spontaneous crystallization of spectral carriers.
 
-The system operates via three principles: (1) \textbf{Spectral Entanglement}, where distant oscillators couple via shared carrier frequencies; (2) \textbf{Metabolic Gating}, where carriers persist only if energetically maintained by resonance; and (3) \textbf{Crystallization}, a parallel inference process where inputs are ``dumped'' into the manifold and allowed to relax into a minimum-energy configuration, filling in missing information simultaneously rather than causally. We demonstrate that this system conserves energy (symplectic integration), adapts to rule shifts online, and enables massive parallelism impossible in Transformer architectures.
+The system operates via three principles: (1) \textbf{Spectral Entanglement}, where distant oscillators couple via shared carrier frequencies; (2) \textbf{Metabolic Gating}, where carriers persist only if energetically maintained by resonance; and (3) \textbf{Crystallization}, an ``all-token prediction'' process where generation is a Boundary Value Problem rather than serial autoregression. We show that this crystallization mechanism implements a \emph{Holographic Content Addressable Memory}: partial inputs address complete patterns because information is distributed across the entire resonant field. We demonstrate that this system uses adaptive thermodynamics (GPU-computed energy statistics for self-regulating dynamics), adapts to rule shifts online, and achieves $O(k)$ latency independent of sequence length---a fundamental departure from the $O(N)$ bottleneck of Transformer architectures.
 \end{abstract}
 
 \vspace{0.5em}
@@ -120,6 +139,7 @@ Carrier (Soliton) & Hidden State / Weight & A standing wave that couples oscilla
 Hamiltonian ($H$) & Loss Function & Conserved quantity; system minimizes potential $V$. \\
 Spectral Coupling & Attention Mechanism & Non-local entanglement via frequency resonance. \\
 Crystallization & Inference & Global parallel relaxation, not serial generation. \\
+Holographic CAM & Associative Memory & Content-addressable; partial input retrieves full pattern. \\
 Metabolism & Regularization & Carriers decay if they do not receive energy. \\
 Universal Tokenizer & Embedding Layer & Deterministic hashing of raw bytes; no training. \\
 Phase Locking & Pattern Matching & Information encoded in relative phase angles. \\
@@ -140,8 +160,8 @@ We propose an alternative paradigm: \emph{thermodynamic computation}. In physica
 
 \begin{itemize}
   \item \textbf{Particles} represent activated concepts, carrying energy through continuous space
-  \item \textbf{Attractors} are stable points in the space, corresponding to learned representations
-  \item \textbf{Bonds} encode relationships between concepts, with mass that grows from use and decays from disuse
+  \item \textbf{Spectral Carriers} are resonant modes in frequency space, corresponding to learned patterns
+  \item \textbf{Carriers} encode relationships between concepts as resonant modes that crystallize from use and decay from disuse
   \item \textbf{Heat} captures uncertainty and accumulated noise, driving exploration
   \item \textbf{Homeostasis} regulates system activity through adaptive baselines, preventing runaway excitation or quiescence
 \end{itemize}
@@ -160,7 +180,7 @@ We take a different approach. Like these systems, we use modality-specific encod
   \item \textbf{Text}: Energy over semantic embedding dimensions
 \end{itemize}
 
-By projecting these native spectral coordinates into a common Euclidean embedding space $\R^D$, we obtain a \emph{unified manifold} where particles from all modalities coexist. The thermodynamic dynamics---diffusion, bonding, metabolism, homeostasis---operate identically regardless of particle origin. This is integration by isomorphism.
+By projecting these native spectral coordinates into a common Euclidean embedding space $\R^D$, we obtain a \emph{unified manifold} where particles from all modalities coexist. The thermodynamic dynamics---diffusion, carrier coupling, metabolism, homeostasis---operate identically regardless of particle origin. This is integration by isomorphism.
 
 \begin{principle}[Spectral Isomorphism]
 \label{principle:isomorphism}
@@ -173,9 +193,10 @@ The consequence is that adding a new modality requires only a new encoder (spect
 
 \begin{enumerate}
   \item A complete thermodynamic framework for learning without backpropagation (\Cref{sec:framework})
-  \item The Sensorium Manifold: a unified substrate for native multimodality (\Cref{sec:sensorium})
-  \item Sparse bond graph dynamics that avoid dense $V \times V$ matrices (\Cref{sec:graphs})
-  \item Dissipative structure maintenance through stochastic traversal (\Cref{sec:traversal})
+  \item The Universal Tokenizer: modality-agnostic encoding via deterministic hashing (\Cref{sec:tokenizer})
+  \item Spectral carrier coupling: non-local entanglement via resonance in frequency space (\Cref{sec:sensorium})
+  \item Crystallization: all-token prediction as a boundary value problem (\Cref{sec:crystallization})
+  \item Holographic Content Addressable Memory: partial inputs retrieve complete patterns (\Cref{subsec:holographic})
   \item Empirical validation on cross-modal transduction and adaptation (\Cref{sec:experiments})
 \end{enumerate}
 
@@ -187,53 +208,62 @@ The consequence is that adding a new modality requires only a new encoder (spect
 
 We model learning as a physical process. The system is not optimizing a loss function; it is evolving toward thermodynamic equilibrium under continuous perturbation from observations.
 
-\subsection{The Particle-Attractor System}
+\subsection{The Particle-Oscillator System}
 \label{sec:particles}
 
-The Sensorium Manifold $\sensorium$ is a flat Euclidean space $\R^D$. Within this space, we distinguish two types of entities:
+The Sensorium Manifold $\sensorium$ is a three-dimensional simulation volume. Each entity has dual identity:
 
-\begin{definition}[Particle]
-A particle $\particle_i$ is a transient entity with:
+\begin{definition}[Particle (Spatial Layer)]
+A particle $\particle_i$ is an entity in the thermodynamic simulation with:
 \begin{itemize}
-  \item Position $\bm{x}_i \in \R^D$
-  \item Energy $\energy_i \geq 0$
-  \item Heat $\heat_i \geq 0$
-  \item Modality tag $\mu_i \in \{\text{text}, \text{audio}, \text{image}, \ldots\}$
+  \item Position $\bm{x}_i \in \R^3$ and velocity $\bm{v}_i \in \R^3$
+  \item Mass $m_i > 0$
+  \item Oscillator energy $\eoscI{i} \geq 0$ (spectral/internal-mode energy; drives amplitude)
+  \item Heat $\heat_i \geq 0$ (thermal energy; entropic store)
 \end{itemize}
-Particles are created by encoders, evolve through dynamics, and are consumed by decoders.
+Particles interact via gravitational fields, thermal diffusion, and collisions.
 \end{definition}
 
-\begin{definition}[Attractor]
-An attractor $\attractor_j$ is a persistent entity with:
+\begin{definition}[Oscillator (Spectral Layer)]
+The same entity viewed as an oscillator has:
 \begin{itemize}
-  \item Position $\bm{a}_j \in \R^D$
-  \item Energy $\energy_j \geq 0$
-  \item Heat $\heat_j \geq 0$
-  \item Optional: associated token, frequency, or other modality-specific data
+  \item Intrinsic frequency $\omega_i$ (assigned by the Universal Tokenizer; conserved)
+  \item Phase $\theta_i \in [0, 2\pi)$ (evolves under carrier coupling)
+  \item Amplitude $A_i = \sqrt{\eoscI{i}}$
 \end{itemize}
-Attractors represent learned structure. Particles diffuse toward nearby attractors.
+Oscillators couple non-locally via spectral carriers in frequency space.
 \end{definition}
+
+The spatial layer governs local physics; the spectral layer governs global resonance.
 
 \subsection{Thermodynamic Quantities}
 \label{sec:quantities}
 
-\begin{definition}[Total Energy]
-The total energy of the system is:
+\begin{definition}[Energy Stores and Total Energy]
+We explicitly track three particle-local energy stores:
+\begin{align}
+\ekinI{i} &= \frac{1}{2} m_i \|\bm{v}_i\|^2 \\
+\eintI{i} &= \heat_i + \eoscI{i} \\
+\temperature_i &= \frac{\eintI{i}}{m_i c_v}
+\end{align}
+where $c_v$ is the specific heat capacity (constant in the current implementation).
+
+\noindent The total tracked energy (used for dashboards and invariants) is:
 \begin{equation}
-\energy_{\text{total}} = \sum_i \energy_i + \sum_j \energy_j + \sum_i \excitation_i
+\energy_{\text{total}} = \sum_i \left(\ekinI{i} + \eintI{i}\right).
 \label{eq:total_energy}
 \end{equation}
-where $\excitation_i$ is the excitation (active energy available for flow).
+This quantity is conserved by collision response and by the internal exchange $\heat \leftrightarrow \eosc$ (up to numerical error); it is not globally conserved in an \emph{open} system with observation-driven energy injection, drag-to-heat conversion, and metabolic carrier processes.
 \end{definition}
 
 \begin{definition}[Heat]
 Heat $\heat$ is the entropic component of energy---energy that has been ``used'' and can no longer do directed work. Heat accumulates from:
 \begin{itemize}
   \item Incoherent activity (mismatch between modalities)
-  \item Flow through bonds (friction)
+  \item Viscous drag and particle collisions
   \item Conflict between competing predictions
 \end{itemize}
-Heat drives diffusion (exploration) and decays homeostatically.
+Heat diffuses spatially and exchanges bidirectionally with oscillator energy $\eosc$ toward thermodynamic equilibrium (\Cref{sec:planck_exchange}).
 \end{definition}
 
 \subsection{Homeostatic Regulation}
@@ -268,27 +298,71 @@ Machine learning practitioners may recognize similarities to batch normalization
 \end{enumerate}
 \end{remark}
 
-\subsection{Diffusion Dynamics}
+\subsection{Spatial Dynamics}
 \label{sec:diffusion}
 
-Particles diffuse toward nearby attractors. The dynamics are:
+Particles evolve under classical field equations in 3D space:
 
 \begin{equation}
-\frac{d\bm{x}_i}{dt} = -\nabla_{\bm{x}_i} U(\bm{x}_i) + \sqrt{2 \diffusion \heat_i} \, \bm{\xi}(t)
-\label{eq:diffusion}
+m_i \frac{d\bm{v}_i}{dt} = -m_i \nabla \phi(\bm{x}_i) - \frac{m_i}{\rho(\bm{x}_i)} \nabla P(\rho, T)\big|_{\bm{x}_i} - \gamma \bm{v}_i + \bm{F}_{\text{collision}}
+\label{eq:dynamics}
 \end{equation}
 
-where $U(\bm{x})$ is a potential defined by attractor positions:
+where:
+\begin{itemize}
+    \item $\phi$ is the gravitational potential satisfying $\nabla^2 \phi = 4\pi G \rho$
+    \item $T$ is derived from total internal energy: $T(\bm{x}) = \eint(\bm{x})/(\rho(\bm{x}) c_v)$
+    \item $\gamma = 6\pi \eta r$ is the Stokes drag coefficient
+    \item $\bm{F}_{\text{collision}}$ is the Hertzian contact force from particle collisions
+\end{itemize}
+
+\noindent\textbf{Pressure closure.} We use an ideal-gas-inspired continuum equation of state:
 \begin{equation}
-U(\bm{x}) = -\sum_j \energy_j \exp\left(-\frac{\|\bm{x} - \bm{a}_j\|^2}{2\sigma^2}\right)
-\label{eq:potential}
+P(\rho, T) = \rho k_B T,
 \end{equation}
+so that
+\begin{equation}
+\nabla P = k_B \left(T \nabla \rho + \rho \nabla T\right).
+\end{equation}
+In vacuum ($\rho \le 0$), the pressure contribution is defined as zero.
 
-and $\bm{\xi}(t)$ is white noise. Heat drives the stochastic term, enabling exploration when uncertainty is high.
+Kinetic energy lost to drag and inelastic collisions becomes heat, conserving total energy in the spatial layer.
 
-\begin{remark}[Discretization]
-In practice, we use Euler-Maruyama discretization with timestep $\dt$. We do not claim to solve continuous-time SDEs exactly.
+\begin{remark}[Implementation]
+In practice, we solve the Poisson equation via Jacobi iteration and use a Strang-split update: conservative forces (gravity + pressure) with Velocity Verlet, plus an exponential drag half-step. Collision detection uses a periodic (wrap) spatial hash for $O(N)$ scaling.
 \end{remark}
+
+\subsection{Thermal--Oscillator Equilibration (Planck Relaxation)}
+\label{sec:planck_exchange}
+To avoid a one-way ``temperature $\to$ excitation'' coupling, we explicitly couple the thermal store $\heat_i$ and the oscillator store $\eoscI{i}$ via a conservative local exchange that relaxes toward the Planck distribution.
+
+\paragraph{Equilibrium energy.}
+For an oscillator of intrinsic frequency $\omega_i$ in a heat bath at temperature $\temperature_i$, the mean equilibrium energy is:
+\begin{equation}
+E_{\text{osc,eq}}(\omega_i,\temperature_i) =
+\frac{\hbar \omega_i}{\exp\!\left(\frac{\hbar\omega_i}{k_B \temperature_i}\right) - 1}.
+\label{eq:planck_energy}
+\end{equation}
+This has the correct limits: $E_{\text{osc,eq}}\approx k_B\temperature$ for $\hbar\omega \ll k_B\temperature$ (classical equipartition) and $E_{\text{osc,eq}}\to 0$ for $\hbar\omega \gg k_B\temperature$ (freeze-out).
+
+\paragraph{Conservative exchange.}
+We apply a local relaxation step
+\begin{align}
+\Delta \eoscI{i} &= \alpha_i \left(E_{\text{osc,eq}}(\omega_i,\temperature_i) - \eoscI{i}\right), \\
+\eoscI{i} &\leftarrow \eoscI{i} + \Delta \eoscI{i}, \\
+\heat_i &\leftarrow \heat_i - \Delta \eoscI{i},
+\end{align}
+with the constraint $\heat_i \ge 0$ enforced by capping positive $\Delta\eoscI{i}$ to the available $\heat_i$.
+
+\paragraph{Timescale (no tunable knobs).}
+The exchange rate $\alpha_i$ is derived from an existing conduction timescale for a sphere of radius $r$ in a medium of thermal conductivity $\kappa$:
+\begin{equation}
+\tau_i = \frac{m_i c_v}{4\pi \kappa r},
+\qquad
+\alpha_i = 1 - \exp\!\left(-\frac{\dt}{\tau_i}\right).
+\label{eq:planck_alpha}
+\end{equation}
+This ensures that equilibration speed is set by physical transport parameters already present in the spatial model.
 
 % ============================================================================
 % 3. THE UNIVERSAL TOKENIZER
@@ -302,27 +376,27 @@ Standard multimodal models require specialized encoders (ViT for images, Mel-fil
 We map raw data to the manifold using a deterministic hash function:
 
 \begin{equation}
-\text{ID} = \mathcal{H}(\text{Byte}, \text{Index}) \pmod N
+\text{ID} = h(\text{Byte}, \text{Index}) \pmod N
 \label{eq:hash}
 \end{equation}
 
-where $\text{Byte} \in [0, 255]$ is the raw data and $\text{Index}$ is the sequence position (or spatial coordinate).
+where $h$ is a deterministic hash function, $\text{Byte} \in [0, 255]$ is the raw data, and $\text{Index}$ is the sequence position (or spatial coordinate). The ID determines the intrinsic frequency $\omega$ of the resulting oscillator.
 
-This implies that a black pixel at $(0,0)$ in Image A has the exact same ID as a black pixel at $(0,0)$ in Image B. In a neural network, this collision is a conflict. In the Resonant Manifold, this is \emph{compression}.
+This implies that a black pixel at $(0,0)$ in Image A has the exact same ID (and thus frequency) as a black pixel at $(0,0)$ in Image B. In a neural network, this collision is a conflict. In the Sensorium Manifold, this is \emph{compression}.
 \begin{itemize}
-    \item \textbf{Convergence}: All inputs sharing a prefix flow into the same initial attractors.
-    \item \textbf{Bifurcation}: When the data diverges (e.g., Image A has a white pixel at $(0,1)$, Image B has black), the energy flow splits.
+    \item \textbf{Convergence}: All inputs sharing a prefix create oscillators that couple to the same carriers.
+    \item \textbf{Bifurcation}: When the data diverges (e.g., Image A has a white pixel at $(0,1)$, Image B has black), the oscillators couple to different carriers.
 \end{itemize}
 
-This creates a \emph{Thermodynamic Trie}. The system naturally learns the topology of the data stream by observing which transitions (bonds) are energetically favorable.
+This creates a \emph{Thermodynamic Trie}. The system naturally learns the topology of the data stream by observing which carrier patterns emerge.
 
 \subsection{Modality Agnosticism}
 The physics engine is blind to the source of the data.
 \begin{itemize}
-    \item \textbf{Text}: $\mathcal{H}(\text{'H'}, 0) \to \mathcal{H}(\text{'e'}, 1) \dots$
-    \item \textbf{Image}: $\mathcal{H}(\text{0xFF}, 0) \to \mathcal{H}(\text{0x00}, 1) \dots$
+    \item \textbf{Text}: $h(\text{'H'}, 0) \to h(\text{'e'}, 1) \dots$
+    \item \textbf{Image}: $h(\text{0xFF}, 0) \to h(\text{0x00}, 1) \dots$
 \end{itemize}
-The manifold processes ``horizontal'' relationships identically, whether they represent a phoneme sequence or a line of pixels.
+All become oscillators with intrinsic frequencies. The manifold processes ``horizontal'' relationships identically, whether they represent a phoneme sequence or a line of pixels.
 
 % ============================================================================
 % 4. HAMILTONIAN DYNAMICS
@@ -330,39 +404,40 @@ The manifold processes ``horizontal'' relationships identically, whether they re
 \section{Hamiltonian Dynamics}
 \label{sec:hamiltonian}
 
-Unlike dissipative neural networks, the Resonant Manifold is a conservative system. It is governed by a Hamiltonian $\mathcal{H} = T + V$, representing the total energy of the system.
+Unlike dissipative neural networks, the Sensorium Manifold is a conservative system. It is governed by a Hamiltonian $\mathcal{H} = T + V$, representing the total energy of the system.
 
-\subsection{The Resonant Ghost Field}
+\subsection{The Spectral Carrier Field}
 \label{subsec:ghost_field}
 
-In standard graph-based learning, relationships are modeled as explicit edges in an adjacency matrix $A_{ij}$. This scales poorly ($O(N^2)$) and is rigid. We propose that semantic structure is not a wire connecting two points, but a standing wave potential that permeates the space. We term this the \emph{Resonant Ghost Field}.
+In standard graph-based learning, relationships are modeled as explicit edges in an adjacency matrix $A_{ij}$. This scales poorly ($O(N^2)$) and is rigid. We propose that semantic structure is not a wire connecting two points, but a standing wave potential that permeates frequency space. We term this the \emph{Spectral Carrier Field}.
 
 \subsubsection{Field Definition}
-The Ghost Field $\Psi$ is the aggregate scalar potential generated by the population of $M$ crystallized carriers (solitons). Unlike a neural network weight which exists to multiply a specific input, the Ghost Field exists as a background potential even in the absence of particles.
+The Carrier Field $\Psi$ is the aggregate potential generated by the population of $M$ carriers. Unlike a neural network weight which exists to multiply a specific input, the Carrier Field exists as a background potential even in the absence of active oscillators.
 
-The Hamiltonian interaction term is defined as:
+The resonance potential is defined as:
 
 \begin{equation}
-V_{\text{ghost}}(\mathbf{q}) = - \sum_{k=1}^M \underbrace{\mu_k}_{\text{Mass}} \cdot \left| \sum_{i=1}^N \exp\left( -\frac{(\omega_i - \Omega_k)^2}{2\sigma_k^2} + i(\theta_i - \phi_k) \right) \right|^2
+V_{\text{carrier}}(\mathbf{q}) = - \sum_{k=1}^M \underbrace{|C_k|}_{\text{Amplitude}} \cdot \left| \sum_{i=1}^N T_{ik} \cdot e^{i(\theta_i - \psi_k)} \right|^2
 \label{eq:ghost_potential}
 \end{equation}
 
-where:
+where $T_{ik} = \exp(-(\omega_i - \Omega_k)^2 / \sigma_k^2)$ is the tuning kernel and:
 \begin{itemize}
-    \item $\mu_k$ is the metabolic mass (importance) of Carrier $k$.
+    \item $C_k = R_k e^{i\psi_k}$ is the complex carrier state (amplitude and phase).
     \item $\Omega_k$ is the intrinsic frequency of the Carrier.
-    \item $\omega_i, \theta_i$ are the frequency and phase of the input oscillator $i$.
+    \item $\sigma_k$ is the gate width (frequency selectivity).
+    \item $\omega_i, \theta_i$ are the frequency and phase of oscillator $i$.
 \end{itemize}
 
-\subsubsection{Action at a Distance (Wormholes)}
-This potential creates a non-Euclidean geometry. In the raw sequence index, token $i$ (at $t=0$) and token $j$ (at $t=1000$) are distant. However, if both tokens resonate with Carrier $k$ (i.e., $|\omega - \Omega_k| < \sigma_k$), the potential $V_{\text{ghost}}$ creates a deep energy well that binds them.
+\subsubsection{Action at a Distance (Spectral Wormholes)}
+This potential creates a non-Euclidean geometry in frequency space. In raw sequence index, token $i$ (at $t=0$) and token $j$ (at $t=1000$) are distant. However, if both tokens have frequencies near $\Omega_k$, the carrier potential creates a deep energy well that binds them.
 
-Effectively, the Resonant Ghost Field folds the manifold, creating a \emph{semantic wormhole}. Two oscillators tuned to the same carrier are entangled with zero distance in phase space, regardless of their separation in sequence space.
+Effectively, the Spectral Carrier Field folds the manifold, creating a \emph{semantic wormhole}. Two oscillators tuned to the same carrier are entangled with zero distance in frequency space, regardless of their separation in sequence space.
 
-\subsubsection{The ``Ghost'' Property}
-We term this field a ``Ghost'' field because it represents \emph{potential energy}. A crystallized carrier for the concept ``Cat'' exists in the manifold with $\mu_k > 0$. It is invisible and consumes no active compute (kinetic energy) until an input oscillator with the hash for ``Cat'' enters the system.
+\subsubsection{The ``Latent'' Property}
+Carriers represent \emph{potential energy}. A crystallized carrier for the concept ``Cat'' exists in the manifold with $|C_k| > 0$. It is latent and consumes no active compute until an input oscillator with a matching frequency enters the system.
 
-Upon entry, the oscillator immediately falls into the potential well of the Ghost Field, transferring kinetic energy into the carrier. The carrier ``wakes up'' (resonates), and through the entanglement described above, immediately pulls the ``Meow'' oscillator (if present) or hallucinates it (if missing) via the shared potential well.
+Upon entry, the oscillator immediately falls into the potential well of the carrier, transferring kinetic energy into resonance. The carrier ``wakes up,'' and through spectral entanglement, immediately pulls the ``Meow'' oscillator (if present) or hallucinates it (if missing) via the shared potential well.
 
 \subsection{Symplectic Integration}
 To ensure stability without ``magic number'' damping, we use a symplectic integrator (Velocity Verlet). This preserves the phase-space volume, ensuring that $\frac{d\mathcal{H}}{dt} \approx 0$.
@@ -385,23 +460,53 @@ While the short-term dynamics are conservative, the long-term structure is dissi
 Carriers that successfully resonate with input data receive ``Income'' (energy injection). Carriers that fail to resonate starve and vanish. This implements continuous, online model selection (Occam's Razor) via thermodynamics.
 
 % ============================================================================
-% 5. CRYSTALLIZATION: PARALLEL INFERENCE
+% 5. CRYSTALLIZATION: ALL-TOKEN PREDICTION
 % ============================================================================
 \section{Crystallization}
 \label{sec:crystallization}
 
-Autoregressive models generate data serially ($t_1 \to t_2 \to t_3$). The Resonant Manifold performs inference via \emph{Global Relaxation} or \emph{Crystallization}.
+The dominant paradigm in generative AI is \emph{autoregression}: predicting the next token $x_{t+1}$ given $x_{0:t}$. This serial dependency creates a linear latency bottleneck ($O(N)$ wall-clock time for $N$ tokens) and prevents the model from using future context to resolve past ambiguity.
 
-\subsection{The Bucket Dump}
-We slice the input data (e.g., an image with missing patches) into buckets and inject them into the manifold simultaneously.
-\begin{enumerate}
-    \item \textbf{Excitation}: Injected oscillators vibrate at their intrinsic frequencies.
-    \item \textbf{Resonance}: Stored carriers (learned patterns) that match the partial input begin to resonate sympathetically.
-    \item \textbf{Hallucination}: The resonating carriers pump energy into the missing oscillators (the gaps).
-\end{enumerate}
+The Sensorium Manifold replaces autoregression with \emph{Crystallization}. Because the system is governed by a global Hamiltonian, we can treat generation not as an Initial Value Problem (integrating forward in time), but as a \emph{Boundary Value Problem} (relaxing the entire field to satisfy constraints).
 
-\subsection{Phase Locking}
-The solution emerges when the system settles into a phase-locked state (a local energy minimum). This is a non-causal process: future tokens can stabilize past tokens, and boundary conditions propagate inward. This allows for massive parallelism, as the entire sequence ``crystallizes'' out of the noise at once.
+\subsection{Time as a Spatial Dimension}
+In the manifold, the sequence index is treated as a spatial coordinate. The Spectral Carrier Field permeates the entire sequence length simultaneously.
+\begin{itemize}
+    \item \textbf{Input}: We inject a set of constraints (e.g., a prompt at $t=0$, a desired sentiment at $t=N$, or sparse keyframes in a video).
+    \item \textbf{Relaxation}: We initialize the unconstrained oscillators (the ``empty'' space) with thermal noise.
+    \item \textbf{Dynamics}: The system evolves under Hamiltonian dynamics. Carriers resonating with the constraints pump energy into the empty oscillators.
+\end{itemize}
+
+\subsection{Massive Parallelism}
+Because the interactions are mediated by the Carrier Field (which is computed globally per step), the oscillators at $t=10$ and $t=1000$ evolve in parallel.
+\begin{equation}
+\text{Latency}(N) \propto k_{\text{relaxation}}
+\end{equation}
+The wall-clock time to generate a sequence depends on the \emph{complexity} of the energy landscape (how long it takes to relax), not the \emph{length} of the sequence. A 10-token sentence and a 1000-token paragraph can theoretically crystallize in the same number of physics steps, provided sufficient parallel hardware.
+
+\subsection{Global Coherence}
+This ``All-Token Prediction'' allows for non-causal error correction. In an autoregressive model, a mistake at $t=5$ propagates to $t=100$. In the Sensorium Manifold, the emergence of a strong pattern at $t=100$ creates a resonant potential that travels \emph{backwards} in time, forcing the oscillator at $t=5$ to flip its state to maintain global phase coherence. The result is a self-correcting, holographic generation process.
+
+\subsection{Holographic Content Addressable Memory}
+\label{subsec:holographic}
+
+The crystallization mechanism reveals the manifold's fundamental nature as a \emph{Holographic Content Addressable Memory} (HCAM). Consider the optical analogy: if you cut a hologram in half, you do not get half the image---you get the \emph{entire} image, albeit at lower resolution. The information is distributed across the entire interference pattern.
+
+The Sensorium Manifold exhibits the same property:
+\begin{itemize}
+    \item \textbf{Distributed Encoding}: Carriers encode patterns as standing waves across the entire phase space. The ``meaning'' of a sequence is not localized to specific oscillators but is distributed across resonant modes.
+    \item \textbf{Content Addressing}: Injecting \emph{any} subset of the pattern (50\% of tokens, randomly scattered) is sufficient to address the complete memory. The Carrier Field reconstructs the whole signal because the pattern (the Carrier) resonates with partial input.
+    \item \textbf{Graceful Degradation}: As the number of constraint tokens decreases, the reconstruction becomes ``blurrier'' (higher entropy, more ambiguity) but remains structurally coherent.
+\end{itemize}
+
+The mathematical basis is the coupling potential (\Cref{eq:ghost_potential}). When partial input resonates with Carrier $k$, the carrier's potential well attracts \emph{all} oscillators tuned to its frequency---including those not yet observed. The manifold ``hallucinates'' missing data by minimizing global Hamiltonian energy.
+
+\begin{equation}
+\text{Query}(\mathcal{C}_{\text{partial}}) \to \arg\min_{\mathbf{q}} \mathcal{H}(\mathbf{q}) \quad \text{s.t.} \quad q_i = c_i \; \forall \, i \in \mathcal{C}_{\text{partial}}
+\label{eq:hcam_query}
+\end{equation}
+
+This reframes ``next token prediction'' as a degenerate case: clamping the left boundary and leaving the right unconstrained. ``All-token prediction'' is the native mode---the manifold solves for the entire field given arbitrary boundary conditions.
 
 % ============================================================================
 % 6. OBSERVER-DEPENDENT INFERENCE
@@ -409,7 +514,7 @@ The solution emerges when the system settles into a phase-locked state (a local 
 \section{Observer-Dependent Inference}
 \label{sec:inference}
 
-In autoregressive models, inference is synonymous with next-token prediction. The Resonant Manifold decouples the \emph{dynamics} of the system from the \emph{observation} of the system. Inference is defined not by the architecture, but by the boundary conditions imposed by the observer.
+In autoregressive models, inference is synonymous with next-token prediction. The Sensorium Manifold decouples the \emph{dynamics} of the system from the \emph{observation} of the system. Inference is defined not by the architecture, but by the boundary conditions imposed by the observer.
 
 \subsection{Inference as a Boundary Value Problem}
 Mathematically, inference is the minimization of the Hamiltonian $\mathcal{H}$ subject to a set of constraints $\mathcal{C}$ defined by the observer:
@@ -437,332 +542,201 @@ Because the system exists in continuous phase space, the observer chooses \emph{
 
 This flexibility implies that a single trained manifold can function as a generator, a classifier, a compressor, or a search engine, depending solely on which variables the observer chooses to clamp and which they choose to measure.
 
+\subsection{Dark Particles: Observer Interventions Without Query Fossilization}
+\label{sec:dark_particles}
+
+In a freely inferrable system, the observer is not passive: applying a query is itself an intervention that can steer the dynamics. We therefore distinguish between \emph{endogenous} top-down feedback (crystallized carriers biasing anchored oscillators) and \emph{exogenous} observer-driven forcing.
+
+\begin{definition}[Dark Particle (Probe Degree of Freedom)]
+A \emph{dark particle} is an observer-introduced probe that couples into the manifold dynamics (injecting energy, heat, or phase pull into existing token identities), but is not itself eligible to become persistent knowledge.
+\end{definition}
+
+Operationally, this means:
+\begin{itemize}
+    \item \textbf{Coupling allowed}: dark particles may drive chain reactions by injecting energy into substrate token identities, thereby activating carriers and shifting basins of attraction.
+    \item \textbf{No direct recruitment}: dark particles are \emph{ineligible} to be selected as carrier \emph{anchors} or as conflict \emph{offenders} that seed splitting. New carriers induced during probing must be recruited/anchored by \emph{existing} substrate oscillators that align with the emergent concept.
+\end{itemize}
+
+This provides a physically grounded resolution to a common tension in online systems: \emph{inference is information} and should rapidly steer behavior (e.g., under rule change), but transient queries should not permanently overwrite the substrate by being ``written'' as anchors. Instead, the probe can create a candidate carrier, and the substrate either supports it (metabolic survival) or it decays.
+
+\paragraph{Experiment sketch (rule change).}
+We evaluate three observer policies: (i) \emph{no-write probes} (probes cannot create/split/anchor carriers), (ii) \emph{dark probes} (probes can drive dynamics and trigger candidate carriers, but remain ineligible for anchoring/offender selection), and (iii) \emph{full-write probes} (probes are treated as ordinary oscillators). We measure switch speed under abrupt context change, stability after probe removal, and ``query fossilization'' (probe indices appearing as anchors in crystallized carriers).
+
 % ============================================================================
 % 7. THE SENSORIUM MANIFOLD
 % ============================================================================
 \section{The Sensorium Manifold}
 \label{sec:sensorium}
 
-\subsection{Unified Particle Space}
-\label{sec:unified}
+The Sensorium Manifold is a three-dimensional thermodynamic simulation volume where particles interact via physical forces, spectral carriers provide non-local coupling, and structure emerges from the interplay of energy flow and metabolic regulation.
 
-The key insight is that particles from different modalities can coexist in a shared embedding space if we project their native coordinates appropriately.
+\subsection{Particle-as-Oscillator Duality}
+\label{sec:particle_oscillator}
 
-\begin{definition}[Spectral Encoding]
-For a sensory input with native spectral representation $\bm{f} \in \mathcal{F}$, the spectral encoding is:
+Each particle in the manifold has a dual identity:
+\begin{itemize}
+    \item \textbf{Spatial identity}: Position $\bm{x} \in \R^3$, velocity $\bm{v}$, mass $m$, heat $Q$.
+    \item \textbf{Spectral identity}: Intrinsic frequency $\omega$, amplitude $A = \sqrt{\eosc}$, phase $\theta$.
+\end{itemize}
+
+The spatial layer governs local thermodynamics: gravitational attraction, heat diffusion, viscous drag, and particle collisions. The spectral layer governs non-local coupling: carriers create resonant potential wells that entangle oscillators across arbitrary distances.
+
+\begin{definition}[Oscillator State]
+An oscillator is represented as a complex phasor:
 \begin{equation}
-\bm{x} = \pi(\bm{f}) \in \R^D
-\label{eq:spectral_encoding}
+z_i = A_i e^{i\theta_i}, \quad \text{where } A_i = \sqrt{\energy_i}
+\label{eq:oscillator}
 \end{equation}
-where $\pi: \mathcal{F} \to \R^D$ is a projection that preserves distance relationships.
+The intrinsic frequency $\omega_i$ is a conserved property assigned at particle creation (e.g., from the Universal Tokenizer hash). It does not change during simulation.
 \end{definition}
 
-For modalities with native dimension $d < D$, we pad with zeros:
-\begin{equation}
-\pi(\bm{f}) = [\bm{f}; \bm{0}_{D-d}]
-\label{eq:padding}
-\end{equation}
+\subsection{The Two-Layer Architecture}
+\label{sec:two_layer}
 
-For modalities with native dimension $d > D$, we use random projection (Johnson-Lindenstrauss):
-\begin{equation}
-\pi(\bm{f}) = \bm{f} \cdot \bm{P}, \quad \bm{P} \in \R^{d \times D}, \quad \bm{P}_{ij} \sim \mathcal{N}(0, 1/D)
-\label{eq:random_projection}
-\end{equation}
+The system operates two physics engines in parallel:
 
-\subsection{Modality-Specific Encoders}
-\label{sec:encoders}
-
-\subsubsection{Audio Encoding}
-
-Audio is encoded via 1D Fourier transform:
-\begin{equation}
-\hat{x}(f) = \int_{-\infty}^{\infty} x(t) e^{-2\pi i f t} \, dt
-\label{eq:audio_fft}
-\end{equation}
-
-Each frequency bin $f_k$ with magnitude $|\hat{x}(f_k)|$ becomes a particle with:
+\subsubsection{Layer 1: Thermodynamic Particle Physics}
+Particles evolve according to classical field equations:
 \begin{itemize}
-  \item Position: $\pi([f_k]) \in \R^D$
-  \item Energy: $\energy_k = |\hat{x}(f_k)| / \sum_j |\hat{x}(f_j)|$
-  \item Phase: $\phi_k = \arg(\hat{x}(f_k))$ (stored for reconstruction)
+    \item \textbf{Gravity}: $\nabla^2 \phi = 4\pi G \rho$ (Poisson equation for gravitational potential)
+    \item \textbf{Heat diffusion}: $\partial T / \partial t = \alpha \nabla^2 T$ (thermal diffusion on the field)
+    \item \textbf{Particle update}: Forces from $-\nabla \phi$ (gravity) and $-\nabla T$ (thermal pressure), viscous drag (Stokes' law), and collision response (Hertzian contact + momentum conservation).
 \end{itemize}
 
-\subsubsection{Image Encoding}
+This layer is implemented as a GPU-accelerated PDE solver with trilinear field interpolation and spatial-hash collision detection.
 
-Images are encoded via 2D Fourier transform:
-\begin{equation}
-\hat{I}(u, v) = \int \int I(x, y) e^{-2\pi i (ux + vy)} \, dx \, dy
-\label{eq:image_fft}
-\end{equation}
+\subsubsection{Layer 2: Spectral Carrier Coupling}
+Oscillators couple non-locally via a population of \emph{spectral carriers}---global modes that exist in frequency space, not physical space.
 
-Each spatial frequency $(u_k, v_k)$ becomes a particle with:
+\begin{definition}[Spectral Carrier]
+A carrier $C_k = R_k e^{i\psi_k}$ is a complex mode with:
 \begin{itemize}
-  \item Position: $\pi([u_k, v_k]) \in \R^D$
-  \item Energy: $\energy_k = |\hat{I}(u_k, v_k)| / \sum_j |\hat{I}(u_j, v_j)|$
-  \item Phase: $\phi_k = \arg(\hat{I}(u_k, v_k))$
+    \item Intrinsic frequency $\Omega_k$ (center of its tuning curve)
+    \item Gate width $\sigma_k$ (frequency selectivity)
+    \item Metabolic state: volatile $\to$ stable $\to$ crystallized
 \end{itemize}
+\end{definition}
 
-\subsubsection{Text Encoding}
+Carriers are \emph{not} located in space. They are standing waves in the oscillator ensemble. Two oscillators with frequencies near $\Omega_k$ are entangled via the carrier regardless of their spatial separation.
 
-Text tokens are encoded via learned or pretrained embeddings:
+\subsection{Carrier Dynamics}
+\label{sec:carrier_dynamics}
+
+The carrier-oscillator coupling follows a resonance potential (energy-based, not geometric):
+
 \begin{equation}
-\bm{x}_k = \text{embed}(t_k) \in \R^D
-\label{eq:text_embed}
+V = -\sum_{i,k} T_{ik} \cdot \text{Re}(z_i C_k^*) + \frac{\lambda}{2} \sum_k |C_k|^2
+\label{eq:carrier_potential}
 \end{equation}
 
-If using a semantic embedding of dimension $d$, we project to $\R^D$ via $\pi$.
+where the tuning kernel $T_{ik}$ determines frequency selectivity:
+\begin{equation}
+T_{ik} = \exp\left( -\frac{(\omega_i - \Omega_k)^2}{\sigma_k^2} \right)
+\label{eq:tuning_kernel}
+\end{equation}
 
-\subsection{The Unified Dynamics}
-\label{sec:unified_dynamics}
+\begin{remark}[Sparse evaluation without approximation]
+Although the Gaussian tuning kernel has infinite support in real arithmetic, in IEEE-754 fp32 it underflows to \emph{exactly zero} when
+\(
+(\omega_i-\Omega_k)^2/\sigma_k^2 \ge x_0
+\),
+with
+\(
+x_0 = -\ln(\mathrm{FLT\_TRUE\_MIN}) = 149\ln 2
+\).
+Therefore, for fixed $\sigma_{\max}$, all interactions with
+\(
+|\omega_i-\Omega_k| \ge \sqrt{x_0}\,\sigma_{\max}
+\)
+are provably irrelevant in fp32 and can be skipped with no approximation. Our implementation exploits this by bucketing carriers into frequency bins and evaluating only a small neighborhood of bins per oscillator.
+\end{remark}
 
-Once all particles are in $\R^D$, the dynamics are identical:
+The dynamics are Langevin flow on this potential:
+\begin{align}
+\dot{C}_k &= \sum_i T_{ik} z_i - \lambda C_k + \sqrt{2T} \, \xi_k(t) \label{eq:carrier_update} \\
+\dot{\theta}_i &= \omega_i + \kappa \sum_k T_{ik} A_i R_k \sin(\psi_k - \theta_i) + \sqrt{2T} \, \eta_i(t) \label{eq:phase_update}
+\end{align}
 
+where $T$ is the Langevin temperature (noise strength) and $\kappa$ is the coupling scale.
+
+\subsection{Carrier Crystallization (Memory)}
+\label{sec:carrier_memory}
+
+Carriers undergo a lifecycle that implements memory:
 \begin{enumerate}
-  \item \textbf{Diffusion}: Particles drift toward attractors and diffuse based on heat
-  \item \textbf{Bonding}: Co-activated particles form bonds (see \Cref{sec:graphs})
-  \item \textbf{Metabolism}: Bonds grow from use, decay from cost
-  \item \textbf{Homeostasis}: System energy is regulated against adaptive baseline
+    \item \textbf{Volatile}: Newly spawned, decays quickly unless reinforced by resonance.
+    \item \textbf{Stable}: Sufficient amplitude and coherence; decays slowly.
+    \item \textbf{Crystallized}: Frozen as permanent memory; does not decay; provides top-down bias to anchored oscillators.
 \end{enumerate}
 
-The manifold does not ``know'' that a particle came from audio vs. image. It only sees positions, energies, and heats. Cross-modal relationships emerge naturally when particles from different modalities co-activate.
+Crystallized carriers store \emph{anchored oscillators}---a small set of oscillator indices and their relative phase offsets. When the carrier activates, it injects energy into its anchored oscillators, enabling pattern completion (the ``bucket dump'' reconstruction).
 
-\subsection{Modality-Specific Decoders}
-\label{sec:decoders}
+\subsection{Conflict-Driven Splitting}
+\label{sec:splitting}
 
-To output in a specific modality, we select particles by modality tag and reconstruct:
+When a carrier experiences persistent phase incoherence (high conflict among its coupled oscillators), it identifies the ``offending'' oscillator---the one most misaligned with the carrier's target phase---and spawns a new carrier centered on that oscillator's frequency.
 
-\subsubsection{Audio Decoding}
-
-Collect all audio-tagged particles. Reconstruct the spectrum:
-\begin{equation}
-\hat{x}(f_k) = \energy_k \cdot e^{i\phi_k}
-\label{eq:audio_decode}
-\end{equation}
-
-Apply inverse FFT to obtain the waveform.
-
-\subsubsection{Image Decoding}
-
-Collect all image-tagged particles. Reconstruct the 2D spectrum:
-\begin{equation}
-\hat{I}(u_k, v_k) = \energy_k \cdot e^{i\phi_k}
-\label{eq:image_decode}
-\end{equation}
-
-Apply inverse FFT2D to obtain the image.
+This implements automatic mode separation: a carrier that initially captures a broad frequency band will progressively specialize as conflict accumulates, eventually covering the oscillator population with a diverse set of narrow-band carriers.
 
 % ============================================================================
-% 4. SPARSE BOND GRAPH DYNAMICS
+% 8. IDLE COMPUTE (DISSIPATIVE STRUCTURE MAINTENANCE)
 % ============================================================================
-\section{Sparse Bond Graph Dynamics}
-\label{sec:graphs}
+\section{Idle Compute}
+\label{sec:idle_compute}
 
-Relationships between particles are encoded in a sparse directed graph, not dense weight matrices.
+Between observations, the system performs \emph{idle compute}---internal processing that refines the carrier population without external input. Following Prigogine's theory of dissipative structures \citep{prigogine1977self}, this is the mechanism by which the system maintains organization far from equilibrium.
 
-\subsection{Bond Graph Representation}
-\label{sec:bond_graph}
+\subsection{Idle Modes}
 
-\begin{definition}[Bond Graph]
-The bond graph $\bondgraph = (V, E)$ is a sparse directed graph where:
+The idle compute has three modes:
+\begin{enumerate}
+    \item \textbf{Consolidation}: Low noise, favoring crystallization of stable carriers. The system ``locks in'' patterns that have been consistently reinforced.
+    \item \textbf{Disambiguation}: Carrier-frequency repulsion active. Nearby carriers in $\omega$-space repel each other, reducing mode collision.
+    \item \textbf{Exploration}: High noise, low weight thresholds. Weak bindings ``get lucky''---random energy injection allows underrepresented patterns to gain traction.
+\end{enumerate}
+
+\subsection{Adaptive Thermodynamics}
+
+The system computes global energy statistics (mean, variance) via GPU reduction and uses these to adaptively scale:
 \begin{itemize}
-  \item $V$ is the set of attractor indices
-  \item $E \subseteq V \times V$ is the set of directed bonds
-  \item Each bond $(i, j) \in E$ has mass $\mass_{ij} \geq 0$ and trace $\trace_{ij} \geq 0$
+    \item \textbf{Decay rates}: Carriers decay relative to system energy scale, preventing runaway growth.
+    \item \textbf{Noise amplitude}: Langevin temperature scales with system energy, maintaining a consistent exploration/exploitation balance.
+    \item \textbf{Metabolic cost}: Carriers that do not receive sufficient ``income'' (coherent drive) shrink, implementing continuous model selection.
 \end{itemize}
-\end{definition}
 
-The graph is stored as a sparse edge list $(I, J, M, T)$, scaling with the number of observed transitions, not $O(V^2)$.
-
-\subsection{Bond Formation (Hebbian Dynamics)}
-\label{sec:hebbian}
-
-Bonds form and strengthen through co-activation:
-
-\begin{principle}[Hebbian Bonding]
-When particles at attractors $i$ and $j$ are co-activated (e.g., observed in sequence), the bond $(i, j)$ receives mass:
-\begin{equation}
-\mass_{ij} \leftarrow \mass_{ij} + \dt \cdot \excitation_i \cdot \excitation_j
-\label{eq:hebbian}
-\end{equation}
-\end{principle}
-
-For sequential data, we observe $i \to j$ and inject mass:
-\begin{equation}
-\mass_{ij} \leftarrow \mass_{ij} + \dt \cdot \pressure \cdot (1 + \text{depletion}_i)
-\label{eq:bond_injection}
-\end{equation}
-
-where $\pressure$ is the metabolic pressure (normalized surprise) and $\text{depletion}_i$ is accumulated from sink encounters during stochastic traversal.
-
-\subsection{Metabolism}
-\label{sec:metabolism}
-
-Active bonds undergo metabolism: they receive income from use and pay cost for existence.
-
-\begin{definition}[Bond Income]
-\begin{equation}
-\text{income}_{ij} = \excitation_i \cdot \tilde{\mass}_{ij} \cdot \frac{1}{1 + \bar{\heat} + \eps}
-\label{eq:income}
-\end{equation}
-where $\tilde{\mass}_{ij} = \mass_{ij} / \sum_k \mass_{ik}$ is the normalized mass and $\bar{\heat}$ is mean heat.
-\end{definition}
-
-\begin{definition}[Bond Cost]
-\begin{equation}
-\text{cost}_{ij} = \ratio \cdot \bar{\excitation} \cdot \frac{\mass_{ij}}{\bar{\mass} + \eps}
-\label{eq:cost}
-\end{equation}
-where $\ratio$ is the homeostatic ratio.
-\end{definition}
-
-The mass update is:
-\begin{equation}
-\mass_{ij} \leftarrow \max(0, \mass_{ij} + \dt \cdot (\text{income}_{ij} - \text{cost}_{ij}))
-\label{eq:mass_update}
-\end{equation}
-
-This is not gradient descent. There is no loss function. Bonds that are used grow; bonds that are unused decay. The homeostatic ratio modulates the rate.
-
-\subsection{Energy Flux}
-\label{sec:flux}
-
-Energy flows through bonds according to the flux equation:
-
-\begin{equation}
-\flux_j = \sum_{i: (i,j) \in E} \excitation_i \cdot \tilde{\mass}_{ij}
-\label{eq:flux}
-\end{equation}
-
-This is the amount of excitation arriving at attractor $j$ from all sources. The computation is sparse---we only sum over existing bonds.
-
-\subsection{Adaptive Pruning}
-\label{sec:pruning}
-
-Rather than fixed thresholds, bonds are pruned when their mass falls below the mean outgoing mass from their source:
-
-\begin{equation}
-\text{prune}(i,j) \iff \mass_{ij} < \frac{1}{|N_{\text{out}}(i)|} \sum_{k \in N_{\text{out}}(i)} \mass_{ik}
-\label{eq:pruning}
-\end{equation}
-
-This maintains sparsity while adapting to the scale of each source.
+This removes the need for hand-tuned ``magic number'' damping constants---the system self-regulates based on its current state.
 
 % ============================================================================
-% 5. STOCHASTIC TRAVERSAL (DISSIPATIVE STRUCTURE MAINTENANCE)
-% ============================================================================
-\section{Stochastic Traversal}
-\label{sec:traversal}
-
-Between observations, the system performs stochastic traversal---sampling paths through its bond graph under thermal noise. This is not passive relaxation toward equilibrium, but active dissipation: the system expends energy to explore its own structure.
-
-Following Prigogine's theory of dissipative structures \citep{prigogine1977self}, we recognize this as the mechanism by which the system maintains organization far from equilibrium. The traversal \emph{exports entropy} (by exploring and abandoning unproductive paths) while \emph{reducing internal entropy} (by discovering shortcuts that sharpen future predictions). Without this process, the system would approach heat death---maximum entropy, no gradients, no useful work possible.
-
-This is not ``offline training''---there is no training data. The system processes its own structure.
-
-\subsection{Transitive Closure}
-\label{sec:transitive}
-
-If bonds $A \to B$ and $B \to C$ exist, we can infer a shortcut $A \to C$:
-
-\begin{equation}
-\mass_{AC} = \dt \cdot \tilde{\mass}_{AB} \cdot \tilde{\mass}_{BC} \cdot \exp\left(-\frac{\|\bm{a}_A - \bm{a}_C\|^2}{\bar{d}^2}\right)
-\label{eq:transitive}
-\end{equation}
-
-The geometric factor $\exp(-d^2/\bar{d}^2)$ discounts shortcuts between distant attractors.
-
-\subsection{Conflict Resolution}
-\label{sec:conflict}
-
-Sources with high outgoing entropy (ambiguous predictions) receive noise injection:
-
-\begin{equation}
-\excitation_i \leftarrow \excitation_i + \dt \cdot \mathcal{N}(0, \sigma_i^2), \quad \sigma_i \propto \entropy_i
-\label{eq:conflict}
-\end{equation}
-
-where $\entropy_i = -\sum_j \tilde{\mass}_{ij} \log \tilde{\mass}_{ij}$ is the entropy of outgoing bonds. Subsequent metabolism allows competition to sharpen predictions.
-
-\subsection{Stochastic Trajectories}
-\label{sec:trajectories}
-
-The system samples hypothetical trajectories from its current structure:
-
-\begin{algorithm}[H]
-\caption{Stochastic Trajectory Sampling}
-\label{alg:trajectory}
-\begin{algorithmic}[1]
-\State $\text{budget} \leftarrow E_{\text{dream}} \cdot (1 + \gamma \cdot \max(0, \ratio - 1))$
-\While{$\text{budget} > 0$}
-  \State Sample starting attractor $i$ proportional to $\excitation_i$
-  \State $\text{path\_prob} \leftarrow 1$
-  \For{$t = 1, \ldots, T_{\text{max}}$}
-    \State Compute $P(\cdot | i)$ from bond graph
-    \If{$P$ is empty (sink)}
-      \State $\text{depletion}_i \leftarrow \text{depletion}_i + \dt$ \Comment{Mark sink}
-      \State \textbf{break}
-    \EndIf
-    \State Sample $j \sim P$
-    \State $\text{path\_prob} \leftarrow \text{path\_prob} \cdot P(j|i)$
-    \State Reinforce $(i, j)$ with mass $\propto \text{path\_prob}$
-    \State $i \leftarrow j$
-    \State $\text{budget} \leftarrow \text{budget} - (1 + \heat_i / \bar{\heat})$
-  \EndFor
-\EndWhile
-\State $\text{depletion} \leftarrow \text{depletion} \cdot \exp(-\dt \cdot \ratio / \bar{\text{depletion}})$ \Comment{Homeostatic decay}
-\end{algorithmic}
-\end{algorithm}
-
-Depletion accumulates at sinks (states with no outgoing flux). When real observations arrive, depletion modulates plasticity---the system is more receptive to learning transitions from depleted attractors. This is not a biological hunger signal; it is a local measurement of incomplete structure that increases the rate of bond formation.
-
-% ============================================================================
-% 6. CROSS-MODAL TRANSDUCTION
+% 9. CROSS-MODAL TRANSDUCTION
 % ============================================================================
 \section{Cross-Modal Transduction}
 \label{sec:bridge}
 
-The Sensorium Manifold enables cross-modal transduction without architectural changes. We describe the mechanism.
+The Sensorium Manifold enables cross-modal transduction through frequency-based carrier coupling. Carriers are \emph{not} located in geometric space; they exist in frequency space and can couple oscillators from any modality.
 
-\subsection{Carrier Coupling}
-\label{sec:carriers}
+\subsection{Frequency-Domain Coupling}
+\label{sec:freq_coupling}
 
-To transduce between semantic (text) and spectral (audio/image) representations, we introduce a population of \emph{carriers}---particles that have positions in both semantic and spectral spaces.
+Cross-modal transduction works because the Universal Tokenizer assigns intrinsic frequencies ($\omega$) to all particles regardless of modality. A text token, an audio sample, and an image pixel all become oscillators with frequencies determined by their (byte, index) hash.
 
-\begin{definition}[Carrier]
-A carrier $c_k$ has:
+When oscillators from different modalities have nearby frequencies, they couple to the same carriers. This creates automatic cross-modal association:
 \begin{itemize}
-  \item Semantic position $\bm{s}_k \in \R^D$
-  \item Spectral position $\bm{f}_k \in \R^{d_{\text{spec}}}$ (1D for audio, 2D for image)
-  \item Energy $\energy_k \geq 0$
-  \item Heat $\heat_k \geq 0$
+    \item An audio sample of a cat meowing may hash to frequencies near the text ``meow''.
+    \item When both are present during training, carriers that bind one will also bind the other.
+    \item At inference, injecting one modality excites shared carriers, which in turn inject energy into oscillators of the other modality.
 \end{itemize}
-\end{definition}
 
-Carriers learn to couple semantic and spectral spaces through co-activation. When semantic particle at $\bm{s}$ and spectral particle at $\bm{f}$ are observed together, nearby carriers receive energy:
+\subsection{Bidirectional Transduction}
 
-\begin{equation}
-\energy_k \leftarrow \energy_k + \dt \cdot w_{\text{sem}}(\bm{s}, \bm{s}_k) \cdot w_{\text{spec}}(\bm{f}, \bm{f}_k)
-\label{eq:carrier_update}
-\end{equation}
+The coupling is inherently bidirectional. The same carrier dynamics (\Cref{eq:carrier_update}, \Cref{eq:phase_update}) apply regardless of which oscillators are clamped (observed) and which are free (to be inferred).
 
-where $w$ are kernel functions (e.g., Gaussian).
+\begin{itemize}
+    \item \textbf{Text $\to$ Audio}: Clamp text oscillators, let audio oscillators relax.
+    \item \textbf{Audio $\to$ Text}: Clamp audio oscillators, let text oscillators relax.
+    \item \textbf{Image $\to$ Text + Audio}: Clamp image, let both text and audio relax.
+\end{itemize}
 
-\subsection{Forward Transduction (Semantic to Spectral)}
-\label{sec:forward}
-
-To transduce semantic input to spectral output:
-
-\begin{enumerate}
-  \item Compute carrier activations from semantic input
-  \item Each carrier projects its energy to its spectral position
-  \item Collect spectral energy distribution
-  \item Decode via inverse FFT
-\end{enumerate}
-
-\subsection{Backward Transduction (Spectral to Semantic)}
-\label{sec:backward}
-
-The same mechanism works in reverse. The manifold is bidirectional.
+The manifold does not distinguish these cases. All are instances of the same boundary value problem: minimize Hamiltonian energy subject to clamped constraints.
 
 % ============================================================================
 % 7. EXPERIMENTS
@@ -820,7 +794,11 @@ We demonstrate semantic-to-audio transduction using the carrier coupling mechani
 
 We evaluate a two-speaker mixture scenario using a fixed recorded mixture. The system forms distinct carrier subsets from short speaker prompts and reconstructs two different overlap completions by selecting which carriers to sample from.
 
-\input{tables/cocktail_party_summary.tex}
+\IfFileExists{tables/cocktail_party_summary.tex}{%
+  \input{tables/cocktail_party_summary.tex}
+}{%
+  \fbox{\parbox{0.9\textwidth}{\centering\vspace{0.8cm}\textit{Table will be generated by \texttt{make paper}}\vspace{0.8cm}}}
+}
 
 \begin{figure}[t]
   \centering
@@ -838,17 +816,32 @@ We evaluate a two-speaker mixture scenario using a fixed recorded mixture. The s
 
 We show that the same unified manifold handles 2D image frequencies. Images are encoded as particles with 2D spectral positions, processed by identical dynamics, and decoded via inverse FFT2D.
 
-\input{tables/image_gen_summary.tex}
+\IfFileExists{tables/mnist_trie_recall_summary.tex}{%
+  \input{tables/mnist_trie_recall_summary.tex}
+}{%
+  \fbox{\parbox{0.9\textwidth}{\centering\vspace{0.8cm}\textit{Table will be generated by \texttt{make paper}}\vspace{0.8cm}}}
+}
 
 \begin{figure}[t]
   \centering
-  \IfFileExists{figures/image_gen.pdf}{%
-    \includegraphics[width=\textwidth]{figures/image_gen.pdf}
+  \IfFileExists{figures/mnist_trie_hero.png}{%
+    \includegraphics[width=\textwidth]{figures/mnist_trie_hero.png}
   }{%
     \fbox{\parbox{0.9\textwidth}{\centering\vspace{2cm}\textit{Figure will be generated by \texttt{make paper}}\vspace{2cm}}}
   }
-  \caption{Kernel MNIST completion via Universal Tokenizer byte inpainting.}
-  \label{fig:image_gen}
+  \caption{Kernel MNIST completion via Universal Tokenizer byte inpainting. The system learns a thermodynamic trie from raw byte streams and reconstructs held-out digits from partial prompts.}
+  \label{fig:mnist_hero}
+\end{figure}
+
+\begin{figure}[t]
+  \centering
+  \IfFileExists{figures/mnist_trie_inference_grid.png}{%
+    \includegraphics[width=\textwidth]{figures/mnist_trie_inference_grid.png}
+  }{%
+    \fbox{\parbox{0.9\textwidth}{\centering\vspace{2cm}\textit{Figure will be generated by \texttt{make paper}}\vspace{2cm}}}
+  }
+  \caption{MNIST inference grid showing target digits (top), masked prompts (middle), and thermodynamic reconstructions (bottom).}
+  \label{fig:mnist_grid}
 \end{figure}
 
 \subsection{Ablation Studies}
@@ -857,14 +850,161 @@ We show that the same unified manifold handles 2D image frequencies. Images are 
 \input{tables/ablation.tex}
 
 % ============================================================================
-% APPENDIX: ADDITIONAL EXPERIMENTS
+% RELATED WORK
+% ============================================================================
+\section{Related Work}
+\label{sec:related}
+
+\paragraph{Dissipative Structures and Thermodynamic Computing}
+Prigogine's theory of dissipative structures \citep{prigogine1977self, prigogine1978time} describes how systems far from equilibrium can maintain complex organization by continuously dissipating energy. Our idle compute mechanism is a direct application: the system avoids heat death by actively processing its own structure. Recent work on thermodynamic computing \citep{conte2019thermodynamic, boyd2022thermodynamic, whitelam2025generative} explores physical substrates for computation based on these principles; we implement them in software via GPU-accelerated field solvers and spectral carrier dynamics.
+
+\paragraph{Oscillator Networks and the Kuramoto Model}
+The Kuramoto model \citep{kuramoto1975international, strogatz2000kuramoto} describes synchronization in coupled oscillator populations and has recently been applied to deep learning. Artificial Kuramoto Oscillatory Neurons (AKOrN) \citep{miyato2025akorn} replace threshold units with oscillatory neurons that synchronize through generalized Kuramoto dynamics, demonstrating improvements in object discovery, adversarial robustness, and reasoning. Our spectral carrier mechanism shares the phase-coupling principle but extends it with metabolic gating and crystallization for memory formation.
+
+\paragraph{Binding by Synchrony}
+The hypothesis that neural oscillation synchrony solves the binding problem \citep{singer1999neuronal, engel2001dynamic, wang2010neurophysiological} provides biological grounding for our approach. Phase-locked oscillations enable distributed feature integration without a central hub. Our carriers implement this mechanism: oscillators with similar frequencies bind through shared carriers, regardless of their spatial separation.
+
+\paragraph{Modern Hopfield Networks and Associative Memory}
+Classical Hopfield networks \citep{hopfield1982neural} implement associative memory via energy minimization. Modern Hopfield networks \citep{ramsauer2021hopfield} achieve exponential storage capacity and connect to transformer attention. Recent work on sparse Hopfield networks \citep{santos2024sparse} and Hopfield Encoding Networks \citep{widrich2024hopfield} extends these capabilities. Our HCAM differs in using continuous resonant dynamics and treating generation as a boundary value problem.
+
+\paragraph{Content-Addressable Memory in Transformers}
+Recent work integrates content-addressable memory into transformers: CAMELoT \citep{liu2024camelot} adds training-free associative memory, ARMT \citep{bulatov2024armt} combines attention with segment-level recurrence for 50M+ token sequences, and Memory Mosaics \citep{liu2024memorymosaics} provide interpretable compositional memory. Our carriers serve an analogous role but operate in frequency space rather than token space.
+
+\paragraph{Non-Autoregressive and Parallel Generation}
+Non-autoregressive transformers \citep{gu2018nonautoregressive} generate all tokens in parallel but struggle with output dependencies. Masked diffusion language models \citep{sahoo2024mdlm, nie2024scaling} achieve competitive performance with autoregressive models while enabling parallel sampling. Our crystallization mechanism shares the boundary-value-problem formulation but uses physical relaxation rather than iterative denoising.
+
+\paragraph{Diffusion Models and Langevin Dynamics}
+Diffusion models \citep{sohl2015deep, ho2020denoising, song2021score} learn to reverse a noising process, generating samples through Langevin dynamics. Our carrier dynamics use Langevin flow on a resonance potential, but ``generation'' emerges from phase alignment rather than denoising.
+
+\paragraph{Hamiltonian and Symplectic Neural Networks}
+Hamiltonian Neural Networks \citep{greydanus2019hamiltonian} and Symplectic networks \citep{chen2020symplectic, jin2020sympnets} learn energy-conserving dynamics from data. Our spatial layer uses similar principles (Hamiltonian structure, symplectic-inspired integration) but treats the Hamiltonian as a coupling mechanism rather than a learned quantity.
+
+\paragraph{Multimodal Architectures}
+CLIP \citep{radford2021learning} and Flamingo \citep{alayrac2022flamingo} require explicit cross-modal coupling mechanisms. Unified-IO 2 \citep{lu2024unifiedio2} tokenizes all modalities into a shared space. Our Universal Tokenizer achieves modality-agnostic encoding through deterministic hashing, with cross-modal coupling emerging from shared spectral carrier dynamics.
+
+\paragraph{Energy-Based Models}
+Energy-based models \citep{lecun2006tutorial, du2021improved} define learning as energy minimization. Our framework uses energy differently: the Hamiltonian governs dynamics, but ``learning'' is the crystallization of carriers, not optimization of a loss function.
+
+\paragraph{Hebbian Learning and Predictive Coding}
+Our approach shares principles with Hebbian learning \citep{hebb1949organization}: carrier-oscillator coupling strengthens through resonance. Predictive coding \citep{rao1999predictive, friston2010free} models the brain as minimizing surprise; our top-down bias from crystallized carriers implements a similar mechanism.
+
+% ============================================================================
+% 9. DISCUSSION
+% ============================================================================
+\section{Discussion}
+\label{sec:discussion}
+
+\subsection{What We Claim}
+
+\begin{enumerate}
+  \item \textbf{Native multimodality}: All sensory modalities can be processed by the same thermodynamic dynamics on a shared manifold.
+  \item \textbf{No backpropagation}: Learning emerges from local carrier-oscillator dynamics regulated by homeostasis and adaptive thermodynamics.
+  \item \textbf{Online adaptation}: The system adapts continuously to streaming data and distributional shifts via spectral carrier evolution.
+  \item \textbf{Dissipative self-organization}: Idle compute maintains structure far from equilibrium by processing carrier populations through consolidation, disambiguation, and exploration modes.
+  \item \textbf{Zero-latency scaling}: Sequence generation latency scales with relaxation complexity $O(k)$, not sequence length $O(N)$. Time is treated as a spatial dimension.
+\end{enumerate}
+
+\subsection{What We Do Not Claim}
+
+\begin{enumerate}
+  \item \textbf{Strict thermodynamics}: We use thermodynamic \emph{metaphors}. The spatial layer dissipates kinetic energy into heat (first law); the spectral layer uses adaptive decay and metabolic gating. There is no global conservation law or detailed balance.
+  \item \textbf{Gradient-free optimization}: We are not optimizing a loss function without gradients. We sidestep optimization entirely---structure emerges from carrier crystallization.
+  \item \textbf{Transformer replacement}: Our experiments are on small-scale tasks. We make no claims about scaling to language model pretraining.
+  \item \textbf{Exact continuous dynamics}: The spatial layer uses GPU field solvers (Jacobi iteration, Euler-Maruyama diffusion). These are discretized approximations to continuous PDEs.
+\end{enumerate}
+
+\subsection{The Zero-Latency Paradigm}
+
+The Sensorium Manifold exposes a fundamental inefficiency in autoregressive architectures. Transformers require $O(N)$ sequential forward passes to generate $N$ tokens---each token must wait for all preceding tokens. This serial bottleneck is intrinsic to the causal mask.
+
+Crystallization inverts this relationship. By treating the sequence index $t$ as a spatial coordinate rather than a temporal one, the manifold solves the entire field equation simultaneously. Spectral carriers propagate constraints in all directions: forward (causal), backward (non-causal), and laterally (cross-modal). A prompt at $t=0$ and a constraint at $t=N$ jointly determine the solution in between.
+
+The practical implication: generating a 10-token sentence and a 1000-token paragraph require approximately the same number of relaxation steps, assuming the energy landscape complexity is similar. Latency scales with the number of carriers that must be excited (pattern complexity), not the number of oscillators that must be resolved (sequence length).
+
+This is \emph{Time as Space}---a geometric rather than temporal view of sequence generation.
+
+\subsection{The Physics of ``Horizontal''}
+
+We claimed that ``the physics of horizontal is the same whether it is a word, a sound wave, or a pixel pattern.'' Let us make this precise:
+
+\begin{itemize}
+  \item \textbf{Text}: The word ``horizontal'' is a token with a D-dimensional embedding.
+  \item \textbf{Audio}: A sound panning left-to-right has specific frequency characteristics (Doppler, stereo phase).
+  \item \textbf{Image}: A horizontal line has energy concentrated at $v \approx 0$ in the 2D frequency domain.
+\end{itemize}
+
+All three representations enter the manifold as particles. Through co-activation during training, carriers couple these representations. The word ``horizontal'' activates carriers that also respond to horizontal image frequencies and horizontal audio characteristics. This is not a metaphor---it is the mechanism.
+
+% ============================================================================
+% 10. CONCLUSION
+% ============================================================================
+\section{Conclusion}
+\label{sec:conclusion}
+
+We have presented the Sensorium Manifold, a unified thermodynamic substrate for native multimodal computation. By representing all sensory inputs as oscillators with intrinsic frequencies (via the Universal Tokenizer), we achieve modality-agnostic dynamics. Learning emerges from spectral carrier crystallization---the spontaneous formation of resonant modes that couple oscillators across frequency space---without backpropagation.
+
+The crystallization mechanism represents a fundamental departure from the autoregressive paradigm. By treating time as a spatial dimension and generation as a boundary value problem, we achieve latency that scales with pattern complexity rather than sequence length. The manifold functions as a Holographic Content Addressable Memory: partial inputs address complete patterns because information is distributed across the entire resonant field. ``Next token prediction'' is merely a degenerate case of this more general capability.
+
+The framework suggests an alternative to the optimization-centric paradigm of modern machine learning. Physical principles---thermodynamics, diffusion, homeostasis, and holographic encoding---may offer paths to adaptive systems that are better suited to continuous, online, embodied learning.
+
+The physics of ``horizontal'' really is the same across modalities. And that, perhaps, is how perception should work.
+
+% ============================================================================
+% REFERENCES
+% ============================================================================
+\bibliographystyle{plainnat}
+\bibliography{references}
+
+% ============================================================================
+% APPENDIX
 % ============================================================================
 \appendix
+
 \section{Additional Experiments}
 \label{sec:appendix_experiments}
 
 This appendix aggregates additional kernel experiments that exercise the same
 mechanism across tasks and different sampling/observation choices.
+
+\subsection{Universal Tokenizer Collision Regimes (TOY)}
+\IfFileExists{tables/tokenizer_toy_collisions_summary.tex}{%
+  \input{tables/tokenizer_toy_collisions_summary.tex}
+}{%
+  \fbox{\parbox{0.9\textwidth}{\centering\vspace{0.8cm}\textit{Table will be generated by \texttt{make paper}}\vspace{0.8cm}}}
+}
+\begin{figure}[t]
+  \centering
+  \IfFileExists{figures/tokenizer_toy_collisions.png}{%
+    \includegraphics[width=0.85\textwidth]{figures/tokenizer_toy_collisions.png}
+  }{%
+    \fbox{\parbox{0.85\textwidth}{\centering\vspace{2cm}\textit{Figure will be generated by \texttt{make paper}}\vspace{2cm}}}
+  }
+  \caption{Synthetic trie collision sweep. As the hash vocabulary shrinks, collisions transition from useful compression to aliasing, visible as sustained conflict and degraded crystallization.}
+  \label{fig:tokenizer_toy_collisions}
+\end{figure}
+
+\subsection{Image-Based Hash Collision Compression}
+\input{tables/image_collision_summary.tex}
+\begin{figure}[t]
+  \centering
+  \IfFileExists{figures/image_collision_hero.png}{%
+    \includegraphics[width=\textwidth]{figures/image_collision_hero.png}
+  }{%
+    \fbox{\parbox{0.9\textwidth}{\centering\vspace{2cm}\textit{Figure will be generated by \texttt{make paper}}\vspace{2cm}}}
+  }
+  \caption{Hash collisions act as compression in a thermodynamic trie: multi-panel visualization demonstrating spatial clustering, energy accumulation, and information compression across different collision rates. As collision rate increases (left to right), particles with identical token IDs cluster together in 3D space, energy accumulates in colliding particles, and compression metrics improve (lower compression ratio and entropy). The visualization proves that hash collisions naturally create a hierarchical trie structure where shared patterns compress through thermodynamic dynamics.}
+  \label{fig:image_collision_hero}
+\end{figure}
+\begin{figure}[t]
+  \centering
+  \IfFileExists{figures/image_collision_bifurcation.png}{%
+    \includegraphics[width=\textwidth]{figures/image_collision_bifurcation.png}
+  }{%
+    \fbox{\parbox{0.9\textwidth}{\centering\vspace{2cm}\textit{Figure will be generated by \texttt{make paper}}\vspace{2cm}}}
+  }
+  \caption{Bifurcation charts showing the trie structure created by hash collisions. Top row: Hierarchical clustering dendrograms showing how token IDs branch into a tree structure. Bottom row: Spatial bifurcation plots showing how particles with different token IDs separate in space, with convex hulls highlighting clusters. Higher collision rates create more pronounced branching patterns, demonstrating that collisions create a thermodynamic trie where shared prefixes cluster together and unique patterns branch apart.}
+  \label{fig:image_collision_bifurcation}
+\end{figure}
 
 \subsection{Universal Tokenizer Next-Byte Prediction}
 \input{tables/next_token_summary.tex}
@@ -920,89 +1060,6 @@ mechanism across tasks and different sampling/observation choices.
   \label{fig:continuous_final}
 \end{figure}
 
-% ============================================================================
-% 8. RELATED WORK
-% ============================================================================
-\section{Related Work}
-\label{sec:related}
-
-\paragraph{Dissipative Structures}
-Prigogine's theory of dissipative structures \citep{prigogine1977self, prigogine1978time} describes how systems far from equilibrium can maintain complex organization by continuously dissipating energy. Our stochastic traversal mechanism is a direct application: the system avoids heat death by actively exporting entropy through path exploration, while reducing internal entropy by discovering structural shortcuts.
-
-\paragraph{Thermodynamic Computing}
-Recent work explores physical substrates for computation based on thermodynamic principles \citep{conte2019thermodynamic}. We draw inspiration from these ideas but implement them in software.
-
-\paragraph{Hebbian Learning}
-Our approach shares principles with Hebbian learning \citep{hebb1949organization}. We extend this with thermodynamic regulation and sparse graph dynamics.
-
-\paragraph{Energy-Based Models}
-Energy-based models \citep{lecun2006tutorial} define learning as energy minimization. Our framework differs: energy is for homeostatic regulation, not optimization.
-
-\paragraph{Multimodal Architectures}
-CLIP \citep{radford2021learning} uses contrastive learning to align image and text encoders. Flamingo \citep{alayrac2022flamingo} introduces cross-attention layers to fuse visual features into language models. These approaches require explicit coupling mechanisms that must be designed per modality pair. We propose that cross-modal coupling can emerge from shared dynamics: particles coexist in a common space, and Hebbian co-activation creates associations without architectural intervention.
-
-\paragraph{Predictive Coding}
-Predictive coding \citep{rao1999predictive} models the brain as a prediction engine minimizing surprise. Our surprise-driven plasticity relates to this framework.
-
-% ============================================================================
-% 9. DISCUSSION
-% ============================================================================
-\section{Discussion}
-\label{sec:discussion}
-
-\subsection{What We Claim}
-
-\begin{enumerate}
-  \item \textbf{Native multimodality}: All sensory modalities can be processed by the same thermodynamic dynamics on a shared manifold.
-  \item \textbf{No backpropagation}: Learning emerges from local, Hebbian-style dynamics regulated by homeostasis.
-  \item \textbf{Online adaptation}: The system adapts continuously to streaming data and distributional shifts.
-  \item \textbf{Dissipative self-organization}: Stochastic traversal maintains structure far from equilibrium by exporting entropy while discovering shortcuts.
-\end{enumerate}
-
-\subsection{What We Do Not Claim}
-
-\begin{enumerate}
-  \item \textbf{Strict thermodynamics}: We use thermodynamic \emph{metaphors}. Energy is not conserved; there is no detailed balance.
-  \item \textbf{Gradient-free optimization}: We are not optimizing a loss function without gradients. We sidestep optimization entirely.
-  \item \textbf{Transformer replacement}: Our experiments are on small-scale tasks. We make no claims about scaling to language model pretraining.
-  \item \textbf{Continuous dynamics}: Our ``continuous'' dynamics are Euler-discretized. We do not solve PDEs exactly.
-\end{enumerate}
-
-\subsection{The Physics of ``Horizontal''}
-
-We claimed that ``the physics of horizontal is the same whether it is a word, a sound wave, or a pixel pattern.'' Let us make this precise:
-
-\begin{itemize}
-  \item \textbf{Text}: The word ``horizontal'' is a token with a D-dimensional embedding.
-  \item \textbf{Audio}: A sound panning left-to-right has specific frequency characteristics (Doppler, stereo phase).
-  \item \textbf{Image}: A horizontal line has energy concentrated at $v \approx 0$ in the 2D frequency domain.
-\end{itemize}
-
-All three representations enter the manifold as particles. Through co-activation during training, carriers couple these representations. The word ``horizontal'' activates carriers that also respond to horizontal image frequencies and horizontal audio characteristics. This is not a metaphor---it is the mechanism.
-
-% ============================================================================
-% 10. CONCLUSION
-% ============================================================================
-\section{Conclusion}
-\label{sec:conclusion}
-
-We have presented the Sensorium Manifold, a unified thermodynamic substrate for native multimodal computation. By representing all sensory inputs as spectral distributions in a shared Euclidean space, we achieve modality-agnostic dynamics. Learning emerges from local thermodynamic interactions---energy flow, Hebbian bonding, homeostatic regulation---without backpropagation.
-
-The framework suggests an alternative to the optimization-centric paradigm of modern machine learning. Physical principles---thermodynamics, diffusion, homeostasis---may offer paths to adaptive systems that are better suited to continuous, online, embodied learning.
-
-The physics of ``horizontal'' really is the same across modalities. And that, perhaps, is how perception should work.
-
-% ============================================================================
-% REFERENCES
-% ============================================================================
-\bibliographystyle{plainnat}
-\bibliography{references}
-
-% ============================================================================
-% APPENDIX
-% ============================================================================
-\appendix
-
 \section{Extended Translation Table}
 \label{app:translation}
 
@@ -1014,24 +1071,27 @@ For readers seeking deeper correspondences:
 \toprule
 \textcolor{physicsblue}{\textbf{Physics Concept}} & \textcolor{mlgreen}{\textbf{ML Analogue}} \\
 \midrule
-\textcolor{physicsblue}{Euclidean space $\R^D$} & \textcolor{mlgreen}{Embedding space} \\
-\textcolor{physicsblue}{Particle diffusion} & \textcolor{mlgreen}{Gradient flow / Langevin dynamics} \\
-\textcolor{physicsblue}{Attractor basin} & \textcolor{mlgreen}{Class region / prototype} \\
-\textcolor{physicsblue}{Energy injection} & \textcolor{mlgreen}{Forward pass activation} \\
-\textcolor{physicsblue}{Heat dissipation} & \textcolor{mlgreen}{Regularization / dropout (sort of)} \\
-\textcolor{physicsblue}{Homeostatic ratio $\ratio$} & \textcolor{mlgreen}{Adaptive learning rate} \\
-\textcolor{physicsblue}{Bond mass $\mass$} & \textcolor{mlgreen}{Edge weight in sparse graph} \\
-\textcolor{physicsblue}{Eligibility trace $\trace$} & \textcolor{mlgreen}{Temporal credit (no backprop)} \\
-\textcolor{physicsblue}{Metabolic cost} & \textcolor{mlgreen}{Weight decay / L2 regularization} \\
-\textcolor{physicsblue}{Metabolic income} & \textcolor{mlgreen}{Hebbian update} \\
-\textcolor{physicsblue}{Transitive closure} & \textcolor{mlgreen}{Shortcut / skip connections} \\
-\textcolor{physicsblue}{Stochastic trajectories} & \textcolor{mlgreen}{Monte Carlo sampling / rollouts} \\
-\textcolor{physicsblue}{Depletion signal} & \textcolor{mlgreen}{Curiosity / exploration bonus} \\
-\textcolor{physicsblue}{Sink} & \textcolor{mlgreen}{Absorbing state / dead end} \\
-\textcolor{physicsblue}{Dissipative structure} & \textcolor{mlgreen}{Self-organizing system} \\
-\textcolor{physicsblue}{Spectral distribution} & \textcolor{mlgreen}{Frequency representation} \\
-\textcolor{physicsblue}{Carrier coupling} & \textcolor{mlgreen}{Cross-modal alignment} \\
-\textcolor{physicsblue}{Event horizon locality} & \textcolor{mlgreen}{Local / sparse attention} \\
+\textcolor{physicsblue}{3D Manifold space} & \textcolor{mlgreen}{Simulation volume / embedding space} \\
+\textcolor{physicsblue}{Particle (spatial layer)} & \textcolor{mlgreen}{Token / feature vector} \\
+\textcolor{physicsblue}{Oscillator (spectral layer)} & \textcolor{mlgreen}{Hidden state with phase/frequency} \\
+\textcolor{physicsblue}{Intrinsic frequency $\omega$} & \textcolor{mlgreen}{Token identity (from hash)} \\
+\textcolor{physicsblue}{Spectral carrier $C_k$} & \textcolor{mlgreen}{Learned mode / pattern detector} \\
+\textcolor{physicsblue}{Tuning kernel $T_{ik}$} & \textcolor{mlgreen}{Attention weight (frequency-based)} \\
+\textcolor{physicsblue}{Gate width $\sigma_k$} & \textcolor{mlgreen}{Receptive field / specialization} \\
+\textcolor{physicsblue}{Carrier crystallization} & \textcolor{mlgreen}{Weight freezing / memory consolidation} \\
+\textcolor{physicsblue}{Carrier conflict} & \textcolor{mlgreen}{Mode collision / interference} \\
+\textcolor{physicsblue}{Carrier splitting} & \textcolor{mlgreen}{Mixture component birth} \\
+\textcolor{physicsblue}{Anchored oscillators} & \textcolor{mlgreen}{Associated tokens in memory} \\
+\textcolor{physicsblue}{Top-down energy bias} & \textcolor{mlgreen}{Prior / completion signal} \\
+\textcolor{physicsblue}{Gravity field $\phi$} & \textcolor{mlgreen}{Attraction potential} \\
+\textcolor{physicsblue}{Heat diffusion} & \textcolor{mlgreen}{Uncertainty propagation} \\
+\textcolor{physicsblue}{Particle collision} & \textcolor{mlgreen}{Local interaction / gating} \\
+\textcolor{physicsblue}{Langevin noise} & \textcolor{mlgreen}{Stochastic exploration / dropout} \\
+\textcolor{physicsblue}{Idle compute} & \textcolor{mlgreen}{Offline consolidation / dreaming} \\
+\textcolor{physicsblue}{Crystallization} & \textcolor{mlgreen}{All-token generation (cf. autoregression)} \\
+\textcolor{physicsblue}{Holographic CAM} & \textcolor{mlgreen}{Content-addressable associative memory} \\
+\textcolor{physicsblue}{Time as Space} & \textcolor{mlgreen}{Sequence index as spatial coordinate} \\
+\textcolor{physicsblue}{Boundary Value Problem} & \textcolor{mlgreen}{Constrained generation (inpainting)} \\
 \bottomrule
 \end{tabular}
 \end{center}
@@ -1039,26 +1099,46 @@ For readers seeking deeper correspondences:
 \section{Hyperparameter Settings}
 \label{app:hyperparameters}
 
-\input{tables/hyperparameters.tex}
+\IfFileExists{tables/hyperparameters.tex}{%
+  \input{tables/hyperparameters.tex}
+}{%
+  \fbox{\parbox{0.9\textwidth}{\centering\vspace{0.8cm}\textit{Table will be generated by \texttt{make paper}}\vspace{0.8cm}}}
+}
 
 \section{Pseudocode}
 \label{app:algorithms}
 
 \begin{algorithm}[H]
-\caption{Unified Manifold Step}
+\caption{Unified Manifold Step (Spatial + Spectral Layers)}
 \label{alg:unified_step}
 \begin{algorithmic}[1]
-\Require Particles $\{(\bm{x}_i, \energy_i, \heat_i)\}$, Attractors $\{(\bm{a}_j, \energy_j)\}$, Bond graph $\bondgraph$
-\State Project all particles to common space: $\bm{z}_i = \pi(\bm{x}_i)$
-\State Compute $\ratio$ via \Cref{eq:ratio}
-\State \textbf{Diffusion}: Update particle positions via \Cref{eq:diffusion}
-\State \textbf{Bonding}: For co-activated pairs, inject mass via \Cref{eq:hebbian}
-\State \textbf{Metabolism}: Update bond masses via \Cref{eq:mass_update}
-\State \textbf{Flux}: Propagate energy via \Cref{eq:flux}
-\State \textbf{Heat}: $\heat_i \leftarrow \heat_i + \dt \cdot |\flux_i| / \bar{\flux}$
-\State \textbf{Damping}: $\excitation_i \leftarrow \excitation_i \cdot \exp(-\dt \cdot \ratio / \bar{\excitation})$
-\State \textbf{Pruning}: Remove bonds below per-source mean
-\State Sync energy and heat back to particles
+\Require Particles $\{(\bm{x}_i, \bm{v}_i, \eoscI{i}, \heat_i, \omega_i, \theta_i)\}$, Carriers $\{C_k, \Omega_k, \sigma_k\}$
+\State \textbf{// Spatial Layer (Thermodynamic Physics)}
+\State Scatter particle masses to gravity field; total internal energy $\eintI{i}=\heat_i+\eoscI{i}$ to internal-energy field
+\State Solve $\nabla^2 \phi = 4\pi G \rho$ (Poisson equation for gravity potential)
+\State Compute temperature field: $T(\bm{x}) = \eint(\bm{x})/(\rho(\bm{x})c_v)$
+\State Diffuse thermal field (FFT/Jacobi): $T \leftarrow T + \alpha \nabla^2 T \cdot \dt$
+\State Gather from fields: $\bm{F}_i = -m_i \nabla \phi - (m_i/\rho)\nabla P(\rho,T)$; sample $\eint(\bm{x}_i)$
+\State Update velocities: $\bm{v}_i \leftarrow \bm{v}_i \cdot e^{-\gamma \dt} + \bm{F}_i \dt / m_i$
+\State Update positions: $\bm{x}_i \leftarrow \bm{x}_i + \bm{v}_i \dt$
+\State Compute particle collisions (spatial hash or brute force)
+\State Local conservative exchange: $\heat_i \leftrightarrow \eoscI{i}$ via Planck relaxation (\Cref{eq:planck_energy}, \Cref{eq:planck_alpha})
+\State \textbf{// Spectral Layer (Carrier Coupling)}
+\State Compute energy statistics: $\bar{E}, \sigma_E$ (GPU reduction)
+\State Compute oscillator amplitudes: $A_i = \sqrt{\eoscI{i}}$
+\State Build frequency bins over carriers (GPU-only bucket + prefix sum)
+\For{each oscillator $i$ (parallel)}
+  \State Accumulate contributions over nearby carrier bins (skip fp32-zero couplings)
+\EndFor
+\For{each carrier $k$ (parallel)}
+  \State Compute force: $F_k = \sum_i T_{ik} z_i - \lambda C_k + \sqrt{2T}\,\xi_k$
+  \State Update carrier: $C_k \leftarrow C_k + F_k \dt$
+  \State If conflict > threshold, spawn new carrier from offender
+  \State Update crystallization state: volatile $\to$ stable $\to$ crystallized
+\EndFor
+\State Update oscillator phases: $\theta_i \leftarrow \theta_i + (\omega_i + \kappa \cdot \text{torque}_i) \dt$
+\State Top-down bias: crystallized carriers inject energy into anchored oscillators
+\State Spawn carriers for uncoupled oscillators
 \end{algorithmic}
 \end{algorithm}
 

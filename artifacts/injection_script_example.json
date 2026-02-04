@@ -1,0 +1,20 @@
+[
+  {
+    "step": 0,
+    "num_particles": 50,
+    "pattern": "cluster",
+    "energy_scale": 1.0,
+    "omega": 0.4,
+    "label": "A",
+    "seed": 1
+  },
+  {
+    "step": 300,
+    "num_particles": 50,
+    "pattern": "cluster",
+    "energy_scale": 1.0,
+    "omega": 1.2,
+    "label": "B",
+    "seed": 2
+  }
+]
