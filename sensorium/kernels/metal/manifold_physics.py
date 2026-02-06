@@ -6,7 +6,7 @@ If Metal is not available or something fails, we raise an exception.
 ------------------------------------
 COMMENT CONVENTION (physics choices)
 ------------------------------------
-For clarity, and reviewer ergonomics, all values, methods, and equations 
+For clarity, and reviewer ergonomics, all values, methods, and equations
 must be annotated to clarify the choices made, the formula used, and the
 reasoning behind the choice. Always think about reviewer ergonomics, and
 provide additional context to the person who has to read through this dense
@@ -67,12 +67,42 @@ class GasNumerics:
     p_min: float = 1e-3
 
 
+@dataclass(frozen=True)
+class ThermodynamicsDomainConfig:
+    """Public config surface for tests / backend symmetry.
+
+    The Metal backend intentionally keeps most physics constants fixed; the
+    only tunables are the grid topology and a soft timestep ceiling.
+    """
+
+    grid_size: tuple[int, int, int] = (64, 64, 64)
+    dt_max: float = 0.015
+
+
+@dataclass(frozen=True)
+class CoherenceFieldConfig:
+    """Compatibility config surface for coherence field tests.
+
+    The production Metal `OmegaWaveDomain` intentionally derives its ω-lattice
+    size and parameters. Tests (and backend symmetry) use an explicit config.
+    """
+
+    omega_bins: int = 64
+    omega_min: float = -4.0
+    omega_max: float = 4.0
+    hbar_eff: float = 1.0
+    mass_eff: float = 1.0
+    g_interaction: float = -1.0
+    energy_decay: float = 0.0
+
+
 def thermodynamics_domain_available() -> bool:
     """Check if the Metal thermodynamics domain is available."""
     if not torch.backends.mps.is_available():
         raise RuntimeError("Metal backend not available")
     try:
         from .jit import load_manifold_metal_ops
+
         load_manifold_metal_ops()
         return True
     except Exception as err:
@@ -102,7 +132,7 @@ def _morton_part1by2_u32(v: "Tensor") -> "Tensor":
              compact and deterministic, with no hashing/collisions.
     [NOTES] `v` is masked to 10 bits defensively.
     """
-    v = (v.to(torch.int64) & 0x3FF)
+    v = v.to(torch.int64) & 0x3FF
     v = (v | (v << 16)) & 0x030000FF
     v = (v | (v << 8)) & 0x0300F00F
     v = (v | (v << 4)) & 0x030C30C3
@@ -140,11 +170,12 @@ def _read_metal_mode_anchors() -> int:
     """
     import re
     from pathlib import Path
+
     metal_file = Path(__file__).parent / "manifold_physics.metal"
     if not metal_file.exists():
         raise RuntimeError(f"Metal source not found at {metal_file}")
     content = metal_file.read_text()
-    match = re.search(r'#define\s+MODE_ANCHORS\s+(\d+)u?', content)
+    match = re.search(r"#define\s+MODE_ANCHORS\s+(\d+)u?", content)
     if not match:
         raise RuntimeError("Could not find MODE_ANCHORS define in Metal source")
     return int(match.group(1))
@@ -156,22 +187,47 @@ _METAL_MODE_ANCHORS: int = _read_metal_mode_anchors()
 
 class ThermodynamicsDomain:
     """Metal-accelerated thermodynamics domain (compressible ideal-gas NS + PIC).
-    
+
     No fallbacks. Metal only. Exceptions on failure.
     """
-    
+
     def __init__(
         self,
+        config: Optional[ThermodynamicsDomainConfig] = None,
         grid_size: tuple[int, int, int] = (64, 64, 64),
+        *,
+        dt_max: Optional[float] = None,
+        device: str = "mps",
     ):
+        # Backward-compat: allow `ThermodynamicsDomain((gx,gy,gz))`.
+        if config is not None and isinstance(config, tuple):  # type: ignore[unreachable]
+            grid_size = config  # type: ignore[assignment]
+            config = None
+
+        if device != "mps":
+            raise RuntimeError(
+                f"Metal ThermodynamicsDomain requires device='mps' (got {device!r})"
+            )
+
         if not torch.backends.mps.is_available():
             raise RuntimeError("MPS backend not available")
-        
+
         self.device = torch.device("mps")
         self.dtype = torch.float32
-        
+
+        if config is not None:
+            grid_size = config.grid_size
+            dt_max_val = float(config.dt_max)
+        else:
+            dt_max_val = float(dt_max) if dt_max is not None else 0.015
+
         gx, gy, gz = grid_size
         self.grid_dims = (int(gx), int(gy), int(gz))
+
+        self.dt_max: float = float(dt_max_val)
+        self.config = ThermodynamicsDomainConfig(
+            grid_size=self.grid_dims, dt_max=self.dt_max
+        )
 
         # ---------------------------------------------------------------------
         # Discretization + constants (no config surface)
@@ -198,7 +254,9 @@ class ThermodynamicsDomain:
             molecular_weight_kg_per_mol=float(self.molecular_weight_kg_per_mol),
             length_unit_m=1.0,
         )
-        self.constants: PhysicalConstants = PhysicalConstants.from_codata_si(self.unit_system)
+        self.constants: PhysicalConstants = PhysicalConstants.from_codata_si(
+            self.unit_system
+        )
         assert_finite_constants(self.constants)
 
         # ---------------------------------------------------------------------
@@ -214,9 +272,11 @@ class ThermodynamicsDomain:
         # grid-scale submodel coefficient (still a model choice, but *not* a per-run knob).
         # If/when we simulate a specific real-world scale, we can revisit SI transport.
         self.dynamic_viscosity: float = 1e-4
-        
+
         # Optional gravitational potential Φ (periodic Poisson solve).
-        self.gravity_potential = torch.zeros(gx, gy, gz, device=self.device, dtype=self.dtype)
+        self.gravity_potential = torch.zeros(
+            gx, gy, gz, device=self.device, dtype=self.dtype
+        )
 
         # ---------------------------------------------------------------------
         # Compressible gas (ideal-gas Navier–Stokes): conserved grid state
@@ -233,7 +293,9 @@ class ThermodynamicsDomain:
         # [NOTES] Any oscillator↔thermal exchange must be explicit and locally
         #         energy-conserving (not implicit via repeated re-scatter).
         self.rho_field = torch.zeros(gx, gy, gz, device=self.device, dtype=self.dtype)
-        self.mom_field = torch.zeros(gx, gy, gz, 3, device=self.device, dtype=self.dtype)
+        self.mom_field = torch.zeros(
+            gx, gy, gz, 3, device=self.device, dtype=self.dtype
+        )
         self.e_int_field = torch.zeros(gx, gy, gz, device=self.device, dtype=self.dtype)
         # NOTE: Metal ABI uses the name `E_field` for internal energy density (rho e).
         self.E_field = self.e_int_field
@@ -246,35 +308,40 @@ class ThermodynamicsDomain:
         self.last_energy_report: Optional[dict[str, Any]] = None
 
         # FFT Poisson cache (periodic domain).
-        self._fft_k2: Optional[torch.Tensor] = None      # (gx, gy, gz) float32 on MPS
+        self._fft_k2: Optional[torch.Tensor] = None  # (gx, gy, gz) float32 on MPS
         self._fft_inv_k2: Optional[torch.Tensor] = None  # (gx, gy, gz) float32 on MPS
 
         # Collision snapshots (avoid write hazards by reading old state).
-        self._vel_in: Optional[torch.Tensor] = None   # (N, 3)
+        self._vel_in: Optional[torch.Tensor] = None  # (N, 3)
         self._heat_in: Optional[torch.Tensor] = None  # (N,)
 
         # Spatial-hash scratch buffers (reused to avoid per-step allocations).
         # Shapes depend on N and on derived hash grid dims (num_cells).
         self._hash_particle_cell_idx: Optional[torch.Tensor] = None  # (N,) int32
         self._hash_sorted_particle_idx: Optional[torch.Tensor] = None  # (N,) int32
-        self._hash_cell_counts: Optional[torch.Tensor] = None  # (num_cells,) int32 (must be zeroed each call)
+        self._hash_cell_counts: Optional[torch.Tensor] = (
+            None  # (num_cells,) int32 (must be zeroed each call)
+        )
         self._hash_cell_starts: Optional[torch.Tensor] = None  # (num_cells+1,) int32
-        self._hash_cell_offsets: Optional[torch.Tensor] = None  # (num_cells,) int32 (working copy of starts)
+        self._hash_cell_offsets: Optional[torch.Tensor] = (
+            None  # (num_cells,) int32 (working copy of starts)
+        )
 
         # Sort-based scatter scratch buffers (for "sorted" mode).
         self._sort_particle_cell_idx: Optional[torch.Tensor] = None  # (N,) uint32
-        self._sort_cell_counts: Optional[torch.Tensor] = None        # (num_cells,) uint32
-        self._sort_cell_starts: Optional[torch.Tensor] = None        # (num_cells,) uint32
-        self._sort_cell_offsets: Optional[torch.Tensor] = None       # (num_cells,) uint32
-        self._sort_pos_out: Optional[torch.Tensor] = None            # (N, 3) float32
-        self._sort_vel_out: Optional[torch.Tensor] = None            # (N, 3) float32
-        self._sort_mass_out: Optional[torch.Tensor] = None           # (N,) float32
-        self._sort_heat_out: Optional[torch.Tensor] = None           # (N,) float32
-        self._sort_energy_out: Optional[torch.Tensor] = None         # (N,) float32
-        self._sort_original_idx: Optional[torch.Tensor] = None       # (N,) uint32
+        self._sort_cell_counts: Optional[torch.Tensor] = None  # (num_cells,) uint32
+        self._sort_cell_starts: Optional[torch.Tensor] = None  # (num_cells,) uint32
+        self._sort_cell_offsets: Optional[torch.Tensor] = None  # (num_cells,) uint32
+        self._sort_pos_out: Optional[torch.Tensor] = None  # (N, 3) float32
+        self._sort_vel_out: Optional[torch.Tensor] = None  # (N, 3) float32
+        self._sort_mass_out: Optional[torch.Tensor] = None  # (N,) float32
+        self._sort_heat_out: Optional[torch.Tensor] = None  # (N,) float32
+        self._sort_energy_out: Optional[torch.Tensor] = None  # (N,) float32
+        self._sort_original_idx: Optional[torch.Tensor] = None  # (N,) uint32
 
         # Metal kernel bindings (JIT compiled, cached per-process).
         from .jit import load_manifold_metal_ops
+
         self._ops = load_manifold_metal_ops()
 
         # ---------------------------------------------------------------------
@@ -283,14 +350,18 @@ class ThermodynamicsDomain:
         # Default ON (can disable with SENSORIUM_KERNEL_LOG=0).
         env_on = os.getenv("SENSORIUM_KERNEL_LOG", "1").strip().lower()
         self.kernel_log_enabled: bool = env_on not in ("0", "false", "no", "off")
-        self.kernel_log_capacity: int = int(os.getenv("SENSORIUM_KERNEL_LOG_CAP", "2048"))
+        self.kernel_log_capacity: int = int(
+            os.getenv("SENSORIUM_KERNEL_LOG_CAP", "2048")
+        )
         if self.kernel_log_capacity < 0:
             self.kernel_log_capacity = 0
         cap_alloc = max(1, self.kernel_log_capacity if self.kernel_log_enabled else 1)
         # `dbg_head` is a single u32 counter (stored as int32 tensor).
         self._dbg_head = torch.zeros((1,), device=self.device, dtype=torch.int32)
         # `dbg_words` stores cap * 6 u32 words (stored as int32 tensor).
-        self._dbg_words = torch.zeros((cap_alloc * 6,), device=self.device, dtype=torch.int32)
+        self._dbg_words = torch.zeros(
+            (cap_alloc * 6,), device=self.device, dtype=torch.int32
+        )
 
         # Gas grid RK2 scratch buffers (allocated lazily).
         self._gas_rho1: Optional[torch.Tensor] = None
@@ -312,7 +383,9 @@ class ThermodynamicsDomain:
             n_ev = max(0, min(n_ev, int(self.kernel_log_capacity)))
             if n_ev <= 0:
                 return ""
-            words_i32 = self._dbg_words.detach().to("cpu").numpy().astype(np.uint32, copy=False)
+            words_i32 = (
+                self._dbg_words.detach().to("cpu").numpy().astype(np.uint32, copy=False)
+            )
             words = words_i32[: n_ev * 6].reshape(n_ev, 6)
             payload_u32 = words[:, 2:6].reshape(-1)
             payload = payload_u32.view(np.float32).reshape(n_ev, 4)
@@ -334,9 +407,16 @@ class ThermodynamicsDomain:
             for i in range(start, n_ev):
                 tag = int(words[i, 0])
                 gid = int(words[i, 1])
-                a, b, c, d = (float(payload[i, 0]), float(payload[i, 1]), float(payload[i, 2]), float(payload[i, 3]))
+                a, b, c, d = (
+                    float(payload[i, 0]),
+                    float(payload[i, 1]),
+                    float(payload[i, 2]),
+                    float(payload[i, 3]),
+                )
                 nm = names.get(tag, f"tag=0x{tag:02x}")
-                lines.append(f"{i:04d} {nm:>12} gid={gid:<6} a={a:.6g} b={b:.6g} c={c:.6g} d={d:.6g}")
+                lines.append(
+                    f"{i:04d} {nm:>12} gid={gid:<6} a={a:.6g} b={b:.6g} c={c:.6g} d={d:.6g}"
+                )
             return "\n".join(lines)
         except Exception:
             return "(kernel log decode failed)"
@@ -376,23 +456,59 @@ class ThermodynamicsDomain:
         """Allocate/reuse RK2 scratch buffers for the gas grid step."""
         dev = self.device
         dtype = self.dtype
-        if self._gas_rho1 is None or self._gas_rho1.shape != self.rho_field.shape or self._gas_rho1.device != dev:
+        if (
+            self._gas_rho1 is None
+            or self._gas_rho1.shape != self.rho_field.shape
+            or self._gas_rho1.device != dev
+        ):
             self._gas_rho1 = torch.empty_like(self.rho_field, device=dev, dtype=dtype)
-        if self._gas_mom1 is None or self._gas_mom1.shape != self.mom_field.shape or self._gas_mom1.device != dev:
+        if (
+            self._gas_mom1 is None
+            or self._gas_mom1.shape != self.mom_field.shape
+            or self._gas_mom1.device != dev
+        ):
             self._gas_mom1 = torch.empty_like(self.mom_field, device=dev, dtype=dtype)
-        if self._gas_e1 is None or self._gas_e1.shape != self.e_int_field.shape or self._gas_e1.device != dev:
+        if (
+            self._gas_e1 is None
+            or self._gas_e1.shape != self.e_int_field.shape
+            or self._gas_e1.device != dev
+        ):
             self._gas_e1 = torch.empty_like(self.e_int_field, device=dev, dtype=dtype)
-        if self._gas_rho2 is None or self._gas_rho2.shape != self.rho_field.shape or self._gas_rho2.device != dev:
+        if (
+            self._gas_rho2 is None
+            or self._gas_rho2.shape != self.rho_field.shape
+            or self._gas_rho2.device != dev
+        ):
             self._gas_rho2 = torch.empty_like(self.rho_field, device=dev, dtype=dtype)
-        if self._gas_mom2 is None or self._gas_mom2.shape != self.mom_field.shape or self._gas_mom2.device != dev:
+        if (
+            self._gas_mom2 is None
+            or self._gas_mom2.shape != self.mom_field.shape
+            or self._gas_mom2.device != dev
+        ):
             self._gas_mom2 = torch.empty_like(self.mom_field, device=dev, dtype=dtype)
-        if self._gas_e2 is None or self._gas_e2.shape != self.e_int_field.shape or self._gas_e2.device != dev:
+        if (
+            self._gas_e2 is None
+            or self._gas_e2.shape != self.e_int_field.shape
+            or self._gas_e2.device != dev
+        ):
             self._gas_e2 = torch.empty_like(self.e_int_field, device=dev, dtype=dtype)
-        if self._gas_k1_rho is None or self._gas_k1_rho.shape != self.rho_field.shape or self._gas_k1_rho.device != dev:
+        if (
+            self._gas_k1_rho is None
+            or self._gas_k1_rho.shape != self.rho_field.shape
+            or self._gas_k1_rho.device != dev
+        ):
             self._gas_k1_rho = torch.empty_like(self.rho_field, device=dev, dtype=dtype)
-        if self._gas_k1_mom is None or self._gas_k1_mom.shape != self.mom_field.shape or self._gas_k1_mom.device != dev:
+        if (
+            self._gas_k1_mom is None
+            or self._gas_k1_mom.shape != self.mom_field.shape
+            or self._gas_k1_mom.device != dev
+        ):
             self._gas_k1_mom = torch.empty_like(self.mom_field, device=dev, dtype=dtype)
-        if self._gas_k1_e is None or self._gas_k1_e.shape != self.e_int_field.shape or self._gas_k1_e.device != dev:
+        if (
+            self._gas_k1_e is None
+            or self._gas_k1_e.shape != self.e_int_field.shape
+            or self._gas_k1_e.device != dev
+        ):
             self._gas_k1_e = torch.empty_like(self.e_int_field, device=dev, dtype=dtype)
 
     def _planck_exchange(
@@ -466,7 +582,9 @@ class ThermodynamicsDomain:
             return heat, e_osc
 
         tau = (m * float(cv)) / (4.0 * math.pi * float(kappa) * float(r))
-        tau = torch.where(torch.isfinite(tau) & (tau > 0.0), tau, torch.full_like(tau, float("inf")))
+        tau = torch.where(
+            torch.isfinite(tau) & (tau > 0.0), tau, torch.full_like(tau, float("inf"))
+        )
         alpha = 1.0 - torch.exp(-float(dt) / tau)
         alpha = torch.nan_to_num(alpha, nan=0.0, posinf=1.0, neginf=0.0)
         alpha = torch.clamp(alpha, 0.0, 1.0)
@@ -486,7 +604,9 @@ class ThermodynamicsDomain:
         if (not torch.isfinite(E2).all()) or (not torch.isfinite(Q2).all()):
             raise RuntimeError("Planck exchange produced non-finite energies.")
         if (E2 < 0.0).any() or (Q2 < 0.0).any():
-            raise RuntimeError("Planck exchange violated non-negativity (E_osc or heat < 0).")
+            raise RuntimeError(
+                "Planck exchange violated non-negativity (E_osc or heat < 0)."
+            )
 
         return Q2.to(heat.dtype), E2.to(e_osc.dtype)
 
@@ -538,7 +658,9 @@ class ThermodynamicsDomain:
         # [REASON] MPS scatter_add is functional but not always optimized; Metal is the
         #          intended hot path. Torch remains as a debugging fallback.
         if _PIC_SCATTER_BACKEND != "torch":
-            self._scatter_particles_sorted(positions, velocities, masses, heats, energies)
+            self._scatter_particles_sorted(
+                positions, velocities, masses, heats, energies
+            )
             return
 
         # Torch CIC fallback (debug/portability).
@@ -560,7 +682,9 @@ class ThermodynamicsDomain:
 
         self.rho_field.view(-1).scatter_add_(0, idx_flat, rho_contrib)
         self.e_int_field.view(-1).scatter_add_(0, idx_flat, E_contrib)
-        self.mom_field.view(-1, 3).scatter_add_(0, idx_flat[:, None].expand(-1, 3), mom_contrib)
+        self.mom_field.view(-1, 3).scatter_add_(
+            0, idx_flat[:, None].expand(-1, 3), mom_contrib
+        )
 
     def pic_gather_primitives(
         self,
@@ -696,7 +820,7 @@ class ThermodynamicsDomain:
 
         max_cfl_tol = float(self._done_thinking_max_cfl)
         max_ke_tol = float(self._done_thinking_max_ke_frac)
-        dt_ok = (max(halvings_hist) == 0)
+        dt_ok = max(halvings_hist) == 0
 
         # Only require ω-field convergence if this run is producing the signal.
         if psi_delta_rel_f is None:
@@ -704,11 +828,18 @@ class ThermodynamicsDomain:
         else:
             if len(psi_hist) < w:
                 return False
-            psi_ok = (max(psi_hist) <= float(self._done_thinking_max_psi_delta_rel))
+            psi_ok = max(psi_hist) <= float(self._done_thinking_max_psi_delta_rel)
 
-        return (max(cfl_hist) <= max_cfl_tol) and (max(ke_hist) <= max_ke_tol) and dt_ok and psi_ok
+        return (
+            (max(cfl_hist) <= max_cfl_tol)
+            and (max(ke_hist) <= max_ke_tol)
+            and dt_ok
+            and psi_ok
+        )
 
-    def _ensure_spatial_hash_buffers(self, n: int, num_cells: int) -> tuple["Tensor", "Tensor", "Tensor", "Tensor", "Tensor"]:
+    def _ensure_spatial_hash_buffers(
+        self, n: int, num_cells: int
+    ) -> tuple["Tensor", "Tensor", "Tensor", "Tensor", "Tensor"]:
         """Allocate/reuse spatial-hash scratch buffers on the correct device.
 
         This avoids repeated allocations and clones in the hot path.
@@ -725,25 +856,33 @@ class ThermodynamicsDomain:
             or self._hash_sorted_particle_idx.numel() != n
             or self._hash_sorted_particle_idx.device != dev
         ):
-            self._hash_sorted_particle_idx = torch.empty(n, dtype=torch.int32, device=dev)
+            self._hash_sorted_particle_idx = torch.empty(
+                n, dtype=torch.int32, device=dev
+            )
         if (
             self._hash_cell_counts is None
             or self._hash_cell_counts.numel() != num_cells
             or self._hash_cell_counts.device != dev
         ):
-            self._hash_cell_counts = torch.empty(num_cells, dtype=torch.int32, device=dev)
+            self._hash_cell_counts = torch.empty(
+                num_cells, dtype=torch.int32, device=dev
+            )
         if (
             self._hash_cell_starts is None
             or self._hash_cell_starts.numel() != (num_cells + 1)
             or self._hash_cell_starts.device != dev
         ):
-            self._hash_cell_starts = torch.empty(num_cells + 1, dtype=torch.int32, device=dev)
+            self._hash_cell_starts = torch.empty(
+                num_cells + 1, dtype=torch.int32, device=dev
+            )
         if (
             self._hash_cell_offsets is None
             or self._hash_cell_offsets.numel() != num_cells
             or self._hash_cell_offsets.device != dev
         ):
-            self._hash_cell_offsets = torch.empty(num_cells, dtype=torch.int32, device=dev)
+            self._hash_cell_offsets = torch.empty(
+                num_cells, dtype=torch.int32, device=dev
+            )
 
         return (
             self._hash_particle_cell_idx,
@@ -753,11 +892,21 @@ class ThermodynamicsDomain:
             self._hash_cell_offsets,
         )
 
-    def _ensure_collision_snapshots(self, velocities: "Tensor", heats: "Tensor") -> tuple["Tensor", "Tensor"]:
+    def _ensure_collision_snapshots(
+        self, velocities: "Tensor", heats: "Tensor"
+    ) -> tuple["Tensor", "Tensor"]:
         """Allocate/reuse snapshot buffers and copy current state into them."""
-        if self._vel_in is None or self._vel_in.shape != velocities.shape or self._vel_in.device != velocities.device:
+        if (
+            self._vel_in is None
+            or self._vel_in.shape != velocities.shape
+            or self._vel_in.device != velocities.device
+        ):
             self._vel_in = torch.empty_like(velocities)
-        if self._heat_in is None or self._heat_in.shape != heats.shape or self._heat_in.device != heats.device:
+        if (
+            self._heat_in is None
+            or self._heat_in.shape != heats.shape
+            or self._heat_in.device != heats.device
+        ):
             self._heat_in = torch.empty_like(heats)
         self._vel_in.copy_(velocities)
         self._heat_in.copy_(heats)
@@ -772,9 +921,15 @@ class ThermodynamicsDomain:
         two_pi = float(2.0 * math.pi)
 
         # Wave numbers in radians per unit length.
-        kx = two_pi * torch.fft.fftfreq(gx, d=h, device=self.device, dtype=torch.float32)
-        ky = two_pi * torch.fft.fftfreq(gy, d=h, device=self.device, dtype=torch.float32)
-        kz = two_pi * torch.fft.fftfreq(gz, d=h, device=self.device, dtype=torch.float32)
+        kx = two_pi * torch.fft.fftfreq(
+            gx, d=h, device=self.device, dtype=torch.float32
+        )
+        ky = two_pi * torch.fft.fftfreq(
+            gy, d=h, device=self.device, dtype=torch.float32
+        )
+        kz = two_pi * torch.fft.fftfreq(
+            gz, d=h, device=self.device, dtype=torch.float32
+        )
 
         KX, KY, KZ = torch.meshgrid(kx, ky, kz, indexing="ij")
         k2 = (KX * KX + KY * KY + KZ * KZ).to(torch.float32)
@@ -782,7 +937,7 @@ class ThermodynamicsDomain:
         inv_k2 = torch.where(k2 > 0, 1.0 / k2, inv_k2)  # k=0 -> 0 (gauge)
         self._fft_k2 = k2
         self._fft_inv_k2 = inv_k2
-    
+
     @property
     def ops(self):
         return self._ops
@@ -791,17 +946,35 @@ class ThermodynamicsDomain:
         """Allocate/reuse sort-scatter scratch buffers on the correct device."""
         dev = self.device
         # Cell index per particle
-        if self._sort_particle_cell_idx is None or self._sort_particle_cell_idx.numel() != n:
+        if (
+            self._sort_particle_cell_idx is None
+            or self._sort_particle_cell_idx.numel() != n
+        ):
             self._sort_particle_cell_idx = torch.empty(n, dtype=torch.int32, device=dev)
         # Cell counts (must be zeroed each call)
-        if self._sort_cell_counts is None or self._sort_cell_counts.numel() != num_cells:
-            self._sort_cell_counts = torch.empty(num_cells, dtype=torch.int32, device=dev)
+        if (
+            self._sort_cell_counts is None
+            or self._sort_cell_counts.numel() != num_cells
+        ):
+            self._sort_cell_counts = torch.empty(
+                num_cells, dtype=torch.int32, device=dev
+            )
         # Cell starts (prefix sum result)
-        if self._sort_cell_starts is None or self._sort_cell_starts.numel() != num_cells:
-            self._sort_cell_starts = torch.empty(num_cells, dtype=torch.int32, device=dev)
+        if (
+            self._sort_cell_starts is None
+            or self._sort_cell_starts.numel() != num_cells
+        ):
+            self._sort_cell_starts = torch.empty(
+                num_cells, dtype=torch.int32, device=dev
+            )
         # Cell offsets (working copy for atomic increment)
-        if self._sort_cell_offsets is None or self._sort_cell_offsets.numel() != num_cells:
-            self._sort_cell_offsets = torch.empty(num_cells, dtype=torch.int32, device=dev)
+        if (
+            self._sort_cell_offsets is None
+            or self._sort_cell_offsets.numel() != num_cells
+        ):
+            self._sort_cell_offsets = torch.empty(
+                num_cells, dtype=torch.int32, device=dev
+            )
         # Sorted particle data
         if self._sort_pos_out is None or self._sort_pos_out.shape[0] != n:
             self._sort_pos_out = torch.empty(n, 3, dtype=torch.float32, device=dev)
@@ -836,34 +1009,66 @@ class ThermodynamicsDomain:
 
         self._ensure_sort_scatter_buffers(n, num_cells)
 
+        assert self._sort_particle_cell_idx is not None
+        assert self._sort_cell_counts is not None
+        assert self._sort_cell_starts is not None
+        assert self._sort_cell_offsets is not None
+        assert self._sort_pos_out is not None
+        assert self._sort_vel_out is not None
+        assert self._sort_mass_out is not None
+        assert self._sort_heat_out is not None
+        assert self._sort_energy_out is not None
+        assert self._sort_original_idx is not None
+
+        particle_cell_idx = self._sort_particle_cell_idx
+        cell_counts = self._sort_cell_counts
+        cell_starts = self._sort_cell_starts
+        cell_offsets = self._sort_cell_offsets
+        pos_out = self._sort_pos_out
+        vel_out = self._sort_vel_out
+        mass_out = self._sort_mass_out
+        heat_out = self._sort_heat_out
+        energy_out = self._sort_energy_out
+        original_idx_out = self._sort_original_idx
+
         # Step 1: Compute cell index for each particle
         self.ops.scatter_compute_cell_idx(
-            pos, self._sort_particle_cell_idx,
-            int(gx), int(gy), int(gz), spacing,
+            pos,
+            particle_cell_idx,
+            int(gx),
+            int(gy),
+            int(gz),
+            spacing,
         )
 
         # Step 2: Count particles per cell
-        self._sort_cell_counts.zero_()
+        cell_counts.zero_()
         self.ops.scatter_count_cells(
-            self._sort_particle_cell_idx, self._sort_cell_counts,
-            int(gx), int(gy), int(gz), spacing,
+            particle_cell_idx,
+            cell_counts,
+            int(gx),
+            int(gy),
+            int(gz),
+            spacing,
         )
 
         # Sanity: the histogram must account for every particle.
         # If it doesn't, the reorder step will leave holes (uninitialized garbage),
         # which then gets scattered into the grid as ~1e35 energy densities.
-        total = int(self._sort_cell_counts.to(torch.int64).sum().detach().item())
+        total = int(cell_counts.to(torch.int64).sum().detach().item())
         if total != int(n):
-            raise RuntimeError(f"Sort-scatter cell histogram mismatch: counted={total} n={int(n)}")
+            raise RuntimeError(
+                f"Sort-scatter cell histogram mismatch: counted={total} n={int(n)}"
+            )
 
         # Step 3: Prefix sum to get cell_starts (using existing scan infrastructure)
         # We can use the existing exclusive_scan_u32 functions
-        self._sort_cell_starts.copy_(self._sort_cell_counts)
+        cell_starts.copy_(cell_counts)
         # In-place exclusive prefix sum via cumsum then shift
-        torch.cumsum(self._sort_cell_starts, dim=0, out=self._sort_cell_starts)
+        torch.cumsum(cell_starts, dim=0, out=cell_starts)
         # Shift right by 1 (exclusive scan)
-        self._sort_cell_starts[1:] = self._sort_cell_starts[:-1].clone()
-        self._sort_cell_starts[0] = 0
+        cell_starts[1:] = cell_starts[:-1].clone()
+        cell_starts[0] = 0
 
         # Step 4: Reorder particles to sorted positions
         # IMPORTANT: the Metal reorder kernel computes `dest = cell_starts[cell] + offset`,
@@ -871,37 +1076,47 @@ class ThermodynamicsDomain:
         # Therefore `cell_offsets` must start at 0 for every cell (offset-within-cell),
         # not at `cell_starts` (absolute pointer), otherwise we double-add the base and
         # write out of bounds.
-        self._sort_cell_offsets.zero_()
+        cell_offsets.zero_()
         self.ops.scatter_reorder_particles(
-            pos, vel, mass, heat, energy,
-            self._sort_particle_cell_idx,
-            self._sort_cell_starts,
-            self._sort_cell_offsets,
-            self._sort_pos_out,
-            self._sort_vel_out,
-            self._sort_mass_out,
-            self._sort_heat_out,
-            self._sort_energy_out,
-            self._sort_original_idx,
-            int(gx), int(gy), int(gz), spacing,
+            pos,
+            vel,
+            mass,
+            heat,
+            energy,
+            particle_cell_idx,
+            cell_starts,
+            cell_offsets,
+            pos_out,
+            vel_out,
+            mass_out,
+            heat_out,
+            energy_out,
+            original_idx_out,
+            int(gx),
+            int(gy),
+            int(gz),
+            spacing,
         )
 
         # Step 5: Scatter from sorted particles
         self.ops.scatter_sorted(
-            self._sort_pos_out,
-            self._sort_vel_out,
-            self._sort_mass_out,
-            self._sort_heat_out,
-            self._sort_energy_out,
+            pos_out,
+            vel_out,
+            mass_out,
+            heat_out,
+            energy_out,
             self.rho_field,
             self.mom_field,
             self.e_int_field,
-            int(gx), int(gy), int(gz), spacing,
+            int(gx),
+            int(gy),
+            int(gz),
+            spacing,
         )
-    
+
     def solve_gravity(self) -> None:
         """Solve Poisson equation for gravitational potential.
-        
+
         Poisson equation: ∇²φ = 4πGρ
         We use G from CODATA (simulation SI units) as the gravitational constant.
         """
@@ -923,7 +1138,7 @@ class ThermodynamicsDomain:
         phi_hat = -(4.0 * math.pi * float(const.G)) * rho_hat * self._fft_inv_k2
         phi = torch.fft.ifftn(phi_hat).real.to(self.dtype)
         self.gravity_potential.copy_(phi)
-    
+
     def _derive_dt(
         self,
         velocities: "Tensor",
@@ -932,8 +1147,10 @@ class ThermodynamicsDomain:
         # Single-model: timestep is derived from stability constraints (CFL, explicit RK2).
         _ = (velocities, masses)
         return float(self.last_dt)
-        
-    def _exclusive_scan_u32_into_starts(self, counts_u32_i32: "Tensor", starts_u32_i32: "Tensor", n: int) -> None:
+
+    def _exclusive_scan_u32_into_starts(
+        self, counts_u32_i32: "Tensor", starts_u32_i32: "Tensor", n: int
+    ) -> None:
         """Exclusive scan of int32 tensor (uint32 semantics) into starts[:n] and starts[n]=total."""
         if n <= 0:
             starts_u32_i32.zero_()
@@ -951,7 +1168,9 @@ class ThermodynamicsDomain:
             key = (name, int(size))
             t = self._scan_scratch.get(key)
             if t is None or t.numel() != size or t.device != counts_u32_i32.device:
-                t = torch.empty((size,), device=counts_u32_i32.device, dtype=torch.int32)
+                t = torch.empty(
+                    (size,), device=counts_u32_i32.device, dtype=torch.int32
+                )
                 self._scan_scratch[key] = t
             return t
 
@@ -962,7 +1181,9 @@ class ThermodynamicsDomain:
 
         # Per-level outputs and block sums.
         # out_levels[i] is exclusive scan of input at level i (length sizes[i]).
-        out_levels: list["Tensor"] = [starts_u32_i32[:n]]  # view: writes into `starts_u32_i32`
+        out_levels: list["Tensor"] = [
+            starts_u32_i32[:n]
+        ]  # view: writes into `starts_u32_i32`
         block_sums_levels: list["Tensor"] = []
 
         for li, sz in enumerate(sizes[1:], start=1):
@@ -985,12 +1206,14 @@ class ThermodynamicsDomain:
 
         # Backward: add scanned block offsets to each lower level.
         for li in range(len(sizes) - 2, -1, -1):
-            self.ops.exclusive_scan_u32_add_block_offsets(out_levels[li], out_levels[li + 1], sizes[li])
+            self.ops.exclusive_scan_u32_add_block_offsets(
+                out_levels[li], out_levels[li + 1], sizes[li]
+            )
 
         # Finalize total sum into starts[n].
         self.ops.exclusive_scan_u32_finalize_total(counts_u32_i32, starts_u32_i32, n)
-    
-    def step(self, state: dict[str, Any]) -> dict[str, Any]:
+
+    def step_state(self, state: dict[str, Any]) -> dict[str, Any]:
         """Advance the coupled thermodynamic domain one timestep (periodic box).
 
         This executes the enforced spatial model:
@@ -1006,12 +1229,16 @@ class ThermodynamicsDomain:
         # Oscillator energy store (E_i).
         e_mode_in = state.get("energies", state.get("energy_osc", None))
         if e_mode_in is None:
-            raise KeyError("Missing oscillator energy: expected `energies` or `energy_osc`.")
+            raise KeyError(
+                "Missing oscillator energy: expected `energies` or `energy_osc`."
+            )
         e_mode = e_mode_in.to(device=self.device, dtype=self.dtype).contiguous()
         # Intrinsic frequency ω_i.
         exc_in = state.get("excitations", state.get("omega", None))
         if exc_in is None:
-            raise KeyError("Missing intrinsic frequency: expected `excitations` or `omega`.")
+            raise KeyError(
+                "Missing intrinsic frequency: expected `excitations` or `omega`."
+            )
         exc = exc_in.to(device=self.device, dtype=self.dtype).contiguous()
 
         gx, gy, gz = self.grid_dims
@@ -1040,7 +1267,11 @@ class ThermodynamicsDomain:
         # Derived numerical vacuum envelope (resolution-scale, not a tunable floor).
         # We scale by total particle mass in the unit-volume domain, then by fp32 eps.
         domain_vol = float(gx) * dx * float(gy) * dx * float(gz) * dx
-        mass_total = float(mass.to(torch.float32).sum().detach().to("cpu").item()) if mass.numel() else 0.0
+        mass_total = (
+            float(mass.to(torch.float32).sum().detach().to("cpu").item())
+            if mass.numel()
+            else 0.0
+        )
         rho_mean = (mass_total / domain_vol) if (domain_vol > 0.0) else 0.0
         # Numerical vacuum envelope / positivity scale.
         #
@@ -1073,33 +1304,43 @@ class ThermodynamicsDomain:
 
         # FAIL-FAST invariants for the Eulerian state *before* deriving dt.
         if (not torch.isfinite(rho).all()) or (rho < -rho_eps).any():
-            raise RuntimeError("Gas state invalid before CFL: rho non-finite or too negative.")
-        if (not torch.isfinite(mom).all()):
+            raise RuntimeError(
+                "Gas state invalid before CFL: rho non-finite or too negative."
+            )
+        if not torch.isfinite(mom).all():
             raise RuntimeError("Gas state invalid before CFL: mom non-finite.")
-        if (not torch.isfinite(e_int).all()):
+        if not torch.isfinite(e_int).all():
             raise RuntimeError("Gas state invalid before CFL: e_int non-finite.")
 
         # Low-density consistency (aligns with Metal envelope).
-        vac = (rho.abs() <= rho_eps)
+        vac = rho.abs() <= rho_eps
         if bool(vac.any().detach().item()):
             mom_mag = torch.linalg.vector_norm(mom[vac], dim=-1)
             e_v = e_int[vac]
-            if (mom_mag > rho_eps).any() or (e_v < -e_eps).any() or (e_v > e_int_max).any():
-                raise RuntimeError("Gas state invalid before CFL: low-density envelope violated (mom/e_int out of bounds).")
+            if (
+                (mom_mag > rho_eps).any()
+                or (e_v < -e_eps).any()
+                or (e_v > e_int_max).any()
+            ):
+                raise RuntimeError(
+                    "Gas state invalid before CFL: low-density envelope violated (mom/e_int out of bounds)."
+                )
 
         # CFL characteristic rate only defined where rho>rho_eps (else treat as vacuum).
         mask = rho > rho_eps
         u = torch.zeros_like(mom)
         u[mask] = mom[mask] / rho[mask][..., None]
         if (e_int[mask] < 0.0).any():
-            raise RuntimeError("Gas state invalid before CFL: negative e_int outside vacuum envelope.")
+            raise RuntimeError(
+                "Gas state invalid before CFL: negative e_int outside vacuum envelope."
+            )
         p_gas = (gamma - 1.0) * e_int
         c = torch.zeros_like(rho)
         c[mask] = torch.sqrt((gamma * p_gas[mask]) / rho[mask])
         rate = torch.zeros_like(rho)
         rate[mask] = (u[mask].abs().sum(dim=-1) + 3.0 * c[mask]) / float(dx)
 
-        if (not torch.isfinite(rate).all()):
+        if not torch.isfinite(rate).all():
             # This is the exact "masked hot pixel" bug: do not continue.
             raise RuntimeError("CFL rate non-finite (hot pixel / vacuum singularity).")
 
@@ -1119,15 +1360,22 @@ class ThermodynamicsDomain:
             rho_m = rho[mask]  # guaranteed > rho_eps
             # ν = μ/ρ  (kinematic viscosity), α = k/(ρ c_v) (thermal diffusivity)
             nu_max = float((mu / rho_m).max().detach().to("cpu").item())
-            alpha_max = float((k_thermal / (rho_m * float(cv))).max().detach().to("cpu").item())
+            alpha_max = float(
+                (k_thermal / (rho_m * float(cv))).max().detach().to("cpu").item()
+            )
             diff_max = max(nu_max, alpha_max)
             if diff_max > 0.0 and math.isfinite(diff_max):
-                dt_diff = float(self.gas_numerics.cfl_diffusion) * float(dx) * float(dx) / float(diff_max)
+                dt_diff = (
+                    float(self.gas_numerics.cfl_diffusion)
+                    * float(dx)
+                    * float(dx)
+                    / float(diff_max)
+                )
         else:
             # Vacuum/static: diffusion does not constrain dt.
             dt_diff = float(dx)
 
-        dt_derived = float(min(dt_adv, dt_diff))
+        dt_derived = float(min(dt_adv, dt_diff, float(self.dt_max)))
         # Numerical policy (explicit): dt must be finite and positive.
         # If you want a hard ceiling, make it a model choice, not a silent clamp.
         if not (math.isfinite(float(dt_derived)) and float(dt_derived) > 0.0):
@@ -1235,7 +1483,11 @@ class ThermodynamicsDomain:
                 reason_bits.append("mom2=nonfinite")
             if not bool(torch.isfinite(self._gas_e2).all().detach().item()):
                 reason_bits.append("e2=nonfinite")
-            kl_tail = self._decode_kernel_log(tail=8).strip() if (self.kernel_log_enabled and self.kernel_log_capacity > 0) else ""
+            kl_tail = (
+                self._decode_kernel_log(tail=8).strip()
+                if (self.kernel_log_enabled and self.kernel_log_capacity > 0)
+                else ""
+            )
             bad_line = ""
             if kl_tail:
                 for ln in reversed(kl_tail.splitlines()):
@@ -1246,7 +1498,7 @@ class ThermodynamicsDomain:
                 reason_bits.append(bad_line)
             reason = " | ".join(reason_bits) if reason_bits else "inadmissible_grid"
             if len(reject_trace) < 8:
-                reject_trace.append(f"reject dt={dt:.6g} -> {dt*0.5:.6g} ({reason})")
+                reject_trace.append(f"reject dt={dt:.6g} -> {dt * 0.5:.6g} ({reason})")
 
             if halvings >= max_halvings:
                 kernel_log = self._decode_kernel_log()
@@ -1255,7 +1507,11 @@ class ThermodynamicsDomain:
                     f"- dt_derived: {float(dt_derived)}\n"
                     f"- dt_final: {float(dt)}\n"
                     f"- halvings: {int(halvings)}\n"
-                    + (f"\n--- kernel_log (tail) ---\n{kernel_log}\n" if kernel_log else "")
+                    + (
+                        f"\n--- kernel_log (tail) ---\n{kernel_log}\n"
+                        if kernel_log
+                        else ""
+                    )
                 )
 
             dt *= 0.5
@@ -1278,18 +1534,38 @@ class ThermodynamicsDomain:
         mom_post = self.mom_field.to(torch.float32)
         e_post = self.e_int_field.to(torch.float32)
 
-        if (not torch.isfinite(rho_post).all()) or (not torch.isfinite(mom_post).all()) or (not torch.isfinite(e_post).all()):
+        if (
+            (not torch.isfinite(rho_post).all())
+            or (not torch.isfinite(mom_post).all())
+            or (not torch.isfinite(e_post).all())
+        ):
             # Report the first offending cell, not the entire tensors.
             bad_rho = ~torch.isfinite(rho_post)
             bad_e = ~torch.isfinite(e_post)
             bad_m = ~torch.isfinite(mom_post).any(dim=-1)
             bad = bad_rho | bad_e | bad_m
             ijk = torch.nonzero(bad, as_tuple=False)
-            i0, j0, k0 = (int(ijk[0, 0].item()), int(ijk[0, 1].item()), int(ijk[0, 2].item())) if ijk.numel() else (-1, -1, -1)
-            r0 = float(rho_post[i0, j0, k0].detach().to("cpu").item()) if i0 >= 0 else float("nan")
-            e0v = float(e_post[i0, j0, k0].detach().to("cpu").item()) if i0 >= 0 else float("nan")
+            i0, j0, k0 = (
+                (int(ijk[0, 0].item()), int(ijk[0, 1].item()), int(ijk[0, 2].item()))
+                if ijk.numel()
+                else (-1, -1, -1)
+            )
+            r0 = (
+                float(rho_post[i0, j0, k0].detach().to("cpu").item())
+                if i0 >= 0
+                else float("nan")
+            )
+            e0v = (
+                float(e_post[i0, j0, k0].detach().to("cpu").item())
+                if i0 >= 0
+                else float("nan")
+            )
             m0v = mom_post[i0, j0, k0].detach().to("cpu")
-            mx, my, mz = (float(m0v[0].item()), float(m0v[1].item()), float(m0v[2].item())) if i0 >= 0 else (float("nan"),) * 3
+            mx, my, mz = (
+                (float(m0v[0].item()), float(m0v[1].item()), float(m0v[2].item()))
+                if i0 >= 0
+                else (float("nan"),) * 3
+            )
             kernel_log = self._decode_kernel_log()
             raise RuntimeError(
                 "Gas RK2 produced non-finite grid state.\n"
@@ -1298,18 +1574,36 @@ class ThermodynamicsDomain:
                 f"- rho,e_int,mom: {r0}, {e0v}, [{mx}, {my}, {mz}]\n"
                 + (f"\n--- kernel_log (tail) ---\n{kernel_log}\n" if kernel_log else "")
             )
-        
+
         # Allow tiny signed rho/e_int inside the numerical vacuum envelope (see Metal admissibility).
         rho_bad = (rho_post < 0.0) & ~(rho_post.abs() <= rho_eps)
-        e_bad = (e_post < 0.0) & ~((rho_post.abs() <= rho_eps) & (e_post.abs() <= e_eps))
+        e_bad = (e_post < 0.0) & ~(
+            (rho_post.abs() <= rho_eps) & (e_post.abs() <= e_eps)
+        )
         if bool(rho_bad.any().detach().item()) or bool(e_bad.any().detach().item()):
             bad = rho_bad | e_bad
             ijk = torch.nonzero(bad, as_tuple=False)
-            i0, j0, k0 = (int(ijk[0, 0].item()), int(ijk[0, 1].item()), int(ijk[0, 2].item())) if ijk.numel() else (-1, -1, -1)
-            r0 = float(rho_post[i0, j0, k0].detach().to("cpu").item()) if i0 >= 0 else float("nan")
-            e0v = float(e_post[i0, j0, k0].detach().to("cpu").item()) if i0 >= 0 else float("nan")
+            i0, j0, k0 = (
+                (int(ijk[0, 0].item()), int(ijk[0, 1].item()), int(ijk[0, 2].item()))
+                if ijk.numel()
+                else (-1, -1, -1)
+            )
+            r0 = (
+                float(rho_post[i0, j0, k0].detach().to("cpu").item())
+                if i0 >= 0
+                else float("nan")
+            )
+            e0v = (
+                float(e_post[i0, j0, k0].detach().to("cpu").item())
+                if i0 >= 0
+                else float("nan")
+            )
             m0v = mom_post[i0, j0, k0].detach().to("cpu")
-            mx, my, mz = (float(m0v[0].item()), float(m0v[1].item()), float(m0v[2].item())) if i0 >= 0 else (float("nan"),) * 3
+            mx, my, mz = (
+                (float(m0v[0].item()), float(m0v[1].item()), float(m0v[2].item()))
+                if i0 >= 0
+                else (float("nan"),) * 3
+            )
             kernel_log = self._decode_kernel_log()
             raise RuntimeError(
                 "Gas RK2 produced negative rho/e_int (inadmissible).\n"
@@ -1374,11 +1668,19 @@ class ThermodynamicsDomain:
             # This uses the same CIC stencil semantics as the kernel.
             pos0 = pos[i0 : i0 + 1]
             st0 = cic_stencil_periodic(pos0, grid_dims=self.grid_dims, dx=float(dx))
-            rho0 = float(gather_trilinear(st0, self.rho_field.to(torch.float32))[0].item())
+            rho0 = float(
+                gather_trilinear(st0, self.rho_field.to(torch.float32))[0].item()
+            )
             mom0 = gather_trilinear_vec3(st0, self.mom_field.to(torch.float32))[0]
-            e_int0 = float(gather_trilinear(st0, self.e_int_field.to(torch.float32))[0].item())
+            e_int0 = float(
+                gather_trilinear(st0, self.e_int_field.to(torch.float32))[0].item()
+            )
             mom0_cpu = mom0.detach().to("cpu")
-            mx, my, mz = (float(mom0_cpu[0].item()), float(mom0_cpu[1].item()), float(mom0_cpu[2].item()))
+            mx, my, mz = (
+                float(mom0_cpu[0].item()),
+                float(mom0_cpu[1].item()),
+                float(mom0_cpu[2].item()),
+            )
             mom2 = mx * mx + my * my + mz * mz
             ke0 = (0.5 * mom2 / rho0) if (rho0 > 0.0) else float("nan")
             m0 = float(mass[i0].detach().to("cpu").item())
@@ -1388,9 +1690,23 @@ class ThermodynamicsDomain:
 
             # Summarize global magnitudes to see whether we're overflowing.
             mom_mag = torch.linalg.vector_norm(self.mom_field.to(torch.float32), dim=-1)
-            mom_max = float(mom_mag.max().detach().to("cpu").item()) if mom_mag.numel() else 0.0
-            e_int_max = float(self.e_int_field.to(torch.float32).max().detach().to("cpu").item()) if self.e_int_field.numel() else 0.0
-            rho_min = float(self.rho_field.to(torch.float32).min().detach().to("cpu").item()) if self.rho_field.numel() else 0.0
+            mom_max = (
+                float(mom_mag.max().detach().to("cpu").item())
+                if mom_mag.numel()
+                else 0.0
+            )
+            e_int_max = (
+                float(
+                    self.e_int_field.to(torch.float32).max().detach().to("cpu").item()
+                )
+                if self.e_int_field.numel()
+                else 0.0
+            )
+            rho_min = (
+                float(self.rho_field.to(torch.float32).min().detach().to("cpu").item())
+                if self.rho_field.numel()
+                else 0.0
+            )
 
             kind = "non-finite" if bool(bad_nf.any().item()) else "negative"
             raise RuntimeError(
@@ -1420,7 +1736,7 @@ class ThermodynamicsDomain:
             dx=float(dx),
             c_v=float(self._c_v()),
         )
-        
+
         # ------------------------------------------------------------------
         # Derived IDs: explicit "where|what" key (no hashing)
         # ------------------------------------------------------------------
@@ -1447,10 +1763,10 @@ class ThermodynamicsDomain:
             **state,
             "positions": pos_out,
             "velocities": vel_out,
-            "energies": e_mode_x,      # oscillator energy
+            "energies": e_mode_x,  # oscillator energy
             "energy_osc": e_mode_x,
             "heats": heat_x,
-            "excitations": exc,        # intrinsic ω
+            "excitations": exc,  # intrinsic ω
             "omega": exc,
             "dt": self.last_dt,
             # Exposed for observers/projectors/debugging; no physics impact.
@@ -1463,15 +1779,81 @@ class ThermodynamicsDomain:
             "c_v": float(self._c_v()),
             "gravity_potential": self.gravity_potential,
             "kernel_log": kernel_log,
-            "cfl_any_bad_rate": float(self.last_energy_report.get("cfl_any_bad_rate", 0.0)) if self.last_energy_report else 0.0,
-            "cfl_max_rate": float(self.last_energy_report.get("cfl_max_rate", 0.0)) if self.last_energy_report else 0.0,
-            "dt_derived": float(self.last_energy_report.get("dt_derived", 0.0)) if self.last_energy_report else 0.0,
-            "dt_adv": float(self.last_energy_report.get("dt_adv", 0.0)) if self.last_energy_report else 0.0,
-            "dt_diff": float(self.last_energy_report.get("dt_diff", 0.0)) if self.last_energy_report else 0.0,
-            "dt_used": float(self.last_energy_report.get("dt_used", self.last_dt)) if self.last_energy_report else float(self.last_dt),
-            "dt_halvings": int(self.last_energy_report.get("dt_halvings", 0)) if self.last_energy_report else 0,
-            "rk2_reject_trace": str(self.last_energy_report.get("rk2_reject_trace", "")) if self.last_energy_report else "",
+            "cfl_any_bad_rate": float(
+                self.last_energy_report.get("cfl_any_bad_rate", 0.0)
+            )
+            if self.last_energy_report
+            else 0.0,
+            "cfl_max_rate": float(self.last_energy_report.get("cfl_max_rate", 0.0))
+            if self.last_energy_report
+            else 0.0,
+            "dt_derived": float(self.last_energy_report.get("dt_derived", 0.0))
+            if self.last_energy_report
+            else 0.0,
+            "dt_adv": float(self.last_energy_report.get("dt_adv", 0.0))
+            if self.last_energy_report
+            else 0.0,
+            "dt_diff": float(self.last_energy_report.get("dt_diff", 0.0))
+            if self.last_energy_report
+            else 0.0,
+            "dt_used": float(self.last_energy_report.get("dt_used", self.last_dt))
+            if self.last_energy_report
+            else float(self.last_dt),
+            "dt_halvings": int(self.last_energy_report.get("dt_halvings", 0))
+            if self.last_energy_report
+            else 0,
+            "rk2_reject_trace": str(self.last_energy_report.get("rk2_reject_trace", ""))
+            if self.last_energy_report
+            else "",
         }
+
+    def step_particles(
+        self,
+        positions: "Tensor",
+        velocities: "Tensor",
+        energies: "Tensor",
+        heats: "Tensor",
+        excitations: "Tensor",
+        masses: "Tensor",
+    ) -> tuple["Tensor", "Tensor", "Tensor", "Tensor", "Tensor"]:
+        out = self.step_state(
+            {
+                "positions": positions,
+                "velocities": velocities,
+                "energies": energies,
+                "heats": heats,
+                "excitations": excitations,
+                "masses": masses,
+            }
+        )
+        energies_out = out.get("energies")
+        if energies_out is None:
+            energies_out = out["energy_osc"]
+        exc_out = out.get("excitations")
+        if exc_out is None:
+            exc_out = out["omega"]
+        return (
+            out["positions"],
+            out["velocities"],
+            energies_out,
+            out["heats"],
+            exc_out,
+        )
+
+    def step(self, *args: Any, **state: Any):
+        # Backward compatible overload:
+        # - `step(state_dict)` -> state_dict
+        # - `step(**state)` -> state_dict
+        # - `step(pos, vel, e, heat, omega, mass)` -> tuple
+        if len(args) == 1 and not state and isinstance(args[0], dict):
+            return self.step_state(args[0])
+        if len(args) == 0 and state:
+            return self.step_state(state)
+        if len(args) == 6 and not state:
+            return self.step_particles(*args)
+        raise TypeError(
+            "ThermodynamicsDomain.step: expected state dict/kwargs or 6 tensors"
+        )
 
 
 class OmegaWaveDomain:
@@ -1492,6 +1874,9 @@ class OmegaWaveDomain:
     def __init__(
         self,
         grid_size: tuple[int, int, int] = (64, 64, 64),
+        *,
+        num_modes: Optional[int] = None,
+        dt: Optional[float] = None,
     ) -> None:
         if not torch.backends.mps.is_available():
             raise RuntimeError("MPS backend not available")
@@ -1506,29 +1891,43 @@ class OmegaWaveDomain:
         self.domain_y = float(gy) * self.grid_spacing
         self.domain_z = float(gz) * self.grid_spacing
 
-        # [CHOICE] ω-lattice size derived from grid topology
-        # [FORMULA] M = next_pow2(max(gx,gy,gz))
-        # [REASON] keeps spectral resolution commensurate with spatial resolution
+        # Default ω-lattice size derived from grid topology.
         max_dim = int(max(self.grid_size))
-        self.num_modes: int = 1 << max(0, (max_dim - 1).bit_length())
+        derived_modes: int = 1 << max(0, (max_dim - 1).bit_length())
+        self.num_modes = int(num_modes) if num_modes is not None else int(derived_modes)
         if self.num_modes <= 0:
             raise ValueError(f"Derived num_modes must be > 0, got {self.num_modes}")
+
+        # Compatibility surface for tests (fixed lattice, no spawning).
+        self.max_carriers: int = int(self.num_modes)
+        self.num_carriers: int = int(self.num_modes)
 
         # ω-field state at lattice sites ω_k:
         #   Ψ_k = ψ_real[k] + i ψ_imag[k]
         # plus a per-site linewidth γ_k (Lorentzian coupling width).
-        self.psi_real = torch.zeros(self.num_modes, device=self.device, dtype=self.dtype)
-        self.psi_imag = torch.zeros(self.num_modes, device=self.device, dtype=self.dtype)
+        self.psi_real = torch.zeros(
+            self.num_modes, device=self.device, dtype=self.dtype
+        )
+        self.psi_imag = torch.zeros(
+            self.num_modes, device=self.device, dtype=self.dtype
+        )
         # Previous step buffers (for convergence signals; no physics impact).
         self._prev_psi_real: torch.Tensor | None = None
         self._prev_psi_imag: torch.Tensor | None = None
-        self.omega_lattice = torch.zeros(self.num_modes, device=self.device, dtype=self.dtype)
-        self.mode_linewidth = torch.ones(self.num_modes, device=self.device, dtype=self.dtype)
+        self.omega_lattice = torch.zeros(
+            self.num_modes, device=self.device, dtype=self.dtype
+        )
+        self.mode_linewidth = torch.ones(
+            self.num_modes, device=self.device, dtype=self.dtype
+        )
 
         # Anchors approximate overlap integrals (mechanically linked to Metal).
         self.anchor_slots: int = int(_METAL_MODE_ANCHORS)
         self.mode_anchor_idx = torch.full(
-            (self.num_modes * self.anchor_slots,), -1, device=self.device, dtype=torch.int32
+            (self.num_modes * self.anchor_slots,),
+            -1,
+            device=self.device,
+            dtype=torch.int32,
         )
         self.mode_anchor_weight = torch.zeros(
             (self.num_modes * self.anchor_slots,), device=self.device, dtype=self.dtype
@@ -1536,15 +1935,23 @@ class OmegaWaveDomain:
         self._anchors_seeded: bool = False
 
         # Fixed "active mode count" snapshot (device-side scalar).
-        self._num_modes_snapshot = torch.tensor([self.num_modes], device=self.device, dtype=torch.int32)
+        self._num_modes_snapshot = torch.tensor(
+            [self.num_modes], device=self.device, dtype=torch.int32
+        )
 
         # Mode accumulators backing store (ModeAccumulators is 8 × 4 bytes in Metal).
-        self._mode_accums = torch.zeros(self.num_modes * 8, device=self.device, dtype=torch.int32)
+        self._mode_accums = torch.zeros(
+            self.num_modes * 8, device=self.device, dtype=torch.int32
+        )
 
         # Simple ω-binning (uniform lattice → identity permutation).
         self._num_bins = int(self.num_modes)
-        self._bin_starts = torch.arange(self._num_bins + 1, device=self.device, dtype=torch.int32)
-        self._mode_binned_idx = torch.arange(self._num_bins, device=self.device, dtype=torch.int32)
+        self._bin_starts = torch.arange(
+            self._num_bins + 1, device=self.device, dtype=torch.int32
+        )
+        self._mode_binned_idx = torch.arange(
+            self._num_bins, device=self.device, dtype=torch.int32
+        )
         self._bin_params = torch.zeros((2,), device=self.device, dtype=self.dtype)
 
         self._omega_initialized = False
@@ -1569,11 +1976,18 @@ class OmegaWaveDomain:
 
         # [CHOICE] spectral timestep derived from spatial discretization
         # [FORMULA] Δt_ω = Δx
-        self.dt = float(self.grid_spacing)
+        self.dt = float(dt) if dt is not None else float(self.grid_spacing)
+
+        # GPE coefficients (fixed model choice unless overridden by wrapper).
+        self.hbar_eff: float = 1.0
+        self.mass_eff: float = 1.0
+        self.g_interaction: float = -1.0
+        self.energy_decay: float = float(1.0 / float(self.num_modes))
 
         self._rng_seed: int = 1
 
         from .jit import load_manifold_metal_ops
+
         self._ops = load_manifold_metal_ops()
 
     @property
@@ -1586,7 +2000,9 @@ class OmegaWaveDomain:
 
     def _init_omega_lattice(self, omega_min: float, omega_max: float) -> None:
         if not (omega_max > omega_min):
-            raise ValueError(f"omega_max must be > omega_min, got {omega_max} <= {omega_min}")
+            raise ValueError(
+                f"omega_max must be > omega_min, got {omega_max} <= {omega_min}"
+            )
 
         self.omega_lattice.copy_(
             torch.linspace(
@@ -1662,7 +2078,7 @@ class OmegaWaveDomain:
         # N is typically small (batch_size), so a simple per-mode pass is fine and deterministic.
         amp = particle_amp.to(torch.float32)
         for k in range(M):
-            mask = (k_idx == int(k))
+            mask = k_idx == int(k)
             if not bool(mask.any().detach().item()):
                 continue
             idx = torch.nonzero(mask, as_tuple=False).flatten()
@@ -1673,9 +2089,11 @@ class OmegaWaveDomain:
             base = k * slots
             # Fill idx/weight (weight uses amplitude as a support proxy).
             self.mode_anchor_idx[base : base + chosen.numel()] = chosen.to(torch.int32)
-            self.mode_anchor_weight[base : base + chosen.numel()] = amp[chosen].to(self.dtype)
+            self.mode_anchor_weight[base : base + chosen.numel()] = amp[chosen].to(
+                self.dtype
+            )
 
-    def step(self, **state) -> Dict[str, "Tensor"]:
+    def step(self, **state) -> dict[str, Any]:
         """Advance the ω-field one timestep."""
         # Canonical wave-layer keys:
         # - phase: particle phase θ_i
@@ -1702,7 +2120,9 @@ class OmegaWaveDomain:
 
         # Ensure anchors are populated deterministically (for overlap + visualization).
         if not self._anchors_seeded:
-            self._seed_mode_anchors(particle_omega=particle_omega, particle_amp=particle_amp)
+            self._seed_mode_anchors(
+                particle_omega=particle_omega, particle_amp=particle_amp
+            )
             self._anchors_seeded = True
 
         self._rng_seed = (self._rng_seed + 1) & 0xFFFFFFFF
@@ -1732,7 +2152,11 @@ class OmegaWaveDomain:
         c_v = float(state.get("c_v", 0.0))
         heats = state.get("heats", None)
         masses = state.get("masses", None)
-        if c_v > 0.0 and isinstance(heats, torch.Tensor) and isinstance(masses, torch.Tensor):
+        if (
+            c_v > 0.0
+            and isinstance(heats, torch.Tensor)
+            and isinstance(masses, torch.Tensor)
+        ):
             q = heats.to(device=self.device, dtype=self.dtype)
             m = masses.to(device=self.device, dtype=self.dtype)
             if q.numel() == m.numel() and q.numel() > 0:
@@ -1742,7 +2166,9 @@ class OmegaWaveDomain:
                     T_mean = T.to(torch.float32).mean()
                     m_mean = m[mask].to(torch.float32).mean()
                     denom = m_mean * T_mean
-                    lam = torch.tensor(float(sigma_max), device=self.device, dtype=torch.float32)
+                    lam = torch.tensor(
+                        float(sigma_max), device=self.device, dtype=torch.float32
+                    )
                     if bool((torch.isfinite(denom) & (denom > 0.0)).detach().item()):
                         lam = math.sqrt(2.0 * math.pi) / torch.sqrt(denom)
                     lam = torch.clamp(lam, min=float(sigma_min), max=float(sigma_max))
@@ -1754,16 +2180,21 @@ class OmegaWaveDomain:
         # Derived coupling normalization (avoid scale dependence on M).
         coupling_scale = float(1.0 / math.sqrt(float(self.num_modes)))
 
-        gate_width_min = float(self._gate_width_min if self._gate_width_min > 0.0 else 1e-6)
-        gate_width_max = float(self._gate_width_max if self._gate_width_max > gate_width_min else (4.0 * gate_width_min))
+        gate_width_min = float(
+            self._gate_width_min if self._gate_width_min > 0.0 else 1e-6
+        )
+        gate_width_max = float(
+            self._gate_width_max
+            if self._gate_width_max > gate_width_min
+            else (4.0 * gate_width_min)
+        )
 
-        # [CHOICE] nondimensional GPE coefficients (fixed model choice)
-        # [NOTES] these are not user-facing knobs; they define the single hydrodynamic model.
-        hbar_eff = 1.0
-        mass_eff = 1.0
-        g_interaction = -1.0
+        # GPE coefficients (fixed model choice unless overridden by wrapper).
+        hbar_eff = float(self.hbar_eff)
+        mass_eff = float(self.mass_eff)
+        g_interaction = float(self.g_interaction)
         chemical_potential = 0.0
-        energy_decay = float(1.0 / float(self.num_modes))
+        energy_decay = float(self.energy_decay)
 
         # 1) Accumulate particle support into mode accumulators (PIC-like coupling).
         self.ops.coherence_accumulate_forces(
@@ -1880,7 +2311,9 @@ class OmegaWaveDomain:
                 dr = (self.psi_real - self._prev_psi_real).to(torch.float32)
                 di = (self.psi_imag - self._prev_psi_imag).to(torch.float32)
                 dpsi2 = (dr * dr + di * di).mean()
-                dpsi_rms = float(torch.sqrt(torch.clamp(dpsi2, min=0.0)).detach().item())
+                dpsi_rms = float(
+                    torch.sqrt(torch.clamp(dpsi2, min=0.0)).detach().item()
+                )
 
                 pr = self.psi_real.to(torch.float32)
                 pi = self.psi_imag.to(torch.float32)
@@ -1911,14 +2344,18 @@ class OmegaWaveDomain:
             st_th = 0.0
             cr_th = 0.0
 
-        denom = (cr_th if cr_th > 0.0 else 1.0)
+        denom = cr_th if cr_th > 0.0 else 1.0
         conflict = (1.0 - torch.clamp(amp / denom, 0.0, 1.0)).to(self.dtype)
 
         mode_state = torch.zeros_like(amp, dtype=torch.int32, device=amp.device)
         if st_th > 0.0:
-            mode_state = torch.where(amp >= st_th, torch.ones_like(mode_state), mode_state)
+            mode_state = torch.where(
+                amp >= st_th, torch.ones_like(mode_state), mode_state
+            )
         if cr_th > 0.0:
-            mode_state = torch.where(amp >= cr_th, torch.full_like(mode_state, 2), mode_state)
+            mode_state = torch.where(
+                amp >= cr_th, torch.full_like(mode_state, 2), mode_state
+            )
 
         # Return updated state (pass through unchanged fields)
         return {
@@ -1955,3 +2392,69 @@ class OmegaWaveDomain:
         }
 
 
+class CoherenceDomain:
+    """Compatibility wrapper for coherence field unit tests.
+
+    The main Metal implementation is `OmegaWaveDomain`. Tests expect an explicit
+    config surface and a positional `step(phase, omega, energy, particle_positions=...)`.
+    """
+
+    def __init__(
+        self,
+        config: CoherenceFieldConfig,
+        *,
+        grid_size: tuple[int, int, int] = (64, 64, 64),
+        dt: float = 0.01,
+        device: str = "mps",
+    ) -> None:
+        if device != "mps":
+            raise RuntimeError(
+                f"CoherenceDomain (Metal) requires device='mps' (got {device!r})"
+            )
+
+        self._impl = OmegaWaveDomain(
+            grid_size=grid_size,
+            num_modes=int(config.omega_bins),
+            dt=float(dt),
+        )
+
+        if not (config.omega_bins > 0):
+            raise ValueError(f"omega_bins must be > 0, got {config.omega_bins}")
+        if not (config.omega_max > config.omega_min):
+            raise ValueError(
+                f"omega_max must be > omega_min, got {config.omega_max} <= {config.omega_min}"
+            )
+
+        self._impl.hbar_eff = float(config.hbar_eff)
+        self._impl.mass_eff = float(config.mass_eff)
+        self._impl.g_interaction = float(config.g_interaction)
+        self._impl.energy_decay = (
+            float(config.energy_decay)
+            if float(config.energy_decay) > 0.0
+            else float(1.0 / float(self._impl.num_modes))
+        )
+
+        # Fixed lattice (do not reinitialize from particle ω in `step`).
+        self._impl._init_omega_lattice(float(config.omega_min), float(config.omega_max))
+        self._impl._omega_initialized = True
+
+    def __getattr__(self, name: str):  # pragma: no cover
+        return getattr(self._impl, name)
+
+    def step(
+        self,
+        osc_phase: "Tensor",
+        osc_omega: "Tensor",
+        osc_energy: "Tensor",
+        *,
+        particle_positions: "Tensor",
+    ) -> dict[str, Any]:
+        N = int(osc_phase.shape[0])
+        heats = torch.zeros((N,), device=self._impl.device, dtype=self._impl.dtype)
+        return self._impl.step(
+            phase=osc_phase,
+            omega=osc_omega,
+            energy_osc=osc_energy,
+            positions=particle_positions,
+            heats=heats,
+        )

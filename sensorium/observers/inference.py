@@ -49,10 +49,15 @@ class InferenceConfig:
             - "decay": Let dark particles decay naturally (default)
             - "immediate": Remove dark particles immediately after observation
             - "keep": Keep dark particles (caller responsible for cleanup)
+        observer_query_cleanup_mode: Cleanup mode for observer-resolved dark queries
+            - "immediate": Remove inferred query particles after observation (default)
+            - "decay": Let inferred query particles decay
+            - "keep": Keep inferred query particles
     """
     steps: int = 10
     dark_config: DarkParticleConfig = field(default_factory=DarkParticleConfig)
     cleanup_mode: str = "decay"
+    observer_query_cleanup_mode: str = "immediate"
 
 
 class InferenceObserver:
@@ -226,9 +231,19 @@ class InferenceObserver:
         device = self._get_device(state_dict)
         dtype = self._get_dtype(state_dict)
         
-        # Step 1: Inject dark particles (if query provided)
-        if self.query is not None:
-            self._inject_query(state_dict, device, dtype)
+        # Step 1: Resolve and inject dark query particles.
+        effective_query = self.query
+        dark_query_source: str | None = None
+        if effective_query is not None:
+            dark_query_source = "explicit"
+        else:
+            effective_query = self._resolve_observer_query(state_dict, metadata)
+            if effective_query is not None:
+                dark_query_source = "observer"
+
+        injected_indices: list[int] = []
+        if effective_query is not None:
+            injected_indices = self._inject_query(state_dict, effective_query, device, dtype)
         
         # Step 2: Run simulation steps (if manifold/physics provided)
         if self.config.steps > 0 and (manifold is not None or physics is not None):
@@ -260,11 +275,18 @@ class InferenceObserver:
         
         # Step 4: Add metadata
         result_dict.update(metadata)
+        if dark_query_source is not None:
+            result_dict["dark_query_source"] = dark_query_source
+            result_dict["n_dark_injected"] = int(len(injected_indices))
         
         # Step 5: Cleanup dark particles
-        if self.config.cleanup_mode == "immediate":
+        cleanup_mode = self.config.cleanup_mode
+        if dark_query_source == "observer" and cleanup_mode == "decay":
+            cleanup_mode = self.config.observer_query_cleanup_mode
+
+        if cleanup_mode == "immediate":
             self.injector.clear(state_dict)
-        elif self.config.cleanup_mode == "decay":
+        elif cleanup_mode == "decay":
             self.injector.decay_and_remove(state_dict)
         
         # Accumulate result
@@ -276,14 +298,45 @@ class InferenceObserver:
     def _inject_query(
         self,
         state: dict,
+        query: bytes | list[int] | Iterator[tuple[int, int]] | list[tuple[int, int]],
         device: str,
         dtype: torch.dtype,
     ) -> list[int]:
         """Inject query data as dark particles."""
-        if isinstance(self.query, (bytes, list)):
-            return self.injector.inject_bytes(state, self.query, device, dtype)
-        else:
-            return self.injector.inject(state, self.query, device, dtype)
+        if isinstance(query, bytes):
+            return self.injector.inject_bytes(state, query, device, dtype)
+
+        if isinstance(query, list):
+            if len(query) == 0:
+                return []
+            first = query[0]
+            if isinstance(first, tuple) and len(first) == 2:
+                return self.injector.inject(state, query, device, dtype)
+            return self.injector.inject_bytes(state, query, device, dtype)
+
+        return self.injector.inject(state, query, device, dtype)
+
+    def _resolve_observer_query(
+        self,
+        state: dict,
+        metadata: dict[str, Any],
+    ) -> bytes | list[int] | Iterator[tuple[int, int]] | list[tuple[int, int]] | None:
+        """Allow observers to request dark-query injection transparently.
+
+        Observer contract (optional):
+            def resolve_dark_query(self, state: dict, metadata: dict) -> query | None
+        """
+        for observer in self.observers:
+            resolver = getattr(observer, "resolve_dark_query", None)
+            if not callable(resolver):
+                continue
+            try:
+                query = resolver(state, metadata=metadata)
+            except TypeError:
+                query = resolver(state, metadata)
+            if query is not None:
+                return query
+        return None
     
     def _run_simulation(
         self,

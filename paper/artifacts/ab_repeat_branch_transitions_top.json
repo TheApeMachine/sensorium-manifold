@@ -1,0 +1,83 @@
+{
+  "top_edges": [
+    {
+      "src": {
+        "pos": 1,
+        "byte": 66,
+        "label": "B"
+      },
+      "dst": {
+        "pos": 2,
+        "byte": 65,
+        "label": "A"
+      },
+      "count": 384
+    },
+    {
+      "src": {
+        "pos": 0,
+        "byte": 65,
+        "label": "A"
+      },
+      "dst": {
+        "pos": 1,
+        "byte": 66,
+        "label": "B"
+      },
+      "count": 384
+    },
+    {
+      "src": {
+        "pos": 2,
+        "byte": 65,
+        "label": "A"
+      },
+      "dst": {
+        "pos": 3,
+        "byte": 69,
+        "label": "E"
+      },
+      "count": 96
+    },
+    {
+      "src": {
+        "pos": 2,
+        "byte": 65,
+        "label": "A"
+      },
+      "dst": {
+        "pos": 3,
+        "byte": 68,
+        "label": "D"
+      },
+      "count": 96
+    },
+    {
+      "src": {
+        "pos": 2,
+        "byte": 65,
+        "label": "A"
+      },
+      "dst": {
+        "pos": 3,
+        "byte": 67,
+        "label": "C"
+      },
+      "count": 96
+    },
+    {
+      "src": {
+        "pos": 2,
+        "byte": 65,
+        "label": "A"
+      },
+      "dst": {
+        "pos": 3,
+        "byte": 66,
+        "label": "B"
+      },
+      "count": 96
+    }
+  ],
+  "total_edges": 1152
+}

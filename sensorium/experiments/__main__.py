@@ -55,6 +55,11 @@ def _resolve_experiments():
 def main():
     parser = argparse.ArgumentParser(prog="python -m sensorium.experiments")
     parser.add_argument(
+        "--list",
+        action="store_true",
+        help="List available experiments and exit",
+    )
+    parser.add_argument(
         "--experiment",
         default="all",
         choices=["all", *_EXPERIMENT_NAMES],
@@ -73,6 +78,12 @@ def main():
     )
     args = parser.parse_args()
 
+    if bool(args.list):
+        print("Available experiments:")
+        for name in _EXPERIMENT_NAMES:
+            print(f"  - {name}")
+        return
+
     if bool(args.dashboard):
         # Ensure an interactive backend before any pyplot import.
         _set_interactive_matplotlib_backend()
@@ -87,8 +98,14 @@ def main():
         experiments = [EXPERIMENTS[args.experiment]]
 
     for experiment in experiments:
-        exp = experiment(experiment_name=experiment.__name__, dashboard=bool(args.dashboard))
-        exp.run()
+        try:
+            exp = experiment(experiment_name=experiment.__name__, dashboard=bool(args.dashboard))
+            exp.run()
+        except Exception as exc:
+            if args.experiment == "all":
+                print(f"[error] {experiment.__name__} failed: {exc}")
+                continue
+            raise
 
 if __name__ == "__main__":
     main()

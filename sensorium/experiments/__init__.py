@@ -1,21 +1,33 @@
-"""Experiment entrypoints.
+"""Experiment entrypoints (lazy imports).
 
-This package previously contained a legacy, Torch/Python semantic stack.
-The *current* experiments are kernel-based (Metal on macOS) and produce
-paper-ready artifacts under `paper/tables/` and `paper/figures/`.
-
-We intentionally avoid importing legacy modules at import-time to prevent
-mixing old/new implementations.
+We keep package import lightweight so CLI features like `--list` work even when
+optional runtime dependencies for a specific experiment are unavailable.
 """
 
-from .ablations import AblationsExperiment
-from .collision import CollisionExperiment
-from .wave_trie import WaveTrieExperiment
+from __future__ import annotations
 
-def __main__():
-    for experiment in [
-        AblationsExperiment,
-        CollisionExperiment,
-        WaveTrieExperiment,
-    ]:
-        experiment(experiment_name=experiment.__name__).run()
+from importlib import import_module
+from typing import Any
+
+__all__ = [
+    "AblationsExperiment",
+    "CollisionExperiment",
+    "WaveTrieExperiment",
+]
+
+_CLASS_TO_MODULE = {
+    "AblationsExperiment": ".ablations",
+    "CollisionExperiment": ".collision",
+    "WaveTrieExperiment": ".wave_trie",
+}
+
+
+def __getattr__(name: str) -> Any:
+    module_name = _CLASS_TO_MODULE.get(name)
+    if module_name is None:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    module = import_module(module_name, __name__)
+    value = getattr(module, name)
+    globals()[name] = value
+    return value
+

@@ -64,76 +64,106 @@ from sensorium.dataset.spectral import SpectralDataset
 from sensorium.dataset.mnist_idx import iter_images as mnist_iter_images
 
 # HuggingFace streaming
-from sensorium.dataset.huggingface import (
-    HuggingFaceConfig,
-    HuggingFaceDataset,
-    fineweb_edu,
-    the_pile,
-    wikipedia,
-)
+try:
+    from sensorium.dataset.huggingface import (
+        HuggingFaceConfig,
+        HuggingFaceDataset,
+        fineweb_edu,
+        the_pile,
+        wikipedia,
+    )
+except Exception:  # pragma: no cover - optional dependency surface
+    pass
 
 # Time series
-from sensorium.dataset.timeseries import (
-    TimeSeriesConfig,
-    TimeSeriesDataset,
-    quantize_to_bytes,
-)
+try:
+    from sensorium.dataset.timeseries import (
+        TimeSeriesConfig,
+        TimeSeriesDataset,
+        quantize_to_bytes,
+    )
+except Exception:  # pragma: no cover
+    pass
 
 # Text
-from sensorium.dataset.text import (
-    TextDatasetConfig,
-    TextDataset,
-)
+try:
+    from sensorium.dataset.text import (
+        TextDatasetConfig,
+        TextDataset,
+    )
+except Exception:  # pragma: no cover
+    pass
 
 # Diffusion
-from sensorium.dataset.diffusion import (
-    DiffusionDatasetConfig,
-    DiffusionDataset,
-)
+try:
+    from sensorium.dataset.diffusion import (
+        DiffusionDatasetConfig,
+        DiffusionDataset,
+    )
+except Exception:  # pragma: no cover
+    pass
 
 # Audio
-from sensorium.dataset.audio import (
-    AudioDatasetConfig,
-    AudioDataset,
-    quantize_audio_to_bytes,
-    dequantize_bytes_to_audio,
-)
+try:
+    from sensorium.dataset.audio import (
+        AudioDatasetConfig,
+        AudioDataset,
+        quantize_audio_to_bytes,
+        dequantize_bytes_to_audio,
+    )
+except Exception:  # pragma: no cover
+    pass
 
 # Rule shift
-from sensorium.dataset.rule_shift import (
-    RuleShiftConfig,
-    RuleShiftDataset,
-)
+try:
+    from sensorium.dataset.rule_shift import (
+        RuleShiftConfig,
+        RuleShiftDataset,
+    )
+except Exception:  # pragma: no cover
+    pass
 
 # Cross-modal
-from sensorium.dataset.cross_modal import (
-    CrossModalConfig,
-    CrossModalDataset,
-    create_stripe_image,
-    create_checkerboard_image,
-)
+try:
+    from sensorium.dataset.cross_modal import (
+        CrossModalConfig,
+        CrossModalDataset,
+        create_stripe_image,
+        create_checkerboard_image,
+    )
+except Exception:  # pragma: no cover
+    pass
 
 # MNIST
-from sensorium.dataset.mnist import (
-    MNISTConfig,
-    MNISTDataset,
-    MNIST_IMAGE_SIZE,
-)
+try:
+    from sensorium.dataset.mnist import (
+        MNISTConfig,
+        MNISTDataset,
+        MNIST_IMAGE_SIZE,
+    )
+except Exception:  # pragma: no cover
+    pass
 
 # Cocktail party
-from sensorium.dataset.cocktail_party import (
-    CocktailPartyConfig,
-    CocktailPartyDataset,
-    save_wav,
-)
+try:
+    from sensorium.dataset.cocktail_party import (
+        CocktailPartyConfig,
+        CocktailPartyDataset,
+        save_wav,
+    )
+except Exception:  # pragma: no cover
+    pass
 
 # Scaling
-from sensorium.dataset.scaling import (
-    ScalingDatasetConfig,
-    ScalingDataset,
-    ScalingTestType,
-    GeneralizationType,
-)
+try:
+    from sensorium.dataset.scaling import (
+        ScalingDatasetConfig,
+        ScalingDataset,
+        ScalingTestType,
+        GeneralizationType,
+    )
+except Exception:  # pragma: no cover
+    pass
 
 
 __all__ = [
@@ -212,3 +242,6 @@ __all__ = [
     "ScalingTestType",
     "GeneralizationType",
 ]
+
+# Keep star-import surface consistent when optional imports are unavailable.
+__all__ = [name for name in __all__ if name in globals()]

@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, field
-from typing import Dict, Optional, TYPE_CHECKING
+from typing import Any, Dict, Optional, TYPE_CHECKING
 
 import torch
 
@@ -38,6 +38,7 @@ from sensorium.kernels.pic import (
 from . import manifold_physics_kernels as k
 from . import manifold_grid_kernels as g
 from . import spatial_hash_kernels as sh
+from . import thermo_metal_kernels as tm
 
 if TYPE_CHECKING:
     from torch import Tensor
@@ -48,6 +49,9 @@ class ThermodynamicsDomainConfig:
     """CUDA/Triton thermodynamics domain config (matches Metal semantics)."""
 
     grid_size: tuple[int, int, int] = (64, 64, 64)
+    # NOTE: Kept for backward compatibility; CUDA thermodynamics is now aligned
+    # to the Metal backend which derives grid spacing from `grid_size`.
+    # The effective spacing is `1/max(grid_size)`.
     grid_spacing: float = 1.0
     dt_max: float = 0.01
 
@@ -69,7 +73,10 @@ class ThermodynamicsDomainConfig:
         return c
 
     def R_specific(self) -> float:
-        return gas_R_specific_sim(self.unit_system, molecular_weight_kg_per_mol=float(self.molecular_weight_kg_per_mol))
+        return gas_R_specific_sim(
+            self.unit_system,
+            molecular_weight_kg_per_mol=float(self.molecular_weight_kg_per_mol),
+        )
 
     def c_v(self) -> float:
         return float(self.R_specific()) / (float(self.gamma) - 1.0)
@@ -84,7 +91,9 @@ class ThermodynamicsDomain:
 
     def __init__(self, config: ThermodynamicsDomainConfig, device: str = "cuda"):
         if device != "cuda":
-            raise RuntimeError(f"ThermodynamicsDomain(CUDA) requires device='cuda', got '{device}'")
+            raise RuntimeError(
+                f"ThermodynamicsDomain(CUDA) requires device='cuda', got '{device}'"
+            )
         if not torch.cuda.is_available():
             raise RuntimeError("CUDA not available")
 
@@ -95,32 +104,83 @@ class ThermodynamicsDomain:
         gx, gy, gz = config.grid_size
         self.grid_dims = (gx, gy, gz)
 
-        self.gravity_field = torch.zeros(gx, gy, gz, device=self.device, dtype=self.dtype)
-        self.gravity_potential = torch.zeros(gx, gy, gz, device=self.device, dtype=self.dtype)
-        # Total internal energy per cell (Q_cell := Σ w_i (Q_i + E_osc,i)), used to derive temperature.
+        # Metal parity: normalize the spatial domain to [0, 1)^3 by deriving
+        # dx = 1/max_dim.
+        max_dim = int(max(self.grid_dims))
+        if max_dim <= 0:
+            raise ValueError(f"grid_size must be positive, got {self.grid_dims}")
+        self.grid_spacing = 1.0 / float(max_dim)
+        self.domain = (
+            float(gx) * self.grid_spacing,
+            float(gy) * self.grid_spacing,
+            float(gz) * self.grid_spacing,
+        )
+
+        self.gravity_field = torch.zeros(
+            gx, gy, gz, device=self.device, dtype=self.dtype
+        )
+        self.gravity_potential = torch.zeros(
+            gx, gy, gz, device=self.device, dtype=self.dtype
+        )
+
+        # Legacy fields retained for compatibility (not used by the Metal-parity path).
         self.heat_field = torch.zeros(gx, gy, gz, device=self.device, dtype=self.dtype)
-        self.temperature_field = torch.zeros(gx, gy, gz, device=self.device, dtype=self.dtype)
+        self.temperature_field = torch.zeros(
+            gx, gy, gz, device=self.device, dtype=self.dtype
+        )
 
         # Compressible gas (ideal-gas Navier–Stokes): conserved grid state.
         self.rho_field = torch.zeros(gx, gy, gz, device=self.device, dtype=self.dtype)
-        self.mom_field = torch.zeros(gx, gy, gz, 3, device=self.device, dtype=self.dtype)
-        self.E_field = torch.zeros(gx, gy, gz, device=self.device, dtype=self.dtype)
+        self.mom_field = torch.zeros(
+            gx, gy, gz, 3, device=self.device, dtype=self.dtype
+        )
+
+        # Dual-energy semantics (Metal parity): internal (thermal) energy density only.
+        self.e_int_field = torch.zeros(gx, gy, gz, device=self.device, dtype=self.dtype)
+        # NOTE: Keep ABI name parity with the Metal ops and existing codepaths.
+        self.E_field = self.e_int_field
         self.gas_numerics = GasNumerics()
 
         # FFT caches for periodic Poisson + diffusion.
-        self._fft_k2: Optional[torch.Tensor] = None      # (gx, gy, gz) fp32 CUDA
+        self._fft_k2: Optional[torch.Tensor] = None  # (gx, gy, gz) fp32 CUDA
         self._fft_inv_k2: Optional[torch.Tensor] = None  # (gx, gy, gz) fp32 CUDA
+
+        # Sort-scatter scratch (Metal parity).
+        self._sort_particle_cell_idx: Optional[torch.Tensor] = None
+        self._sort_cell_counts: Optional[torch.Tensor] = None
+        self._sort_cell_starts: Optional[torch.Tensor] = None
+        self._sort_cell_offsets: Optional[torch.Tensor] = None
+        self._sort_pos_out: Optional[torch.Tensor] = None
+        self._sort_vel_out: Optional[torch.Tensor] = None
+        self._sort_mass_out: Optional[torch.Tensor] = None
+        self._sort_heat_out: Optional[torch.Tensor] = None
+        self._sort_energy_out: Optional[torch.Tensor] = None
+        self._sort_original_idx: Optional[torch.Tensor] = None
+
+        # Gas RK2 scratch (Metal parity).
+        self._gas_rho1: Optional[torch.Tensor] = None
+        self._gas_mom1: Optional[torch.Tensor] = None
+        self._gas_e1: Optional[torch.Tensor] = None
+        self._gas_rho2: Optional[torch.Tensor] = None
+        self._gas_mom2: Optional[torch.Tensor] = None
+        self._gas_e2: Optional[torch.Tensor] = None
+        self._gas_k1_rho: Optional[torch.Tensor] = None
+        self._gas_k1_mom: Optional[torch.Tensor] = None
+        self._gas_k1_e: Optional[torch.Tensor] = None
 
     def _gas_primitives(self) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """Return (u, p, T) from current conserved grid state."""
-        R_spec = float(self.config.R_specific())
-        u, p, T, _ = conserved_to_primitives(
-            self.rho_field.to(torch.float32),
-            self.mom_field.to(torch.float32),
-            self.E_field.to(torch.float32),
-            gamma=float(self.config.gamma),
-            R_specific=R_spec,
-            numerics=self.gas_numerics,
+        cfg = self.config
+        rho = self.rho_field.to(torch.float32)
+        mom = self.mom_field.to(torch.float32)
+        e_int = self.e_int_field.to(torch.float32)
+        rho_safe = torch.clamp(rho, min=float(self.gas_numerics.rho_min))
+        u = mom / rho_safe.unsqueeze(-1)
+        p = (float(cfg.gamma) - 1.0) * torch.clamp(e_int, min=0.0)
+        T = torch.where(
+            rho_safe > 0.0,
+            torch.clamp(e_int, min=0.0) / (rho_safe * float(cfg.c_v())),
+            torch.zeros_like(e_int),
         )
         return u.to(self.dtype), p.to(self.dtype), T.to(self.dtype)
 
@@ -132,29 +192,25 @@ class ThermodynamicsDomain:
         heats: "Tensor",
         energies: "Tensor",
     ) -> None:
-        """Conservatively scatter particle state into (rho, mom, E) grid fields."""
-        gx, gy, gz = self.grid_dims
-        dx = float(self.config.grid_spacing)
+        """Scatter particles into conserved grid fields (Metal-parity path).
 
+        Metal semantics:
+        - `E_field` is INTERNAL energy density (rho * e), derived from particle heat only.
+        - oscillator energy (`energies`) is carried on particles and exchanged via Planck coupling.
+        """
         self.rho_field.zero_()
         self.mom_field.zero_()
-        self.E_field.zero_()
+        self.e_int_field.zero_()
 
         if positions.numel() == 0:
             return
 
-        st = cic_stencil_periodic(positions, grid_dims=(gx, gy, gz), dx=dx)
-        internal_energy = heats + energies
-        scatter_conserved_cic(
-            st,
-            grid_dims=(gx, gy, gz),
-            dx=dx,
-            masses=masses,
-            velocities=velocities,
-            internal_energy=internal_energy,
-            out_rho=self.rho_field,
-            out_mom=self.mom_field,
-            out_E=self.E_field,
+        self._scatter_particles_sorted(
+            positions.to(torch.float32),
+            velocities.to(torch.float32),
+            masses.to(torch.float32),
+            heats.to(torch.float32),
+            energies.to(torch.float32),
         )
 
     def pic_gather_primitives(
@@ -181,12 +237,18 @@ class ThermodynamicsDomain:
         if self._fft_inv_k2 is not None:
             return
         gx, gy, gz = self.grid_dims
-        h = float(self.config.grid_spacing)
+        h = float(self.grid_spacing)
         two_pi = float(2.0 * math.pi)
 
-        kx = two_pi * torch.fft.fftfreq(gx, d=h, device=self.device, dtype=torch.float32)
-        ky = two_pi * torch.fft.fftfreq(gy, d=h, device=self.device, dtype=torch.float32)
-        kz = two_pi * torch.fft.fftfreq(gz, d=h, device=self.device, dtype=torch.float32)
+        kx = two_pi * torch.fft.fftfreq(
+            gx, d=h, device=self.device, dtype=torch.float32
+        )
+        ky = two_pi * torch.fft.fftfreq(
+            gy, d=h, device=self.device, dtype=torch.float32
+        )
+        kz = two_pi * torch.fft.fftfreq(
+            gz, d=h, device=self.device, dtype=torch.float32
+        )
 
         KX, KY, KZ = torch.meshgrid(kx, ky, kz, indexing="ij")
         k2 = (KX * KX + KY * KY + KZ * KZ).to(torch.float32)
@@ -194,6 +256,441 @@ class ThermodynamicsDomain:
         inv_k2 = torch.where(k2 > 0, 1.0 / k2, inv_k2)  # k=0 -> 0 (gauge)
         self._fft_k2 = k2
         self._fft_inv_k2 = inv_k2
+
+    def _ensure_sort_scatter_buffers(
+        self, n: int, num_cells: int
+    ) -> tuple[
+        torch.Tensor,
+        torch.Tensor,
+        torch.Tensor,
+        torch.Tensor,
+        torch.Tensor,
+        torch.Tensor,
+        torch.Tensor,
+        torch.Tensor,
+        torch.Tensor,
+        torch.Tensor,
+    ]:
+        dev = self.device
+        if (
+            self._sort_particle_cell_idx is None
+            or self._sort_particle_cell_idx.numel() != n
+            or self._sort_particle_cell_idx.device != dev
+        ):
+            self._sort_particle_cell_idx = torch.empty(
+                (n,), device=dev, dtype=torch.int32
+            )
+
+        if (
+            self._sort_cell_counts is None
+            or self._sort_cell_counts.numel() != num_cells
+            or self._sort_cell_counts.device != dev
+        ):
+            self._sort_cell_counts = torch.empty(
+                (num_cells,), device=dev, dtype=torch.int32
+            )
+        if (
+            self._sort_cell_starts is None
+            or self._sort_cell_starts.numel() != num_cells
+            or self._sort_cell_starts.device != dev
+        ):
+            self._sort_cell_starts = torch.empty(
+                (num_cells,), device=dev, dtype=torch.int32
+            )
+        if (
+            self._sort_cell_offsets is None
+            or self._sort_cell_offsets.numel() != num_cells
+            or self._sort_cell_offsets.device != dev
+        ):
+            self._sort_cell_offsets = torch.empty(
+                (num_cells,), device=dev, dtype=torch.int32
+            )
+
+        if (
+            self._sort_pos_out is None
+            or self._sort_pos_out.shape != (n, 3)
+            or self._sort_pos_out.device != dev
+        ):
+            self._sort_pos_out = torch.empty((n, 3), device=dev, dtype=torch.float32)
+        if (
+            self._sort_vel_out is None
+            or self._sort_vel_out.shape != (n, 3)
+            or self._sort_vel_out.device != dev
+        ):
+            self._sort_vel_out = torch.empty((n, 3), device=dev, dtype=torch.float32)
+        if (
+            self._sort_mass_out is None
+            or self._sort_mass_out.shape != (n,)
+            or self._sort_mass_out.device != dev
+        ):
+            self._sort_mass_out = torch.empty((n,), device=dev, dtype=torch.float32)
+        if (
+            self._sort_heat_out is None
+            or self._sort_heat_out.shape != (n,)
+            or self._sort_heat_out.device != dev
+        ):
+            self._sort_heat_out = torch.empty((n,), device=dev, dtype=torch.float32)
+        if (
+            self._sort_energy_out is None
+            or self._sort_energy_out.shape != (n,)
+            or self._sort_energy_out.device != dev
+        ):
+            self._sort_energy_out = torch.empty((n,), device=dev, dtype=torch.float32)
+        if (
+            self._sort_original_idx is None
+            or self._sort_original_idx.shape != (n,)
+            or self._sort_original_idx.device != dev
+        ):
+            self._sort_original_idx = torch.empty((n,), device=dev, dtype=torch.int32)
+
+        assert self._sort_particle_cell_idx is not None
+        assert self._sort_cell_counts is not None
+        assert self._sort_cell_starts is not None
+        assert self._sort_cell_offsets is not None
+        assert self._sort_pos_out is not None
+        assert self._sort_vel_out is not None
+        assert self._sort_mass_out is not None
+        assert self._sort_heat_out is not None
+        assert self._sort_energy_out is not None
+        assert self._sort_original_idx is not None
+        return (
+            self._sort_particle_cell_idx,
+            self._sort_cell_counts,
+            self._sort_cell_starts,
+            self._sort_cell_offsets,
+            self._sort_pos_out,
+            self._sort_vel_out,
+            self._sort_mass_out,
+            self._sort_heat_out,
+            self._sort_energy_out,
+            self._sort_original_idx,
+        )
+
+    def _scatter_particles_sorted(
+        self,
+        pos: torch.Tensor,
+        vel: torch.Tensor,
+        mass: torch.Tensor,
+        heat: torch.Tensor,
+        energy: torch.Tensor,
+    ) -> None:
+        gx, gy, gz = self.grid_dims
+        dx = float(self.grid_spacing)
+        meta = tm.SortScatterMeta(grid_x=gx, grid_y=gy, grid_z=gz, dx=dx)
+        n = int(pos.shape[0])
+        num_cells = int(meta.num_cells)
+
+        (
+            particle_cell_idx,
+            cell_counts,
+            cell_starts,
+            cell_offsets,
+            pos_out,
+            vel_out,
+            mass_out,
+            heat_out,
+            energy_out,
+            original_idx_out,
+        ) = self._ensure_sort_scatter_buffers(n, num_cells)
+
+        tm.scatter_compute_cell_idx(pos, particle_cell_idx, meta)
+        cell_counts.zero_()
+        tm.scatter_count_cells(particle_cell_idx, cell_counts)
+        total = (
+            int(cell_counts.sum().detach().to("cpu").item())
+            if cell_counts.numel()
+            else 0
+        )
+        if total != n:
+            raise RuntimeError(
+                f"scatter_count_cells mismatch: expected {n}, got {total}"
+            )
+
+        # Exclusive prefix sum (Metal parity). Torch cumsum is already highly optimized on CUDA.
+        starts_inclusive = torch.cumsum(cell_counts.to(torch.int64), dim=0)
+        starts_exclusive = torch.empty_like(starts_inclusive)
+        if starts_inclusive.numel() > 0:
+            starts_exclusive[0] = 0
+            starts_exclusive[1:] = starts_inclusive[:-1]
+        cell_starts.copy_(starts_exclusive.to(torch.int32))
+
+        cell_offsets.zero_()
+        tm.scatter_reorder_particles(
+            pos,
+            vel,
+            mass,
+            heat,
+            energy,
+            particle_cell_idx,
+            cell_starts,
+            cell_offsets,
+            pos_out,
+            vel_out,
+            mass_out,
+            heat_out,
+            energy_out,
+            original_idx_out,
+        )
+
+        tm.scatter_sorted(
+            pos_out,
+            vel_out,
+            mass_out,
+            heat_out,
+            self.rho_field,
+            self.mom_field,
+            self.e_int_field,
+            meta,
+        )
+
+    def _ensure_gas_rk2_scratch(
+        self,
+    ) -> tuple[
+        torch.Tensor,
+        torch.Tensor,
+        torch.Tensor,
+        torch.Tensor,
+        torch.Tensor,
+        torch.Tensor,
+        torch.Tensor,
+        torch.Tensor,
+        torch.Tensor,
+    ]:
+        dev = self.device
+        dtype = torch.float32
+        gx, gy, gz = self.grid_dims
+
+        def ensure(name: str, shape: tuple[int, ...]) -> torch.Tensor:
+            buf = getattr(self, name)
+            if buf is None or buf.shape != shape or buf.device != dev:
+                buf = torch.empty(shape, device=dev, dtype=dtype)
+                setattr(self, name, buf)
+            return buf
+
+        rho1 = ensure("_gas_rho1", (gx, gy, gz))
+        mom1 = ensure("_gas_mom1", (gx, gy, gz, 3))
+        e1 = ensure("_gas_e1", (gx, gy, gz))
+        rho2 = ensure("_gas_rho2", (gx, gy, gz))
+        mom2 = ensure("_gas_mom2", (gx, gy, gz, 3))
+        e2 = ensure("_gas_e2", (gx, gy, gz))
+        k1_rho = ensure("_gas_k1_rho", (gx, gy, gz))
+        k1_mom = ensure("_gas_k1_mom", (gx, gy, gz, 3))
+        k1_e = ensure("_gas_k1_e", (gx, gy, gz))
+        return rho1, mom1, e1, rho2, mom2, e2, k1_rho, k1_mom, k1_e
+
+    def _derive_dt_constraints(
+        self, *, mu: float, k_thermal: float
+    ) -> tuple[float, float, float]:
+        cfg = self.config
+        gx, gy, gz = self.grid_dims
+        dx = float(self.grid_spacing)
+        gamma = float(cfg.gamma)
+        cfl = float(self.gas_numerics.cfl)
+        cfl_diff = float(self.gas_numerics.cfl_diffusion)
+
+        rho = self.rho_field.to(torch.float32)
+        mom = self.mom_field.to(torch.float32)
+        e_int = self.e_int_field.to(torch.float32)
+
+        rho_safe = torch.clamp(rho, min=float(self.gas_numerics.rho_min))
+        u = mom / rho_safe.unsqueeze(-1)
+        u_mag = torch.linalg.vector_norm(u, dim=-1)
+        p = (gamma - 1.0) * torch.clamp(e_int, min=0.0)
+        c = torch.sqrt(torch.clamp(gamma * p / rho_safe, min=0.0))
+
+        max_speed = (
+            float((u_mag + c).max().detach().to("cpu").item()) if rho.numel() else 0.0
+        )
+        dt_adv = float("inf") if max_speed <= 0.0 else (cfl * dx / max_speed)
+
+        Pr = float(cfg.prandtl)
+        if Pr <= 0.0:
+            raise ValueError(
+                f"ThermodynamicsDomainConfig.prandtl must be > 0 (got {Pr})"
+            )
+        cv = float(cfg.c_v())
+        nu = mu / rho_safe
+        alpha = k_thermal / (rho_safe * cv)
+        diff = torch.maximum(nu, alpha)
+        max_diff = float(diff.max().detach().to("cpu").item()) if diff.numel() else 0.0
+        dt_diff = float("inf") if max_diff <= 0.0 else (cfl_diff * dx * dx / max_diff)
+
+        dt = min(float(cfg.dt_max), dt_adv, dt_diff)
+        if not (math.isfinite(dt) and dt > 0.0):
+            dt = float(cfg.dt_max)
+        return dt, dt_adv, dt_diff
+
+    def _gas_rk2_update(
+        self, *, dt: float, k_thermal: float, max_halvings: int = 10
+    ) -> float:
+        cfg = self.config
+        gx, gy, gz = self.grid_dims
+        dx = float(self.grid_spacing)
+        gamma = float(cfg.gamma)
+        cv = float(cfg.c_v())
+        rho_min = float(self.gas_numerics.rho_min)
+
+        rho1, mom1, e1, rho2, mom2, e2, k1_rho, k1_mom, k1_e = (
+            self._ensure_gas_rk2_scratch()
+        )
+
+        dt_try = float(dt)
+        for _ in range(max_halvings + 1):
+            tm.gas_rk2_stage1(
+                self.rho_field,
+                self.mom_field,
+                self.e_int_field,
+                rho1,
+                mom1,
+                e1,
+                k1_rho,
+                k1_mom,
+                k1_e,
+                grid_x=gx,
+                grid_y=gy,
+                grid_z=gz,
+                dx=dx,
+                dt=dt_try,
+                gamma=gamma,
+                c_v=cv,
+                rho_min=rho_min,
+                k_thermal=float(k_thermal),
+            )
+            tm.gas_rk2_stage2(
+                self.rho_field,
+                self.mom_field,
+                self.e_int_field,
+                rho1,
+                mom1,
+                e1,
+                k1_rho,
+                k1_mom,
+                k1_e,
+                rho2,
+                mom2,
+                e2,
+                grid_x=gx,
+                grid_y=gy,
+                grid_z=gz,
+                dx=dx,
+                dt=dt_try,
+                gamma=gamma,
+                c_v=cv,
+                rho_min=rho_min,
+                k_thermal=float(k_thermal),
+            )
+
+            ok = (
+                torch.isfinite(rho2).all()
+                and torch.isfinite(mom2).all()
+                and torch.isfinite(e2).all()
+            )
+            if ok:
+                self.rho_field.copy_(rho2)
+                self.mom_field.copy_(mom2)
+                self.e_int_field.copy_(e2)
+                return dt_try
+
+            dt_try *= 0.5
+
+        raise RuntimeError("gas_rk2_update failed: non-finite state after dt halving")
+
+    def _planck_exchange(
+        self,
+        *,
+        heat: torch.Tensor,
+        e_mode: torch.Tensor,
+        omega: torch.Tensor,
+        mass: torch.Tensor,
+        dt: float,
+        dx: float,
+        c_v: float,
+        kappa: float,
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        # Ported from the Metal backend for feature parity.
+        heat_f = heat.to(torch.float32)
+        e_mode_f = e_mode.to(torch.float32)
+        omega_f = omega.to(torch.float32)
+        mass_f = mass.to(torch.float32)
+
+        denom = mass_f * float(c_v)
+        T = torch.where(denom > 0.0, heat_f / denom, torch.zeros_like(heat_f))
+
+        eps_T = 1e-12
+        x = omega_f / torch.clamp(T, min=eps_T)
+        small = x < 1e-3
+        large = x > 50.0
+
+        E_eq = torch.empty_like(x)
+        E_eq = torch.where(small, T, E_eq)
+        E_eq = torch.where(large, omega_f * torch.exp(-x), E_eq)
+        mid = (~small) & (~large)
+        E_eq = torch.where(mid, omega_f / (torch.expm1(x)), E_eq)
+        E_eq = torch.nan_to_num(E_eq, nan=0.0, posinf=0.0, neginf=0.0)
+        E_eq = torch.clamp(E_eq, min=0.0)
+
+        r = 0.5 * float(dx)
+        tau = torch.where(
+            (mass_f > 0.0) & (kappa > 0.0) & (r > 0.0),
+            denom / (4.0 * math.pi * float(kappa) * float(r)),
+            torch.full_like(heat_f, float("inf")),
+        )
+        alpha = 1.0 - torch.exp(-float(dt) / tau)
+        alpha = torch.clamp(alpha, 0.0, 1.0)
+
+        dE = alpha * (E_eq - e_mode_f)
+        dE = torch.where(
+            dE > 0.0, torch.minimum(dE, heat_f), torch.maximum(dE, -e_mode_f)
+        )
+
+        e2 = e_mode_f + dE
+        q2 = heat_f - dE
+        if not (torch.isfinite(e2).all() and torch.isfinite(q2).all()):
+            raise RuntimeError("planck_exchange produced non-finite values")
+        if (e2 < -1e-6).any() or (q2 < -1e-6).any():
+            raise RuntimeError("planck_exchange produced negative energy")
+        return q2.to(heat.dtype), e2.to(e_mode.dtype)
+
+    def _pic_gather_update_particles(
+        self, *, positions: torch.Tensor, masses: torch.Tensor, dt: float
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        pos = positions.to(torch.float32).contiguous()
+        mass = masses.to(torch.float32).contiguous()
+        n = int(pos.shape[0])
+
+        pos_out = torch.empty_like(pos)
+        vel_out = torch.empty_like(pos)
+        heat_out = torch.empty((n,), device=pos.device, dtype=torch.float32)
+
+        tm.pic_gather_update_particles(
+            pos,
+            mass,
+            pos_out,
+            vel_out,
+            heat_out,
+            self.rho_field,
+            self.mom_field,
+            self.e_int_field,
+            self.gravity_potential,
+            dx=float(self.grid_spacing),
+            dt=float(dt),
+            gamma=float(self.config.gamma),
+            c_v=float(self.config.c_v()),
+            rho_min=float(self.gas_numerics.rho_min),
+            gravity_enabled=True,
+        )
+
+        if (
+            not torch.isfinite(pos_out).all()
+            or not torch.isfinite(vel_out).all()
+            or not torch.isfinite(heat_out).all()
+        ):
+            raise RuntimeError(
+                "pic_gather_update_particles produced non-finite outputs"
+            )
+        if (heat_out < 0.0).any():
+            raise RuntimeError("pic_gather_update_particles produced negative heat")
+        return pos_out, vel_out, heat_out
 
     def scatter_particles(
         self,
@@ -260,7 +757,30 @@ class ThermodynamicsDomain:
             "The single spatial model is now compressible ideal-gas Navier–Stokes + PIC."
         )
 
-    def step(
+    def step_state(self, state: dict[str, Any]) -> dict[str, Any]:
+        # Minimal Metal-parity dict API (used by `sensorium/manifold.py` on MPS,
+        # but kept here for backend symmetry).
+        pos, vel, e_mode, heat, omega = self.step_particles(
+            state["positions"],
+            state["velocities"],
+            state["energies"],
+            state["heats"],
+            state["excitations"],
+            state["masses"],
+        )
+        out = dict(state)
+        out.update(
+            {
+                "positions": pos,
+                "velocities": vel,
+                "energies": e_mode,
+                "heats": heat,
+                "excitations": omega,
+            }
+        )
+        return out
+
+    def step_particles(
         self,
         positions: "Tensor",
         velocities: "Tensor",
@@ -270,80 +790,56 @@ class ThermodynamicsDomain:
         masses: "Tensor",
     ) -> tuple["Tensor", "Tensor", "Tensor", "Tensor", "Tensor"]:
         cfg = self.config
-        dx = float(cfg.grid_spacing)
-        dt_cfg = float(cfg.dt_max)
 
-        # Single model: compressible ideal-gas Navier–Stokes + PIC (periodic domain).
-        # 1) Particle → grid (conserved)
+        # 1) Particle -> grid (sort-based scatter; Metal semantics: heat only)
         self.pic_scatter_conserved(positions, velocities, masses, heats, energies)
 
-        # 2) Gravity solve from gas density ρ
+        # 2) Gravity potential from gas density
         self.solve_gravity()
-        phi = self.gravity_potential.to(torch.float32)
-        g_accel = torch.stack(
-            [
-                -central_diff_periodic(phi, dx, 0),
-                -central_diff_periodic(phi, dx, 1),
-                -central_diff_periodic(phi, dx, 2),
-            ],
-            dim=-1,
-        ).to(torch.float32)
 
         mu = float(cfg.dynamic_viscosity)
         Pr = float(cfg.prandtl)
         if Pr <= 0.0:
-            raise ValueError(f"ThermodynamicsDomainConfig.prandtl must be > 0 (got {Pr})")
+            raise ValueError(
+                f"ThermodynamicsDomainConfig.prandtl must be > 0 (got {Pr})"
+            )
         k_thermal = mu * float(cfg.c_p()) / Pr
 
-        # 3) dt cap by advective + diffusive constraints
-        dt_stable = compute_dt_stable(
-            self.rho_field.to(torch.float32),
-            self.mom_field.to(torch.float32),
-            self.E_field.to(torch.float32),
-            gamma=float(cfg.gamma),
-            R_specific=float(cfg.R_specific()),
-            dx=dx,
-            mu=mu,
-            k_thermal=k_thermal,
-            c_p=float(cfg.c_p()),
-            numerics=self.gas_numerics,
+        # 3) dt constraints (advection + diffusion) and RK2 update on the grid
+        dt0, _dt_adv, _dt_diff = self._derive_dt_constraints(mu=mu, k_thermal=k_thermal)
+        dt_used = self._gas_rk2_update(dt=dt0, k_thermal=k_thermal)
+
+        # 4) Fused PIC gather + update (gravity + periodic wrap)
+        pos_out, vel_out, heat_out = self._pic_gather_update_particles(
+            positions=positions, masses=masses, dt=dt_used
         )
-        dt = min(dt_cfg, float(dt_stable)) if (math.isfinite(float(dt_stable)) and float(dt_stable) > 0.0) else dt_cfg
 
-        rho_n, mom_n, E_n = advance_navier_stokes_rk2(
-            self.rho_field.to(torch.float32),
-            self.mom_field.to(torch.float32),
-            self.E_field.to(torch.float32),
-            gamma=float(cfg.gamma),
-            R_specific=float(cfg.R_specific()),
-            dx=dx,
-            dt=float(dt),
-            mu=mu,
-            k_thermal=k_thermal,
-            g_accel=g_accel,
-            numerics=self.gas_numerics,
+        # 5) Conservative thermal <-> oscillator exchange (Planck relaxation)
+        heat_x, e_mode_x = self._planck_exchange(
+            heat=heat_out.to(heats.dtype),
+            e_mode=energies,
+            omega=excitations,
+            mass=masses,
+            dt=float(dt_used),
+            dx=float(self.grid_spacing),
+            c_v=float(cfg.c_v()),
+            kappa=float(k_thermal),
         )
-        self.rho_field.copy_(rho_n.to(self.dtype))
-        self.mom_field.copy_(mom_n.to(self.dtype))
-        self.E_field.copy_(E_n.to(self.dtype))
-
-        u_field, _p_field, T_field = self._gas_primitives()
-        u_p, T_p = self.pic_gather_primitives(positions, u_field=u_field, T_field=T_field)
-
-        velocities = u_p
-        positions = (positions + velocities * float(dt)).contiguous()
-        domain = torch.tensor(
-            [self.grid_dims[0] * dx, self.grid_dims[1] * dx, self.grid_dims[2] * dx],
-            device=positions.device,
-            dtype=positions.dtype,
+        return (
+            pos_out.to(positions.dtype),
+            vel_out.to(velocities.dtype),
+            e_mode_x,
+            heat_x,
+            excitations,
         )
-        positions = torch.remainder(positions, domain)
 
-        cv = float(cfg.c_v())
-        total_internal = masses.to(torch.float32) * (cv * T_p.to(torch.float32))
-        heats = torch.clamp(total_internal.to(self.dtype) - energies, min=0.0)
-
-        return positions, velocities, energies, heats, excitations
+    def step(self, *args: Any, **kwargs: Any):
+        # Backward-compatible overload:
+        # - `step(state_dict)` -> state_dict
+        # - `step(pos, vel, e, heat, omega, mass)` -> tuple
+        if len(args) == 1 and not kwargs and isinstance(args[0], dict):
+            return self.step_state(args[0])
+        return self.step_particles(*args, **kwargs)
 
     def _collide_spatial_hash(
         self,
@@ -359,6 +855,7 @@ class ThermodynamicsDomain:
             "_collide_spatial_hash() belonged to the legacy particle collision model. "
             "The single spatial model is now compressible ideal-gas Navier–Stokes + PIC."
         )
+
 
 @dataclass
 class SpectralCarrierConfig:
@@ -432,7 +929,9 @@ class SpectralCarrierPhysics:
         grid_spacing: float = 1.0,
     ):
         if device != "cuda":
-            raise RuntimeError(f"SpectralCarrierPhysics(CUDA) requires device='cuda', got '{device}'")
+            raise RuntimeError(
+                f"SpectralCarrierPhysics(CUDA) requires device='cuda', got '{device}'"
+            )
         if not torch.cuda.is_available():
             raise RuntimeError("CUDA not available")
 
@@ -449,7 +948,9 @@ class SpectralCarrierPhysics:
         self.dtype = torch.float32
 
         # Physics (simulation units). If not provided, fall back to SI identity mapping.
-        self._const = physical_constants or PhysicalConstants.from_codata_si(UnitSystem.si())
+        self._const = physical_constants or PhysicalConstants.from_codata_si(
+            UnitSystem.si()
+        )
         assert_finite_constants(self._const)
 
         # Geometric material parameters (used to derive a physically grounded bath rate).
@@ -467,34 +968,59 @@ class SpectralCarrierPhysics:
             raise ValueError("SpectralCarrierConfig.max_carriers must be > 0")
 
         # Carrier state buffers
-        self.carrier_real = torch.zeros(self.max_carriers, device=self.device, dtype=self.dtype)
-        self.carrier_imag = torch.zeros(self.max_carriers, device=self.device, dtype=self.dtype)
-        self.carrier_omega = torch.zeros(self.max_carriers, device=self.device, dtype=self.dtype)
-        self.carrier_gate_width = torch.full(
-            (self.max_carriers,), float(config.gate_width_init), device=self.device, dtype=self.dtype
+        self.carrier_real = torch.zeros(
+            self.max_carriers, device=self.device, dtype=self.dtype
         )
-        self.carrier_conflict = torch.zeros(self.max_carriers, device=self.device, dtype=self.dtype)
-        self.spawned_from_osc = torch.full((self.max_carriers,), -1, device=self.device, dtype=torch.int32)
+        self.carrier_imag = torch.zeros(
+            self.max_carriers, device=self.device, dtype=self.dtype
+        )
+        self.carrier_omega = torch.zeros(
+            self.max_carriers, device=self.device, dtype=self.dtype
+        )
+        self.carrier_gate_width = torch.full(
+            (self.max_carriers,),
+            float(config.gate_width_init),
+            device=self.device,
+            dtype=self.dtype,
+        )
+        self.carrier_conflict = torch.zeros(
+            self.max_carriers, device=self.device, dtype=self.dtype
+        )
+        self.spawned_from_osc = torch.full(
+            (self.max_carriers,), -1, device=self.device, dtype=torch.int32
+        )
 
-        self.carrier_state = torch.zeros(self.max_carriers, device=self.device, dtype=torch.int32)
-        self.carrier_age = torch.zeros(self.max_carriers, device=self.device, dtype=torch.int32)
+        self.carrier_state = torch.zeros(
+            self.max_carriers, device=self.device, dtype=torch.int32
+        )
+        self.carrier_age = torch.zeros(
+            self.max_carriers, device=self.device, dtype=torch.int32
+        )
 
         anchors = int(config.anchor_slots)
         self.anchor_slots = anchors
         self.carrier_anchor_idx = torch.full(
             (self.max_carriers * anchors,), -1, device=self.device, dtype=torch.int32
         )
-        self.carrier_anchor_phase = torch.zeros(self.max_carriers * anchors, device=self.device, dtype=self.dtype)
-        self.carrier_anchor_weight = torch.zeros(self.max_carriers * anchors, device=self.device, dtype=self.dtype)
+        self.carrier_anchor_phase = torch.zeros(
+            self.max_carriers * anchors, device=self.device, dtype=self.dtype
+        )
+        self.carrier_anchor_weight = torch.zeros(
+            self.max_carriers * anchors, device=self.device, dtype=self.dtype
+        )
 
         self._num_carriers_buf = torch.zeros(1, device=self.device, dtype=torch.int32)
         self.num_carriers = 0
 
-        self._random_phases = torch.rand(self.max_carriers, device=self.device, dtype=self.dtype)
+        self._random_phases = torch.rand(
+            self.max_carriers, device=self.device, dtype=self.dtype
+        )
         self._energy_stats = torch.zeros(4, device=self.device, dtype=self.dtype)
         self._rng_seed: int = 1
 
-    def _ensure_seeded(self, osc_phase: "Tensor", osc_omega: "Tensor", osc_amp: "Tensor") -> None:
+    def _ensure_seeded(
+        self, osc_phase: "Tensor", osc_omega: "Tensor", osc_amp: "Tensor"
+    ) -> None:
         if self.num_carriers > 0:
             return
         N = int(osc_phase.shape[0])
@@ -530,7 +1056,9 @@ class SpectralCarrierPhysics:
 
         sigma = float(cfg.gate_width_init)
         if sigma <= 0.0:
-            sigma = max(1e-3, (omega_max - omega_min) / max(float(self.max_carriers), 1.0))
+            sigma = max(
+                1e-3, (omega_max - omega_min) / max(float(self.max_carriers), 1.0)
+            )
         env = torch.exp(-0.5 * ((self.carrier_omega - float(omega0)) / sigma) ** 2)
         self.carrier_real.copy_(env * (amp0 * math.cos(phi0)))
         self.carrier_imag.copy_(env * (amp0 * math.sin(phi0)))
@@ -551,7 +1079,9 @@ class SpectralCarrierPhysics:
         self._num_carriers_buf[0] = int(self.max_carriers)
 
         if int(self.max_carriers) >= 2:
-            domega = float((self.carrier_omega[1] - self.carrier_omega[0]).detach().item())
+            domega = float(
+                (self.carrier_omega[1] - self.carrier_omega[0]).detach().item()
+            )
             self._inv_domega2 = (1.0 / (domega * domega)) if domega != 0.0 else 0.0
         else:
             self._inv_domega2 = 0.0
@@ -563,7 +1093,9 @@ class SpectralCarrierPhysics:
         mean = energy.mean()
         var = (energy - mean).pow(2).mean()
         std = torch.sqrt(torch.clamp(var, min=0.0))
-        count = torch.tensor(float(energy.numel()), device=energy.device, dtype=energy.dtype).clamp(min=1.0)
+        count = torch.tensor(
+            float(energy.numel()), device=energy.device, dtype=energy.dtype
+        ).clamp(min=1.0)
         self._energy_stats[0] = mean_abs
         self._energy_stats[1] = mean
         self._energy_stats[2] = std
@@ -619,7 +1151,9 @@ class SpectralCarrierPhysics:
         particle_masses: Optional["Tensor"] = None,
     ) -> Dict[str, "Tensor"]:
         osc_phase = osc_phase.to(device=self.device, dtype=self.dtype).contiguous()
-        osc_omega = particle_excitations.to(device=self.device, dtype=self.dtype).contiguous()
+        osc_omega = particle_excitations.to(
+            device=self.device, dtype=self.dtype
+        ).contiguous()
         energy = particle_energies.to(device=self.device, dtype=self.dtype).contiguous()
         osc_amp = torch.sqrt(torch.clamp(energy, min=1e-8)).contiguous()
 
@@ -683,7 +1217,12 @@ class SpectralCarrierPhysics:
         stable_decay_mul = float(cfg.stable_decay_mul)
         crystallized_decay_mul = float(cfg.crystallized_decay_mul)
 
-        if T_bar > 0.0 and m_bar > 0.0 and float(const.hbar) > 0.0 and float(const.k_B) > 0.0:
+        if (
+            T_bar > 0.0
+            and m_bar > 0.0
+            and float(const.hbar) > 0.0
+            and float(const.k_B) > 0.0
+        ):
             omega_th = (float(const.k_B) * T_bar) / float(const.hbar)
             tau_coh = float(const.hbar) / (float(const.k_B) * T_bar)
             bw_min = max(0.5 / float(self.dt), 1e-8)
@@ -696,14 +1235,24 @@ class SpectralCarrierPhysics:
             mu = float(self._dynamic_viscosity) * math.sqrt(max(T_bar, 0.0))
             gamma = 6.0 * math.pi * mu * float(self._particle_radius)
             drag_rate = gamma / m_bar
-            decoh_rate = max(float(drag_rate), (1.0 / tau_coh) if tau_coh > 0.0 else 0.0)
-            decay = math.exp(-decoh_rate * float(self.dt)) if decoh_rate * float(self.dt) < 700 else 0.0
+            decoh_rate = max(
+                float(drag_rate), (1.0 / tau_coh) if tau_coh > 0.0 else 0.0
+            )
+            decay = (
+                math.exp(-decoh_rate * float(self.dt))
+                if decoh_rate * float(self.dt) < 700
+                else 0.0
+            )
 
             zeta3 = 1.202056903159594
             kBT = float(const.k_B) * T_bar
             stable_amp_threshold = math.sqrt(max(kBT, 0.0))
             crystallize_amp_threshold = math.sqrt(max(zeta3 * kBT, 0.0))
-            crystallize_age = max(1, int(math.ceil(tau_coh / float(self.dt)))) if math.isfinite(tau_coh) else 1
+            crystallize_age = (
+                max(1, int(math.ceil(tau_coh / float(self.dt))))
+                if math.isfinite(tau_coh)
+                else 1
+            )
 
             coupling_scale = float(omega_th)
             carrier_reg = float(decoh_rate)
@@ -891,8 +1440,12 @@ class SpectralCarrierPhysics:
         out: Dict[str, "Tensor"] = {}
         for _ in range(int(steps)):
             osc_phase = osc_phase.to(device=self.device, dtype=self.dtype).contiguous()
-            osc_omega = particle_excitations.to(device=self.device, dtype=self.dtype).contiguous()
-            energy = particle_energies.to(device=self.device, dtype=self.dtype).contiguous()
+            osc_omega = particle_excitations.to(
+                device=self.device, dtype=self.dtype
+            ).contiguous()
+            energy = particle_energies.to(
+                device=self.device, dtype=self.dtype
+            ).contiguous()
             osc_amp = torch.sqrt(torch.clamp(energy, min=1e-8)).contiguous()
 
             self._set_energy_stats(energy)
@@ -909,7 +1462,9 @@ class SpectralCarrierPhysics:
                     "SpectralCarrierPhysics.idle_compute requires particle_positions (N,3) to derive "
                     "Hamiltonian coupling from overlap integrals."
                 )
-            pos = particle_positions.to(device=self.device, dtype=self.dtype).contiguous()
+            pos = particle_positions.to(
+                device=self.device, dtype=self.dtype
+            ).contiguous()
 
             if (
                 particle_heats is None
@@ -924,7 +1479,9 @@ class SpectralCarrierPhysics:
 
             const = self._const
             q = particle_heats.to(device=self.device, dtype=self.dtype).contiguous()
-            m_mass = particle_masses.to(device=self.device, dtype=self.dtype).contiguous()
+            m_mass = particle_masses.to(
+                device=self.device, dtype=self.dtype
+            ).contiguous()
             T_i = (q + energy) / (m_mass * float(self._specific_heat))
             T_i = torch.clamp(T_i, min=0.0)
             T_bar = float(T_i.mean().detach().item()) if T_i.numel() else 0.0
@@ -932,12 +1489,17 @@ class SpectralCarrierPhysics:
 
             spatial_sigma: float = 0.0
             gate_width_init = float(self.config.gate_width_init)
-            if T_bar > 0.0 and m_bar > 0.0 and float(const.hbar) > 0.0 and float(const.k_B) > 0.0:
+            if (
+                T_bar > 0.0
+                and m_bar > 0.0
+                and float(const.hbar) > 0.0
+                and float(const.k_B) > 0.0
+            ):
                 omega_th = (float(const.k_B) * T_bar) / float(const.hbar)
                 gate_width_init = float(omega_th)
-                spatial_sigma = (math.sqrt(2.0 * math.pi) * float(const.hbar)) / math.sqrt(
-                    max(m_bar * float(const.k_B) * T_bar, 1e-30)
-                )
+                spatial_sigma = (
+                    math.sqrt(2.0 * math.pi) * float(const.hbar)
+                ) / math.sqrt(max(m_bar * float(const.k_B) * T_bar, 1e-30))
 
             params = self._params(
                 mode=m,
@@ -1019,7 +1581,9 @@ class SpectralCarrierPhysics:
                 rng_seed=int(self._rng_seed) & 0xFFFFFFFF,
                 gate_width_min=float(self.config.gate_width_min),
                 gate_width_max=float(self.config.gate_width_max),
-                crystallized_coupling_boost=float(self.config.crystallized_coupling_boost),
+                crystallized_coupling_boost=float(
+                    self.config.crystallized_coupling_boost
+                ),
                 topdown_phase_scale=float(self.config.topdown_phase_scale),
                 domain_x=float(self._domain_x),
                 domain_y=float(self._domain_y),
@@ -1077,22 +1641,38 @@ class SpectralCarrierPhysics:
         """Mean conflict across active carriers (0 = fully coherent)."""
         if self.num_carriers == 0:
             return 0.0
-        conf = self.carrier_conflict[: self.num_carriers].detach().to("cpu", dtype=torch.float32)
+        conf = (
+            self.carrier_conflict[: self.num_carriers]
+            .detach()
+            .to("cpu", dtype=torch.float32)
+        )
         return float(conf.mean().item())
 
     def max_conflict(self) -> float:
         """Maximum conflict across active carriers."""
         if self.num_carriers == 0:
             return 0.0
-        conf = self.carrier_conflict[: self.num_carriers].detach().to("cpu", dtype=torch.float32)
+        conf = (
+            self.carrier_conflict[: self.num_carriers]
+            .detach()
+            .to("cpu", dtype=torch.float32)
+        )
         return float(conf.max().item())
 
     def mean_amplitude(self) -> float:
         """Mean amplitude across active carriers."""
         if self.num_carriers == 0:
             return 0.0
-        cr = self.carrier_real[: self.num_carriers].detach().to("cpu", dtype=torch.float32)
-        ci = self.carrier_imag[: self.num_carriers].detach().to("cpu", dtype=torch.float32)
+        cr = (
+            self.carrier_real[: self.num_carriers]
+            .detach()
+            .to("cpu", dtype=torch.float32)
+        )
+        ci = (
+            self.carrier_imag[: self.num_carriers]
+            .detach()
+            .to("cpu", dtype=torch.float32)
+        )
         amp = torch.sqrt(cr * cr + ci * ci)
         return float(amp.mean().item())
 
@@ -1148,4 +1728,3 @@ CoherenceFieldPhysics = SpectralCarrierPhysics
 # Preferred naming: hydrodynamic (ω-space) layer paired with ThermodynamicsDomain.
 HydrodynamicDomainConfig = CoherenceFieldConfig
 HydrodynamicDomain = CoherenceFieldPhysics
-

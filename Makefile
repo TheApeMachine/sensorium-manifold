@@ -30,10 +30,10 @@ clean: ## Remove virtual environment and build artifacts
 	find . -type f -name "*.pyc" -delete 2>/dev/null || true
 
 test: ## Run all tests
-	$(ACTIVATE) && pytest sensorium/ -v
+	$(ACTIVATE) && pytest tests/ -v
 
 test-cov: ## Run tests with coverage
-	$(ACTIVATE) && pytest sensorium/ -v --cov=sensorium --cov-report=term-missing
+	$(ACTIVATE) && pytest tests/ -v --cov=sensorium --cov-report=term-missing
 
 lint: ## Run linter (ruff)
 	$(ACTIVATE) && ruff check sensorium/

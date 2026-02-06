@@ -17,6 +17,8 @@ Key concepts:
 - The simplicity allows any modality to be represented uniformly
 """
 
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum

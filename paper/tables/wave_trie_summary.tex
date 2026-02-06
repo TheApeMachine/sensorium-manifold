@@ -1,14 +1,13 @@
 \begin{table}[htbp]
 \centering
-\caption{Easy-proof wave-trie metrics (map vs path) without changing physics.}
+\caption{Wave-trie branch/fold summary (analysis mode)}
 \label{tab:wave_trie}
-\begin{tabular}{cccccccccccc}
+\begin{tabular}{ccccccccccccccccccc}
 \toprule
-Scenario & Tokens & Samples & Unique keys & Key coll. & Edges & Top edge p & Edge H & Fold top1 & Fold PR & Fold H & $||\Delta\Psi||/||\Psi||$ \\
+Scenario & N Tokens & N Samples & Compression Ratio & Collision Rate Observed & Unique Keys & Key Collision Rate & Transition Edges & Transition Unique Edges & Transition Top1 Prob & Transition Entropy & Fold Top1 & Fold Pr & Fold Entropy & Mode Participation & Mode Entropy & Sql N Branch Edges & Sql Max Branch Count & Sql Mean Branch Count \\
 \midrule
-repeated\_AB & 262144 & 1024 & 256 & $0.999$ & 255 & $0.004$ & $7.994$ & $0.004$ & $256.000$ & $8.000$ & $715753.946$ \\
-text\_prefix\_AB\_CvD & 196608 & 65536 & 4 & $1.000$ & 3 & $0.500$ & $1.500$ & $0.333$ & $3.600$ & $1.918$ & $105586.713$ \\
-filesystem\_corpus\_paper & 120554 & 25 & 115920 & $0.038$ & 118404 & $1.91e-04$ & $16.825$ & $1.91e-04$ & $99767.058$ & $16.774$ & $1.010$ \\
+abc\_abd\_abe & 1152 & 384 & $0.0043$ & $0.9957$ & 5 & $0.9957$ & 768 & 4 & $0.5000$ & $1.7925$ & $0.3333$ & $3.8571$ & $2.1133$ & $3.8571$ & $2.1133$ & 4 & 384 & $192.0000$ \\
+ab\_repeat\_branch & 1536 & 384 & $0.0046$ & $0.9954$ & 7 & $0.9954$ & 1152 & 6 & $0.3333$ & $2.2516$ & $0.2500$ & $4.9231$ & $2.5000$ & $2.7826$ & $1.7744$ & 6 & 384 & $192.0000$ \\
 \bottomrule
 \end{tabular}
 \end{table}

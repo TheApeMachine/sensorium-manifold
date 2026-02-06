@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from pathlib import Path
+from typing import Sequence
 
 from sensorium.projectors import (
     PipelineProjector, 
@@ -21,16 +22,22 @@ class Experiment(ABC):
         experiment_name: str,
         profile: bool = False,
         dashboard: bool = False,
-        reportable: list[str] = [],
+        reportable: Sequence[str] | None = None,
     ):
         self.experiment_name = experiment_name
         self.profile = profile
         self.dashboard = dashboard
+        self.reportable = list(reportable) if reportable else []
+        self.repo_root = Path(__file__).resolve().parents[2]
+        self._dashboard_instance = None
+        self._artifact_dir = self.repo_root / "artifacts" / self._slug()
+        self._artifact_dir.mkdir(parents=True, exist_ok=True)
+        self.video_path = str(self._artifact_dir / "dashboard.mp4")
 
         self.projector = PipelineProjector(
             # Console output for real-time feedback
             ConsoleProjector(
-                fields=reportable,
+                fields=self.reportable,
                 format="table",
             ),
             TopTransitionsProjector(),
@@ -38,7 +45,7 @@ class Experiment(ABC):
             LaTeXTableProjector(
                 TableConfig(
                     name=f"{experiment_name}_summary",
-                    columns=reportable,
+                    columns=self.reportable,
                     caption=f"{experiment_name} metrics",
                     label="tab:collision",
                     precision=3,
@@ -60,6 +67,22 @@ class Experiment(ABC):
                 output_dir=Path("paper/figures"),
             ),
         )
+
+    def _slug(self) -> str:
+        return "".join(ch if ch.isalnum() else "_" for ch in self.experiment_name.lower()).strip("_")
+
+    def artifact_path(self, *parts: str) -> Path:
+        """Resolve an artifact path and create parent directories."""
+        if parts and parts[0] in {"tables", "figures"}:
+            base = self.repo_root / "paper"
+        else:
+            base = self._artifact_dir
+        path = base.joinpath(*parts) if parts else base
+        if path.suffix:
+            path.parent.mkdir(parents=True, exist_ok=True)
+        else:
+            path.mkdir(parents=True, exist_ok=True)
+        return path
 
     def close_dashboard(self):
         """Stop recording and close the dashboard."""

@@ -119,9 +119,19 @@ class DarkParticleInjector:
         
         # Create token IDs from bytes
         new_token_ids = torch.tensor(byte_values, device=device, dtype=torch.int64)
+        new_byte_values = torch.tensor(byte_values, device=device, dtype=torch.int64)
+        new_sequence_indices = torch.tensor(seq_indices, device=device, dtype=torch.int64)
+        # Query particles are not part of training samples.
+        new_sample_indices = torch.full((n_new,), -1, device=device, dtype=torch.int64)
         
         # Get current particle count
         n_existing = len(state.get("positions", torch.empty(0, 3)))
+        self._ensure_existing_particle_fields(
+            state=state,
+            n_existing=n_existing,
+            device=device,
+            dtype=dtype,
+        )
         
         # Append to state
         self._append_to_state(
@@ -135,6 +145,9 @@ class DarkParticleInjector:
             osc_phase=new_phases,
             particle_flags=new_flags,
             token_ids=new_token_ids,
+            byte_values=new_byte_values,
+            sequence_indices=new_sequence_indices,
+            sample_indices=new_sample_indices,
         )
         
         # Track indices
@@ -291,13 +304,49 @@ class DarkParticleInjector:
                 state[key] = torch.cat([existing, new_tensor], dim=0)
             else:
                 state[key] = new_tensor
+
+    def _ensure_existing_particle_fields(
+        self,
+        state: dict,
+        n_existing: int,
+        device: str,
+        dtype: torch.dtype,
+    ):
+        """Ensure particle-indexed state tensors exist for current particles.
+
+        This prevents shape mismatches when appending/removing dark particles in
+        states that do not yet carry all particle metadata fields.
+        """
+        if n_existing <= 0:
+            return
+
+        def ensure(name: str, tensor: torch.Tensor):
+            if state.get(name) is None:
+                state[name] = tensor
+
+        ensure("positions", torch.zeros((n_existing, 3), device=device, dtype=dtype))
+        ensure("velocities", torch.zeros((n_existing, 3), device=device, dtype=dtype))
+        ensure("energies", torch.zeros((n_existing,), device=device, dtype=dtype))
+        ensure("heats", torch.zeros((n_existing,), device=device, dtype=dtype))
+        ensure("excitations", torch.zeros((n_existing,), device=device, dtype=dtype))
+        ensure("masses", torch.zeros((n_existing,), device=device, dtype=dtype))
+        ensure("osc_phase", torch.zeros((n_existing,), device=device, dtype=dtype))
+        ensure("particle_flags", torch.zeros((n_existing,), device=device, dtype=torch.int32))
+        ensure("token_ids", torch.zeros((n_existing,), device=device, dtype=torch.int64))
+        ensure("byte_values", torch.zeros((n_existing,), device=device, dtype=torch.int64))
+        ensure(
+            "sequence_indices",
+            torch.arange(n_existing, device=device, dtype=torch.int64),
+        )
+        ensure("sample_indices", torch.zeros((n_existing,), device=device, dtype=torch.int64))
     
     def _remove_particles(self, state: dict, keep_mask: np.ndarray):
         """Remove particles based on a keep mask."""
         keep_mask_torch = torch.tensor(keep_mask, device="cpu")
         
         for key in ["positions", "velocities", "energies", "heats", 
-                    "excitations", "masses", "osc_phase", "particle_flags", "token_ids"]:
+                    "excitations", "masses", "osc_phase", "particle_flags", "token_ids",
+                    "byte_values", "sequence_indices", "sample_indices"]:
             tensor = state.get(key)
             if tensor is not None:
                 device = tensor.device

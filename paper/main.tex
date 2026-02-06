@@ -131,16 +131,11 @@
 % ABSTRACT
 % ============================================================================
 \begin{abstract}
-We present the \emph{Sensorium Manifold}, a computing substrate that substitutes the traditional optimization paradigm for physics-based learning.
-The intended objective is one of exploration, at the core of which is the question: if deep learning is essentially a balancing effort, where data is introduced into a chaotic system, then an error signal is reduced to a stable state, are there any other systems that can model these dynamics?
-We propose that physics is such a system, once a subset of the physical laws are accurately modelled. Through that lens, it is not nearly such a huge leap to make, where deep learning relies on the perceptron as a model of the biological neuron, and halts this methaphor at the boundary of utility, where it becomes a highly successful tool to produce systems that learn, so have we defined such boundaries.
-We suggest that there is indeed value to commit to a workable definition of what intelligence does, no what it is, where out stance is that intellligence in essense a data management system. $\Psi(\omega)$ that supports interference, superposition, and tunneling. Under observation-driven forcing and controlled dissipation, stable structure emerges---persistent wells in $|\Psi(\omega)|$ that encode patterns and bind related particles through phase coherence.
+We present the \emph{Sensorium Manifold}, a physics-native computing substrate for learning and inference. The motivating claim is pragmatic: modern machine learning already treats biology as useful engineering metaphor (e.g., the perceptron), so using physics as a computational metaphor is a natural next step, not a categorical break. We frame intelligence operationally as \emph{information management}: introducing data into a high-dimensional dynamical system and driving it toward usable structure.
 
-There is no loss function and no gradient descent. Structure forms because the physics favors it.
+The system couples particles through a hydrodynamic wave field $\Psi(\omega)$ with interference, superposition, and tunneling. Under observation-driven forcing, controlled dissipation, and homeostatic regulation, the dynamics self-organize into persistent wells in $|\Psi(\omega)|$ that store and bind patterns. No loss function or gradient descent is required; structure emerges because the governing dynamics favor stable attractors. This yields a \emph{Holographic Content Addressable Memory} in which partial cues retrieve complete patterns, and recasts generation as global relaxation (a boundary-value solve) rather than strictly serial autoregression.
 
-This crystallization mechanism implements a \emph{Holographic Content Addressable Memory}: partial inputs address complete patterns because information is distributed across the interference field. Because time is treated as a spatial dimension, generation is a boundary value problem rather than serial autoregression, with latency scaling as $O(k)$ in pattern complexity rather than $O(N)$ in sequence length. The same dynamics process all sensory modalities---text, image, audio---through spectral isomorphism.
-
-We demonstrate these properties on small-scale experiments. Whether the approach scales is an open question; that thermodynamic dynamics can implement associative memory at all is the contribution.
+The same dynamics are modality-agnostic under spectral isomorphism, enabling one substrate for text, image, and audio without modality-specific fusion objectives. We evaluate this framework on small-scale multimodal and sequence experiments, using AI as a demanding test domain rather than the endpoint itself. The central contribution is evidence that thermodynamic-wave dynamics can function as a practical information-processing system; the open question is scale.
 \end{abstract}
 
 \vspace{0.5em}
@@ -176,27 +171,25 @@ Symplectic Integrator & Optimizer & Preserves energy phase-space; no gradient de
 \section{Introduction}
 \label{sec:introduction}
 
-The perceptron, modeled on biological neurons, demonstrated that systems balancing toward equilibrium can encode information. Decades of work have validated this at scale, even as the architectures diverged from biological plausibility.
+Most modern machine learning systems are trained as parametric function approximators with explicit objectives and gradient-based optimization. This paper studies a different computational route: learning and inference as state evolution in an open physical dynamical system.
 
-We ask whether similar behavior arises in other physical domains. After extensive exploration, we identified thermodynamic and wave-physical dynamics as sufficient ingredients: particles with intrinsic frequencies, a hydrodynamic wave field supporting interference and tunneling, and Hamiltonian evolution under observation-driven forcing.
+Our framing is operational. We treat intelligence tasks as information-management problems: observations perturb a high-dimensional substrate, and useful behavior corresponds to the emergence of stable, reusable structure under those perturbations. The question is not whether this system is biologically faithful, but whether physics-governed dynamics can provide a practical computational mechanism.
 
-The key insight is this: if information lacks intrinsic modality, then physical systems that naturally equilibrate may serve as substrates for computation. The physical world itself balances around information.
+To test this, we implement the Sensorium Manifold as a GPU-executable substrate combining particle-grid thermodynamics, a hydrodynamic frequency field $\Psi(\omega)$, and symplectic integration. The resulting system is designed to be falsifiable: it should either form useful associative structure under streaming observations, or fail clearly on measurable tasks.
 
-We test this hypothesis on AI---arguably the most demanding information-processing problem. If thermodynamic dynamics can implement associative memory and multimodal binding, the principle may generalize. If it cannot scale, we will have learned something about the limits of physics-as-computation.
-
-We take this claim seriously enough to build it. The implementation includes GPU kernels for compressible Navier-Stokes, Gross-Pitaevskii field dynamics, and symplectic integration---not a sketch, but a system that runs. The code is available; we invite readers to find where it fails.
+We evaluate on small-scale but diverse workloads (byte prediction, rule-shift adaptation, audio/image reconstruction, and cross-modal coupling). The current evidence is therefore proof-of-mechanism rather than proof-of-scale.
 
 \paragraph{Physics as a computing paradigm.}
-We emphasize that this is \emph{physics as a computing paradigm}, not a physics simulation. The goal is computation, not physical prediction. The equations we employ---compressible Navier-Stokes, Gross-Pitaevskii, Planck statistics---are real physics with production-grade numerics. But we apply them to an abstract computational space rather than modeling a specific physical system. The mathematical structure of thermodynamics and wave physics provides the substrate for learning and inference; whether this substrate could be realized in physical hardware is a separate question we do not address here.
+This work is \emph{physics as a computing paradigm}, not a simulation of a specific laboratory system. We use established equations (compressible Navier--Stokes, Gross--Pitaevskii-style wave dynamics, Planck-informed equilibration) as algorithmic structure for representation and inference in an abstract computational state space. Hardware realizability is outside scope.
 
 \paragraph{System overview.}
 The Sensorium Manifold is a learning system where:
 \begin{itemize}
-  \item \textbf{Particles} represent activated concepts, carrying energy through continuous space
-  \item \textbf{Hydrodynamic $\omega$-Field} is a complex wavefunction $\Psi(\omega)$ whose wells correspond to learned structure
-  \item \textbf{Crystallization} is the emergence of persistent peaks in $|\Psi(\omega)|$ under observation-driven forcing and dissipation
-  \item \textbf{Heat} captures uncertainty and accumulated noise, driving exploration
-  \item \textbf{Homeostasis} regulates system activity through adaptive baselines, preventing runaway excitation or quiescence
+  \item \textbf{Particles} represent active units that carry mass, momentum, and internal energy in continuous space
+  \item \textbf{Hydrodynamic $\omega$-field} is a complex wavefunction $\Psi(\omega)$ whose persistent wells encode reusable structure
+  \item \textbf{Crystallization} is the stabilization of peaks in $|\Psi(\omega)|$ under observation-driven forcing and controlled dissipation
+  \item \textbf{Heat} stores entropic uncertainty and supports exploration through diffusion and exchange
+  \item \textbf{Homeostasis} regulates global activity through adaptive energy baselines to prevent runaway excitation or collapse
 \end{itemize}
 
 \subsection{Native Multimodality}
@@ -857,6 +850,37 @@ The manifold does not distinguish these cases. All are instances of the same bou
 \label{sec:experiments}
 
 We validate the framework across five experiments that probe different aspects of the manifold's behavior: (1) the ``collision is compression'' mechanism where hash collisions create hierarchical trie structure, (2) online adaptation to distributional shifts, (3) audio waveform reconstruction, (4) multi-source audio separation, and (5) native image handling.
+These are mechanism-validation studies. We do not present them as final scale benchmarks.
+
+\subsection{Evaluation Protocol and Anti-Toy-Scale Controls}
+\label{sec:eval_protocol}
+
+To make scale-related claims reviewable, we use the following controls for new benchmark runs:
+\begin{enumerate}
+  \item \textbf{Strict data partitioning}: train/validation/test splits are fixed in advance, with no overlap by sample identity or contiguous windows for sequence data.
+  \item \textbf{Compute-matched baselines}: comparisons are reported at matched training FLOPs and matched wall-clock budgets, not parameter count alone.
+  \item \textbf{Multi-seed statistics}: each condition is run across multiple random seeds, with mean, standard deviation, and confidence intervals reported.
+  \item \textbf{Independent scaling sweeps}: sequence length $N$, $\omega$-lattice size $k$, particle count, and grid size are swept one factor at a time before joint sweeps.
+  \item \textbf{Negative controls}: shuffled-label or shuffled-position controls are reported to verify that measured gains are not artifacts of the tokenizer or evaluation pipeline.
+\end{enumerate}
+
+\begin{table}[!htbp]
+  \centering
+  \caption{Scale-validity criteria for core claims.}
+  \label{tab:scale_validity}
+  \renewcommand{\arraystretch}{1.2}
+  \begin{tabular}{P{0.24\textwidth} P{0.42\textwidth} P{0.27\textwidth}}
+    \toprule
+    \textbf{Claim} & \textbf{Minimum evidence required} & \textbf{Failure condition} \\
+    \midrule
+    Length-insensitive step cost & Fit $t_{\text{step}}(N)=aN^\alpha$ on $N\in\{1\mathrm{k},4\mathrm{k},16\mathrm{k},64\mathrm{k}\}$ at fixed $k$ and hardware; report $\alpha$ with CI. & Lower CI bound for $\alpha$ remains clearly above zero. \\
+    Competitive byte/text modeling & On text8/enwik8-style corpora, report bits-per-byte and throughput at matched FLOPs against n-gram + compact transformer/state-space baselines. & Worse quality-efficiency frontier than all matched baselines. \\
+    Continual adaptation & Under repeated and adversarial rule shifts, report recovery half-life, forgetting, and backward transfer across seeds. & Slow recovery or persistent forgetting relative to baselines. \\
+    Cross-modal reuse & One shared manifold with no modality-pair-specific fusion objective; report Recall@K and reconstruction metrics. & Gains appear only in single-modality settings or collapse out-of-distribution. \\
+    Mechanism necessity & Ablate homeostasis, Planck exchange, inelastic merge, and $\omega$-coupling independently. & Comparable performance after removing proposed core mechanisms. \\
+    \bottomrule
+  \end{tabular}
+\end{table}
 
 \subsection{Hash Collision Compression}
 \label{sec:image_collision}
@@ -869,7 +893,11 @@ We process MNIST images using the Universal Tokenizer, varying the collision rat
 \paragraph{Results.}
 \Cref{tab:image_collision} shows that as collision rate increases, compression improves: particles with shared token IDs cluster together in 3D space, energy accumulates in shared nodes, and entropy decreases. \Cref{fig:image_collision_hero} visualizes the progressive clustering, while \Cref{fig:image_collision_bifurcation} shows the emergent trie structure---hierarchical branching where shared prefixes cluster and unique patterns diverge.
 
-\input{tables/image_collision_summary.tex}
+\IfFileExists{tables/image_collision_summary.tex}{%
+  \input{tables/image_collision_summary.tex}
+}{%
+  \fbox{\parbox{0.9\textwidth}{\centering\vspace{0.8cm}\textit{Table will be generated by \texttt{make paper}}\vspace{0.8cm}}}
+}
 
 \begin{figure}[!htbp]
   \centering
@@ -912,7 +940,11 @@ Both phrases are padded to a fixed segment size (24 bytes), ensuring the thermod
 \paragraph{Results.}
 \Cref{tab:rule_shift} shows the key finding: when the rule shifts at repetition 50, accuracy immediately drops to 0\% (the forward trie cannot predict reversed patterns). However, after just 5 additional repetitions of the new pattern, accuracy recovers to 100\%. This demonstrates rapid online adaptation through open-system driving and relaxation of $\Psi(\omega)$---no gradient-based retraining required.
 
-\input{tables/rule_shift_summary.tex}
+\IfFileExists{tables/rule_shift_summary.tex}{%
+  \input{tables/rule_shift_summary.tex}
+}{%
+  \fbox{\parbox{0.9\textwidth}{\centering\vspace{0.8cm}\textit{Table will be generated by \texttt{make paper}}\vspace{0.8cm}}}
+}
 
 \begin{figure}[!htbp]
   \centering
@@ -938,7 +970,11 @@ Audio waveforms are byte-quantized ([-1, 1] $\to$ [0, 255]) and the segment size
 \paragraph{Results.}
 \Cref{tab:audio_gen} shows reconstruction quality across waveform types. SNR ranges from 5--10 dB depending on mask level, with lower masking yielding better results. MAE (amplitude error) increases approximately linearly with mask fraction. Exact byte accuracy is near zero because continuous values rarely match exactly---but the SNR metric confirms that reconstructed waveforms closely track the original.
 
-\input{tables/audio_gen_summary.tex}
+\IfFileExists{tables/audio_gen_summary.tex}{%
+  \input{tables/audio_gen_summary.tex}
+}{%
+  \fbox{\parbox{0.9\textwidth}{\centering\vspace{0.8cm}\textit{Table will be generated by \texttt{make paper}}\vspace{0.8cm}}}
+}
 
 \begin{figure}[!htbp]
   \centering
@@ -1065,13 +1101,13 @@ Images are encoded via 2D FFT, extracting the top-$k$ frequency components. Each
 \subsection{Scaling Analysis}
 \label{sec:scaling_exp}
 
-We empirically verify the scaling properties of the manifold, particularly the O($k$) latency claim and $\omega$-field structure dynamics.
+We provide preliminary scaling evidence for the manifold, focusing on step-cost behavior and $\omega$-field structure dynamics in the tested regime.
 
 \paragraph{$\omega$-Field Structure Dynamics.}
 We track the emergence of strong wells in $|\Psi(\omega)|$ over 300 simulation steps. Results show rapid early-time organization followed by steady-state persistence under observation-driven forcing and controlled dissipation. Because the $\omega$ lattice is fixed, there are no discrete birth/death events; ``capacity'' corresponds to the finite resolution (number of $\omega$ bins) available to represent distinct wells.
 
 \paragraph{O($k$) Latency Independence.}
-We measure per-step latency across sequence lengths from 500 to 8,000 tokens. \Cref{tab:scaling} shows that latency remains stable at $\approx$3 ms/step with only 11\% coefficient of variation---empirically confirming that latency scales with $\omega$-mode count $k$ (field resolution) rather than sequence length $N$.
+We measure per-step latency across sequence lengths from 500 to 8,000 tokens. \Cref{tab:scaling} shows latency near $\approx$3 ms/step with 11\% coefficient of variation on fixed hardware. This is consistent with step cost being dominated by $\omega$-mode count $k$ (field resolution) in this range; broader claims are deferred to the protocol in \Cref{sec:eval_protocol}.
 
 \paragraph{Generalization.}
 We test structure emergence on four data types: repetitive text, semi-random patterns, natural-like text, and pure random data. All except semi-random achieve full crystallization, suggesting the manifold finds structure in both highly regular and high-entropy data.
@@ -1109,7 +1145,11 @@ We test structure emergence on four data types: repetitive text, semi-random pat
 \subsection{Ablation Studies}
 \label{sec:ablations}
 
-\input{tables/ablation.tex}
+\IfFileExists{tables/ablation.tex}{%
+  \input{tables/ablation.tex}
+}{%
+  \fbox{\parbox{0.9\textwidth}{\centering\vspace{0.8cm}\textit{Ablation table will be generated by \texttt{make paper}}\vspace{0.8cm}}}
+}
 
 \FloatBarrier  % Ensure all experiment floats are placed before Related Work
 
@@ -1164,48 +1204,51 @@ Our approach shares principles with Hebbian learning \citep{hebb1949organization
 \section{Discussion}
 \label{sec:discussion}
 
-We reiterate the framing from \Cref{sec:introduction}: this is physics as a computing paradigm, not a physics simulation. The thermodynamic and wave-physical equations we employ are drawn from established physics, but the space they operate on is abstract and computational. We are not modeling molecules in a gas or photons in a waveguide; we are using the \emph{mathematical structure} of these systems to implement learning and inference. The question ``Is this physically realistic?'' is therefore somewhat misplaced---the goal is computation, and the physics provides the algorithmic substrate.
+We reiterate the core framing from \Cref{sec:introduction}: this is physics-inspired computation, not a claim of literal physical simulation fidelity. The equations define algorithmic update rules in an abstract state space. The appropriate evaluation question is therefore empirical: does this substrate provide useful learning behavior under controlled benchmarks?
 
-\subsection{What We Claim}
-
-\begin{enumerate}
-  \item \textbf{Native multimodality}: All sensory modalities can be processed by the same thermodynamic dynamics on a shared manifold.
-  \item \textbf{No backpropagation}: Learning emerges from local thermodynamics coupled to global $\omega$-field dynamics regulated by homeostasis.
-  \item \textbf{Online adaptation}: The system adapts continuously to streaming data and distributional shifts via observation-driven reshaping of $V_{\mathrm{ext}}$ and relaxation of $\Psi(\omega)$.
-  \item \textbf{Dissipative self-organization}: Idle compute maintains structure far from equilibrium by continuing the same field dynamics under reduced external forcing.
-  \item \textbf{Zero-latency scaling}: Sequence generation latency scales with relaxation complexity $O(k)$, not sequence length $O(N)$. Time is treated as a spatial dimension.
-\end{enumerate}
-
-\subsection{What We Do Not Claim}
+\subsection{What Current Evidence Supports}
 
 \begin{enumerate}
-  \item \textbf{Closed-system thermodynamics}: The manifold is an \emph{open} system with observation-driven energy injection and dissipation. We aim for physically grounded parameterization (e.g., $\sigma_x$ from $\lambda_T$, $\kappa \sim k_BT/\hbar$, linewidth from coherence-time considerations), but we do not claim detailed balance or exact equilibrium sampling.
-  \item \textbf{Gradient-free optimization}: We are not optimizing a loss function without gradients. We sidestep optimization entirely---structure emerges from crystallization of stable wells in $|\Psi(\omega)|$.
-  \item \textbf{Transformer replacement}: Our experiments are on small-scale tasks. We make no claims about scaling to language model pretraining.
-  \item \textbf{Exact continuous dynamics}: The spatial layer uses discretized solvers (FFT Poisson; explicit finite-volume compressible Navier--Stokes). These are numerical approximations to continuous PDEs.
+  \item \textbf{Mechanistic viability}: The coupled spatial and $\omega$-field dynamics run stably and produce persistent structure under observation-driven forcing.
+  \item \textbf{Gradient-free adaptation at small scale}: Across the reported tasks, useful behavior emerges without optimizing a learned loss surface.
+  \item \textbf{Online response to distribution shift}: In the rule-shift experiment, performance recovers quickly after abrupt context change.
+  \item \textbf{Shared substrate across modalities}: The same dynamics process byte/text, image-frequency, and audio-byte inputs in one framework.
+  \item \textbf{Length-insensitive step cost in tested regimes}: Within the measured range, per-step latency is primarily controlled by field resolution and particle workload, not sequence length alone.
 \end{enumerate}
 
-\subsection{The Zero-Latency Paradigm}
+\subsection{What Remains Open}
 
-The Sensorium Manifold exposes a fundamental inefficiency in autoregressive architectures. Transformers require $O(N)$ sequential forward passes to generate $N$ tokens---each token must wait for all preceding tokens. This serial bottleneck is intrinsic to the causal mask.
+\begin{enumerate}
+  \item \textbf{Scale competitiveness}: We have not shown parity with large autoregressive models on standard language or multimodal leaderboards.
+  \item \textbf{Robustness across seeds and regimes}: Several experiments are still single-setting demonstrations rather than broad statistical studies.
+  \item \textbf{Capacity limits}: The relationship between $\omega$-lattice resolution, memory capacity, and retrieval error needs formal characterization.
+  \item \textbf{Failure modes}: We need clearer stress tests for catastrophic interference, saturation, and out-of-distribution behavior.
+  \item \textbf{Complexity constants}: Asymptotic claims require careful accounting of solver steps, synchronization overhead, and hardware effects.
+\end{enumerate}
 
-Crystallization inverts this relationship. By treating the sequence index $t$ as a spatial coordinate rather than a temporal one, the manifold solves the coupled system simultaneously: thermodynamics provides a stable substrate while the $\omega$-field provides global coupling. Constraints influence the entire relaxation field in parallel rather than only forward in an autoregressive chain.
+\subsection{Evaluation Roadmap}
 
-The practical implication: generating a 10-token sentence and a 1000-token paragraph require approximately the same number of relaxation steps, assuming the energy landscape complexity is similar. Latency scales with the number of $\omega$-modes/wells that must be excited (pattern complexity), not the number of oscillators that must be resolved (sequence length).
+To make the central claims falsifiable for an ML audience, we propose the following next-phase protocol:
 
-This is \emph{Time as Space}---a geometric rather than temporal view of sequence generation.
+\begin{enumerate}
+  \item \textbf{Long-context byte/text modeling}: evaluate on text8/enwik8-style corpora with fixed compute budgets. Report bits-per-byte, top-$k$ accuracy, throughput, and wall-clock latency. Compare against n-gram, compact transformer, and recurrent/state-space baselines.
+  \item \textbf{Continual rule-shift benchmark}: extend the current shift task to multi-phase curricula with recurring and adversarial shifts. Report adaptation half-life, backward transfer, and forgetting.
+  \item \textbf{Cross-modal retrieval/transduction}: use paired text-image-audio datasets with explicit train/validation/test partitions. Report retrieval metrics (Recall@K) and reconstruction quality (PSNR/SNR/MSE) against simple fusion and contrastive baselines.
+  \item \textbf{Scaling decomposition}: sweep sequence length $N$, field resolution $k$, particle count, and grid size independently. Fit empirical scaling exponents and report breakpoints where memory bandwidth or synchronization dominates.
+  \item \textbf{Ablation and counterfactual tests}: remove one mechanism at a time (homeostasis, Planck exchange, inelastic merge, $\omega$-field coupling) and quantify performance deltas with confidence intervals.
+\end{enumerate}
 
-\subsection{The Physics of ``Horizontal''}
+For each benchmark, report mean and variance across multiple seeds, matched compute budgets, and explicit failure cases.
 
-We claimed that ``the physics of horizontal is the same whether it is a word, a sound wave, or a pixel pattern.'' Let us make this precise:
+\subsection{How We Handle the ``Toy-Scale'' Objection}
 
-\begin{itemize}
-  \item \textbf{Text}: The word ``horizontal'' is a token with a D-dimensional embedding.
-  \item \textbf{Audio}: A sound panning left-to-right has specific frequency characteristics (Doppler, stereo phase).
-  \item \textbf{Image}: A horizontal line has energy concentrated at $v \approx 0$ in the 2D frequency domain.
-\end{itemize}
+The strongest critique of this paper is that mechanism-level demonstrations may not survive larger regimes. We treat this as a valid default position, not a misunderstanding. Concretely, any scale-sensitive claim in this paper should be considered provisional unless it satisfies the criteria in \Cref{tab:scale_validity}. This shifts the burden from narrative plausibility to quantitative acceptance tests.
 
-All three representations enter the manifold as particles. Through co-activation during training, shared wells in $\Psi(\omega)$ couple these representations. The word ``horizontal'' sustains wells that also respond to horizontal image frequencies and horizontal audio characteristics. This is not a metaphor---it is the mechanism.
+Two implications follow. First, negative outcomes are informative: if the system fails these criteria, the correct conclusion is that the current formulation is not a scalable alternative. Second, positive outcomes must be compute-accounted: gains that disappear under matched FLOPs or wall-clock budgets do not count as evidence for a superior paradigm.
+
+\subsection{Interpreting Cross-Modal ``Horizontal''}
+
+The claim that ``horizontal'' shares structure across text, audio, and vision should be read as a testable representation hypothesis: modality-specific signals that co-activate consistently can reinforce overlapping regions in $\Psi(\omega)$, enabling transfer through shared dynamical wells. The current experiments are consistent with this hypothesis, but larger and more diverse datasets are required before making strong generalization claims.
 
 % ============================================================================
 % 10. CONCLUSION
@@ -1213,13 +1256,11 @@ All three representations enter the manifold as particles. Through co-activation
 \section{Conclusion}
 \label{sec:conclusion}
 
-We have presented the Sensorium Manifold, a unified thermodynamic substrate for native multimodal computation. By representing all sensory inputs as particles with intrinsic frequencies (via the Universal Tokenizer), we achieve modality-agnostic dynamics. Learning emerges from hydrodynamic crystallization in $\omega$-space---the spontaneous formation of persistent wave structure in $\Psi(\omega)$ that couples particles through interference and tunneling---without backpropagation.
+We presented the Sensorium Manifold as a physics-native substrate for learning and inference, with one shared dynamical framework for text, image, and audio representations. Across the reported experiments, the system demonstrates mechanism-level behaviors that motivate the approach: stable $\omega$-field structure, gradient-free adaptation, and modality-agnostic processing under a common state evolution.
 
-The crystallization mechanism represents a fundamental departure from the autoregressive paradigm. By treating time as a spatial dimension and generation as a boundary value problem, we achieve latency that scales with pattern complexity rather than sequence length. The manifold functions as a Holographic Content Addressable Memory: partial inputs address complete patterns because information is distributed across the entire resonant field. ``Next token prediction'' is merely a degenerate case of this more general capability.
+At the same time, this draft does not claim large-scale superiority over modern sequence models. The central unresolved question is scale. For that reason, we define explicit acceptance criteria (\Cref{tab:scale_validity}) for latency scaling, benchmark competitiveness, continual adaptation robustness, cross-modal reuse, and mechanism necessity. These criteria are intended to be easy to fail and hard to game.
 
-The framework suggests an alternative to the optimization-centric paradigm of modern machine learning. Physical principles---thermodynamics, diffusion, homeostasis, and holographic encoding---may offer paths to adaptive systems that are better suited to continuous, online, embodied learning.
-
-The physics of ``horizontal'' really is the same across modalities. And that, perhaps, is how perception should work.
+If those tests are passed under matched compute, the work supports a substantive alternative to optimization-centric architectures. If they are not, the contribution remains a useful negative result about the limits of this physical formulation. In either case, the paper advances a falsifiable research program rather than a closed claim.
 
 % ============================================================================
 % REFERENCES
@@ -1273,7 +1314,11 @@ Given context bytes, we compute their token IDs and search for matching sequence
 \paragraph{Results.}
 \Cref{sec:next_byte_prediction} reports that the system achieves 99.3\% accuracy on deterministic paths (where only one continuation is valid) and 55.8\% on branch points (where it picks the most frequent continuation). The 92.4\% overall accuracy reflects the mixture of these cases. Importantly, the 99.4\% top-3 accuracy demonstrates that even at branch points, the correct answer is almost always among the top candidates---the system correctly learns the frequency distribution of continuations without any gradient-based training.
 
-\input{tables/next_token_summary.tex}
+\IfFileExists{tables/next_token_summary.tex}{%
+  \input{tables/next_token_summary.tex}
+}{%
+  \fbox{\parbox{0.9\textwidth}{\centering\vspace{0.8cm}\textit{Table will be generated by \texttt{make paper}}\vspace{0.8cm}}}
+}
 
 \begin{figure}[!htbp]
   \centering
@@ -1299,7 +1344,11 @@ Continuous signals are quantized to bytes (0--255) and processed with a fixed se
 \paragraph{Results.}
 \Cref{tab:timeseries} shows that the approach works well for stationary periodic signals (sawtooth: MAE 7.9, 57\% direction accuracy; periodic: MAE 21.4, 55\% direction) but struggles with non-stationary patterns. Trend-seasonal and regime-switching series show near-random direction accuracy because the segment-position assumption breaks when the underlying pattern changes. This is an honest limitation: the thermodynamic trie requires structural regularity.
 
-\input{tables/timeseries_summary.tex}
+\IfFileExists{tables/timeseries_summary.tex}{%
+  \input{tables/timeseries_summary.tex}
+}{%
+  \fbox{\parbox{0.9\textwidth}{\centering\vspace{0.8cm}\textit{Table will be generated by \texttt{make paper}}\vspace{0.8cm}}}
+}
 
 \begin{figure}[!htbp]
   \centering
@@ -1315,7 +1364,11 @@ Continuous signals are quantized to bytes (0--255) and processed with a fixed se
 \FloatBarrier
 
 \subsection{MNIST Classification from Raw Bytes}
-\input{tables/mnist_bytes_summary.tex}
+\IfFileExists{tables/mnist_bytes_summary.tex}{%
+  \input{tables/mnist_bytes_summary.tex}
+}{%
+  \fbox{\parbox{0.9\textwidth}{\centering\vspace{0.8cm}\textit{Table will be generated by \texttt{make paper}}\vspace{0.8cm}}}
+}
 \begin{figure}[!htbp]
   \centering
   \IfFileExists{figures/mnist_bytes.png}{%
@@ -1370,7 +1423,11 @@ We train on clean text (repetitive phrases to enable pattern learning), then mas
 \paragraph{Results.}
 \Cref{tab:text_diffusion} shows that reconstruction accuracy ranges from 3--11\% across mask levels, well above the random baseline (1/256 $\approx$ 0.4\%). Accuracy is highest at low masking (10\%) where more context is available. The relatively modest accuracy reflects the challenge: text has high entropy per character, and the thermodynamic trie works best when patterns repeat exactly.
 
-\input{tables/text_diffusion_summary.tex}
+\IfFileExists{tables/text_diffusion_summary.tex}{%
+  \input{tables/text_diffusion_summary.tex}
+}{%
+  \fbox{\parbox{0.9\textwidth}{\centering\vspace{0.8cm}\textit{Table will be generated by \texttt{make paper}}\vspace{0.8cm}}}
+}
 
 \begin{figure}[!htbp]
   \centering
@@ -1400,6 +1457,65 @@ We train on clean text (repetitive phrases to enable pattern learning), then mas
   \caption{Final dashboard frame from a finite kernel simulation run.}
   \label{fig:continuous_final}
 \end{figure}
+
+\FloatBarrier
+
+\section{Review-Ready Benchmark Templates}
+\label{app:review_templates}
+
+The following templates are intended for the next revision cycle, where scale-sensitive claims are evaluated under matched-compute conditions.
+
+\begin{table}[!htbp]
+  \centering
+  \caption{Long-context byte/text benchmark template (fill with measured values).}
+  \label{tab:template_text_scale}
+  \renewcommand{\arraystretch}{1.2}
+  \begin{tabular}{P{0.11\textwidth} P{0.09\textwidth} P{0.10\textwidth} P{0.10\textwidth} P{0.10\textwidth} P{0.10\textwidth} P{0.10\textwidth} P{0.10\textwidth}}
+    \toprule
+    \textbf{Model} & \textbf{Dataset} & \textbf{Context $N$} & \textbf{Train FLOPs} & \textbf{Wall-clock (h)} & \textbf{Bits/byte} & \textbf{Tokens/s} & \textbf{ms/step} \\
+    \midrule
+    Sensorium & text8 &  &  &  &  &  &  \\
+    Sensorium & enwik8 &  &  &  &  &  &  \\
+    N-gram baseline & text8 &  &  &  &  &  &  \\
+    Compact Transformer & text8 &  &  &  &  &  &  \\
+    Compact SSM/RNN & text8 &  &  &  &  &  &  \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\begin{table}[!htbp]
+  \centering
+  \caption{Continual adaptation template (distribution-shift protocol).}
+  \label{tab:template_adaptation}
+  \renewcommand{\arraystretch}{1.2}
+  \begin{tabular}{P{0.15\textwidth} P{0.13\textwidth} P{0.14\textwidth} P{0.13\textwidth} P{0.14\textwidth} P{0.10\textwidth}}
+    \toprule
+    \textbf{Model} & \textbf{Shift Type} & \textbf{Recovery Half-life} & \textbf{Forgetting ($\downarrow$)} & \textbf{Backward Transfer} & \textbf{Seeds} \\
+    \midrule
+    Sensorium & periodic $\rightarrow$ reversed &  &  &  &  \\
+    Sensorium & adversarial shifts &  &  &  &  \\
+    Compact Transformer & periodic $\rightarrow$ reversed &  &  &  &  \\
+    Compact SSM/RNN & periodic $\rightarrow$ reversed &  &  &  &  \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\begin{table}[!htbp]
+  \centering
+  \caption{Scaling decomposition template (single-factor sweeps + fitted exponents).}
+  \label{tab:template_scaling}
+  \renewcommand{\arraystretch}{1.2}
+  \begin{tabular}{P{0.14\textwidth} P{0.10\textwidth} P{0.12\textwidth} P{0.12\textwidth} P{0.14\textwidth} P{0.18\textwidth}}
+    \toprule
+    \textbf{Sweep Variable} & \textbf{Range} & \textbf{Held Fixed} & \textbf{Fit Form} & \textbf{Exponent (CI)} & \textbf{Primary Bottleneck} \\
+    \midrule
+    Sequence length $N$ &  & $k$, grid, hardware & $t_{\text{step}}=aN^\alpha$ &  &  \\
+    Field size $k$ &  & $N$, grid, hardware & $t_{\text{step}}=bk^\beta$ &  &  \\
+    Particle count &  & $N$, $k$, hardware & $t_{\text{step}}=cn^\gamma$ &  &  \\
+    Grid resolution &  & $N$, $k$, hardware & $t_{\text{step}}=dg^\delta$ &  &  \\
+    \bottomrule
+  \end{tabular}
+\end{table}
 
 \FloatBarrier
 

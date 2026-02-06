@@ -1,35 +1,32 @@
-"""Wave-trie / holographic associative memory (easy proof).
-
-This experiment does NOT change physics. It "shows the cards" by extracting a
-lossless path representation (sequence transitions) and a compressed map view
-(folded mass over content+position keys), then emitting paper-ready artifacts.
-
-Key idea:
-- Map key is not a hash: (sequence_position, byte_value)
-  This is the simplest lossless ID for the "what" + "where (claimed)" concept.
-- Path transitions are measured over these keys within each sample.
-"""
+"""Wave-trie / map-vs-path branching experiment (analysis mode)."""
 
 from __future__ import annotations
 
+from pathlib import Path
+
+from sensorium.dataset import SyntheticConfig, SyntheticDataset, SyntheticPattern
 from sensorium.experiments.base import Experiment
-from sensorium.manifold import Manifold
-from sensorium.tokenizer.universal import UniversalTokenizer
-from sensorium.observers.sql import SQLObserver
+from sensorium.experiments.state_builder import StateBuildConfig, build_observation_state
 from sensorium.observers.inference import InferenceObserver
-from sensorium.dataset import HuggingFaceDataset, HuggingFaceConfig
+from sensorium.observers.metrics import KeySpec, MapPathMetrics, TokenDistributionMetrics, WaveFieldMetrics
+from sensorium.observers.sql import SQLObserver, SQLObserverConfig
+from sensorium.projectors import ConsoleProjector, LaTeXTableProjector, PipelineProjector, TableConfig, TopTransitionsProjector
 
 
 class WaveTrieExperiment(Experiment):
-    """Measure position+byte folding + transitions (easy proof)."""
+    """Measure branch structure and fold statistics for shared-prefix datasets."""
 
     def __init__(self, experiment_name: str, profile: bool = False, dashboard: bool = False):
         super().__init__(
-            experiment_name, profile, dashboard=dashboard,
+            experiment_name,
+            profile,
+            dashboard=dashboard,
             reportable=[
                 "scenario",
                 "n_tokens",
                 "n_samples",
+                "compression_ratio",
+                "collision_rate_observed",
                 "unique_keys",
                 "key_collision_rate",
                 "transition_edges",
@@ -39,38 +36,84 @@ class WaveTrieExperiment(Experiment):
                 "fold_top1",
                 "fold_pr",
                 "fold_entropy",
-                "psi_delta_rel",
+                "mode_participation",
+                "mode_entropy",
+                "sql_n_branch_edges",
+                "sql_max_branch_count",
+                "sql_mean_branch_count",
+            ],
+        )
+
+        self.state_config = StateBuildConfig(grid_size=(64, 64, 64), mode_bins=512)
+        self.scenarios = [
+            {
+                "name": "abc_abd_abe",
+                "patterns": ["ABC", "ABD", "ABE"],
+                "counts": {"ABC": 128, "ABD": 128, "ABE": 128},
+            },
+            {
+                "name": "ab_repeat_branch",
+                "patterns": ["ABAB", "ABAC", "ABAD", "ABAE"],
+                "counts": {"ABAB": 96, "ABAC": 96, "ABAD": 96, "ABAE": 96},
+            },
+        ]
+
+        self.inference = InferenceObserver(
+            [
+                TokenDistributionMetrics(),
+                MapPathMetrics(key=KeySpec("sequence_byte"), topk=20),
+                WaveFieldMetrics(),
+                SQLObserver(
+                    """
+                    SELECT
+                        COUNT(*) AS n_branch_edges,
+                        MAX(edge_count) AS max_branch_count,
+                        AVG(edge_count) AS mean_branch_count
+                    FROM transitions;
+                    """,
+                    config=SQLObserverConfig(row_limit=1),
+                ),
             ]
         )
 
-        self.manifold = Manifold(
-            tokenizer=UniversalTokenizer(datasets=[HuggingFaceDataset(HuggingFaceConfig(
-                name="nyu-mll/glue",
-                subset="mrpc",
-                split="train",
-                field="text",
-                streaming=True,
-            ))])
-        )
-
-    def observe(self, _state: dict) -> dict:
-        return InferenceObserver(
-            SQLObserver("""
-                SELECT 
-                    CAST(particles AS TEXT), 
-                    load_count 
-                FROM simulation;
-                JOIN simulation.thermodynamic ON simulation.id = simulation.thermodynamic.id;
-                JOIN simulation.coherence ON simulation.id = simulation.coherence.id;
-                WHERE simulation.coherence.state = 'CRYSTALLIZED'
-                ORDER BY simulation.coherence.amplitude DESC 
-                LIMIT 5;
-            """)
+        self.projector = PipelineProjector(
+            ConsoleProjector(fields=self.reportable, format="table"),
+            LaTeXTableProjector(
+                TableConfig(
+                    name="wave_trie_summary",
+                    columns=self.reportable,
+                    caption="Wave-trie branch/fold summary (analysis mode)",
+                    label="tab:wave_trie",
+                    precision=4,
+                ),
+                output_dir=Path("paper/tables"),
+            ),
+            TopTransitionsProjector(),
         )
 
     def run(self):
-        self.project(self.observe(self.manifold.run()))
+        for item in self.scenarios:
+            dataset = SyntheticDataset(
+                SyntheticConfig(
+                    pattern=SyntheticPattern.TEXT_PREFIX,
+                    text_patterns=list(item["patterns"]),
+                    pattern_counts=dict(item["counts"]),
+                    seed=42,
+                )
+            )
+            state = build_observation_state(dataset.generate(), config=self.state_config)
+
+            self.inference.observe(
+                state,
+                scenario=str(item["name"]),
+                run_name=str(item["name"]),
+                n_tokens=int(state["token_ids"].numel()),
+            )
+
+        return self.project()
+
+    def observe(self, state: dict) -> dict:
+        return self.inference.observe(state)
 
     def project(self) -> dict:
         return self.projector.project(self.inference)
-

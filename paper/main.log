@@ -1,4 +1,4 @@
-This is pdfTeX, Version 3.141592653-2.6-1.40.27 (TeX Live 2025) (preloaded format=pdflatex 2025.12.17)  6 FEB 2026 05:00
+This is pdfTeX, Version 3.141592653-2.6-1.40.27 (TeX Live 2025) (preloaded format=pdflatex 2025.12.17)  6 FEB 2026 22:41
 entering extended mode
  restricted \write18 enabled.
  %&-line parsing enabled.
@@ -1068,12 +1068,12 @@ Package microtype Info: Loading generic protrusion settings for font family
 (microtype)             For optimal results, create family-specific settings.
 (microtype)             See the microtype manual for details.
 
-Underfull \hbox (badness 3078) in paragraph at lines 162--163
+Underfull \hbox (badness 3078) in paragraph at lines 159--160
 []|\T1/cmr/m/n/10.95 (+20) Deterministic hash-ing of raw
  []
 
 
-Underfull \hbox (badness 10000) in paragraph at lines 164--165
+Underfull \hbox (badness 10000) in paragraph at lines 161--162
 []|\T1/cmr/m/n/10.95 (+20) Deterministic, collision-free,
  []
 
@@ -1115,179 +1115,186 @@ al/texlive/2025/texmf-dist/fonts/enc/dvips/cm-super/cm-super-t1.enc}]
 
 [16]
 
-[17] (./tables/image_collision_summary.tex
+[17]
+Overfull \hbox (4.29582pt too wide) in paragraph at lines 872--883
+ [][] 
+ []
+
+
+
+[18] (./tables/image_collision_summary.tex
 Overfull \hbox (64.82083pt too wide) in paragraph at lines 5--17
  [][] 
  []
 
 )
-<figures/image_collision_hero.png, id=579, 994.4352pt x 713.3049pt>
+<figures/image_collision_hero.png, id=602, 994.4352pt x 713.3049pt>
 File: figures/image_collision_hero.png Graphic file (type png)
 <use figures/image_collision_hero.png>
-Package pdftex.def Info: figures/image_collision_hero.png  used on input line 8
-78.
+Package pdftex.def Info: figures/image_collision_hero.png  used on input line 9
+08.
 (pdftex.def)             Requested size: 452.9679pt x 324.9134pt.
-<figures/image_collision_bifurcation.png, id=581, 888.55965pt x 600.92505pt>
+<figures/image_collision_bifurcation.png, id=604, 888.55965pt x 600.92505pt>
 File: figures/image_collision_bifurcation.png Graphic file (type png)
 <use figures/image_collision_bifurcation.png>
 Package pdftex.def Info: figures/image_collision_bifurcation.png  used on input
- line 889.
+ line 919.
 (pdftex.def)             Requested size: 452.9679pt x 306.33936pt.
 
 
-[18]
+[19]
 
-[19 <./figures/image_collision_hero.png>]
+[20 <./figures/image_collision_hero.png>]
 
-[20 <./figures/image_collision_bifurcation.png>]
+[21 <./figures/image_collision_bifurcation.png>]
 (./tables/rule_shift_summary.tex)
-<figures/rule_shift.png, id=604, 1004.3121pt x 281.853pt>
+<figures/rule_shift.png, id=626, 1004.3121pt x 281.853pt>
 File: figures/rule_shift.png Graphic file (type png)
 <use figures/rule_shift.png>
-Package pdftex.def Info: figures/rule_shift.png  used on input line 921.
+Package pdftex.def Info: figures/rule_shift.png  used on input line 955.
 (pdftex.def)             Requested size: 452.9679pt x 127.12512pt.
 
 
-[21
+[22
 
  <./figures/rule_shift.png>] (./tables/audio_gen_summary.tex)
-<figures/audio_gen.png, id=615, 1004.3121pt x 281.853pt>
+<figures/audio_gen.png, id=637, 1004.3121pt x 281.853pt>
 File: figures/audio_gen.png Graphic file (type png)
 <use figures/audio_gen.png>
-Package pdftex.def Info: figures/audio_gen.png  used on input line 947.
+Package pdftex.def Info: figures/audio_gen.png  used on input line 985.
 (pdftex.def)             Requested size: 452.9679pt x 127.12512pt.
 
 
-[22 <./figures/audio_gen.png>] (./tables/cocktail_party_summary.tex)
-<figures/cocktail_party.png, id=626, 1004.3121pt x 281.853pt>
+[23 <./figures/audio_gen.png>] (./tables/cocktail_party_summary.tex)
+<figures/cocktail_party.png, id=648, 1004.3121pt x 281.853pt>
 File: figures/cocktail_party.png Graphic file (type png)
 <use figures/cocktail_party.png>
-Package pdftex.def Info: figures/cocktail_party.png  used on input line 977.
+Package pdftex.def Info: figures/cocktail_party.png  used on input line 1015.
 (pdftex.def)             Requested size: 452.9679pt x 127.12512pt.
 
 
-[23] (./tables/mnist_trie_recall_summary.tex)
-<figures/mnist_bytes.png, id=634, 578.16pt x 361.35pt>
+[24] (./tables/mnist_trie_recall_summary.tex)
+<figures/mnist_bytes.png, id=656, 578.16pt x 361.35pt>
 File: figures/mnist_bytes.png Graphic file (type png)
 <use figures/mnist_bytes.png>
-Package pdftex.def Info: figures/mnist_bytes.png  used on input line 1001.
+Package pdftex.def Info: figures/mnist_bytes.png  used on input line 1039.
 (pdftex.def)             Requested size: 407.66833pt x 254.79037pt.
 
 
-[24 <./figures/cocktail_party.png>] (./tables/cross_modal_summary.tex)
-<figures/cross_modal.png, id=642, 827.7324pt x 627.5445pt>
+[25 <./figures/cocktail_party.png>] (./tables/cross_modal_summary.tex)
+<figures/cross_modal.png, id=665, 827.7324pt x 627.5445pt>
 File: figures/cross_modal.png Graphic file (type png)
 <use figures/cross_modal.png>
-Package pdftex.def Info: figures/cross_modal.png  used on input line 1033.
+Package pdftex.def Info: figures/cross_modal.png  used on input line 1071.
 (pdftex.def)             Requested size: 452.9679pt x 343.41736pt.
-<figures/cross_modal_embedding.png, id=643, 669.4611pt x 540.0978pt>
+<figures/cross_modal_embedding.png, id=666, 669.4611pt x 540.0978pt>
 File: figures/cross_modal_embedding.png Graphic file (type png)
 <use figures/cross_modal_embedding.png>
 Package pdftex.def Info: figures/cross_modal_embedding.png  used on input line 
-1044.
+1082.
 (pdftex.def)             Requested size: 385.02547pt x 310.62799pt.
-<figures/frequency_particles.png, id=644, 686.3241pt x 600.0819pt>
+<figures/frequency_particles.png, id=667, 686.3241pt x 600.0819pt>
 File: figures/frequency_particles.png Graphic file (type png)
 <use figures/frequency_particles.png>
 Package pdftex.def Info: figures/frequency_particles.png  used on input line 10
-56.
+94.
 (pdftex.def)             Requested size: 317.07614pt x 277.23135pt.
 
 
-[25 <./figures/mnist_bytes.png>]
+[26 <./figures/mnist_bytes.png>]
 
-[26 <./figures/cross_modal.png>]
+[27 <./figures/cross_modal.png>]
 
-[27 <./figures/cross_modal_embedding.png>]
+[28 <./figures/cross_modal_embedding.png>]
 
-[28 <./figures/frequency_particles.png>] (./tables/scaling_summary.tex)
-<figures/scaling_dynamics.png, id=674, 859.7721pt x 715.473pt>
+[29 <./figures/frequency_particles.png>] (./tables/scaling_summary.tex)
+<figures/scaling_dynamics.png, id=697, 859.7721pt x 715.473pt>
 File: figures/scaling_dynamics.png Graphic file (type png)
 <use figures/scaling_dynamics.png>
-Package pdftex.def Info: figures/scaling_dynamics.png  used on input line 1089.
+Package pdftex.def Info: figures/scaling_dynamics.png  used on input line 1127.
 
 (pdftex.def)             Requested size: 452.9679pt x 376.94994pt.
-<figures/scaling_compute.png, id=675, 1075.1367pt x 354.123pt>
+<figures/scaling_compute.png, id=698, 1075.1367pt x 354.123pt>
 File: figures/scaling_compute.png Graphic file (type png)
 <use figures/scaling_compute.png>
-Package pdftex.def Info: figures/scaling_compute.png  used on input line 1100.
+Package pdftex.def Info: figures/scaling_compute.png  used on input line 1138.
 (pdftex.def)             Requested size: 452.9679pt x 149.19533pt.
 
 
-[29
+[30
 
 ]
 
-[30 <./figures/scaling_dynamics.png> <./figures/scaling_compute.png>]
+[31 <./figures/scaling_dynamics.png> <./figures/scaling_compute.png>]
 (./tables/ablation.tex)
 
-[31]
-Overfull \hbox (2.41934pt too wide) in paragraph at lines 1133--1134
+[32]
+Overfull \hbox (2.41934pt too wide) in paragraph at lines 1175--1176
  []\T1/cmr/bx/n/10.95 (-20) Content-Addressable Mem-ory in Trans-form-ers[] \T1
 /cmr/m/n/10.95 (-20) Re-cent work in-te-grates content-addressable
  []
 
 
 
-[32]
-
 [33]
 
-[34] (./main.bbl
+[34]
 
-[35]
+[35] (./main.bbl
 
 [36]
 
 [37]
 
-[38])
-<figures/collision_compression_summary.png, id=867, 1011.78pt x 722.7pt>
+[38]
+
+[39])
+<figures/collision_compression_summary.png, id=898, 1011.78pt x 722.7pt>
 File: figures/collision_compression_summary.png Graphic file (type png)
 <use figures/collision_compression_summary.png>
 Package pdftex.def Info: figures/collision_compression_summary.png  used on inp
-ut line 1247.
+ut line 1290.
 (pdftex.def)             Requested size: 430.31812pt x 307.36949pt.
 
 
-[39 <./figures/collision_compression_summary.png>]
+[40 <./figures/collision_compression_summary.png>]
 (./tables/next_token_summary.tex)
-<figures/next_token.png, id=875, 1007.4438pt x 281.853pt>
+<figures/next_token.png, id=906, 1007.4438pt x 281.853pt>
 File: figures/next_token.png Graphic file (type png)
 <use figures/next_token.png>
-Package pdftex.def Info: figures/next_token.png  used on input line 1282.
+Package pdftex.def Info: figures/next_token.png  used on input line 1329.
 (pdftex.def)             Requested size: 452.9679pt x 126.72516pt.
 
 
-[40] (./tables/timeseries_summary.tex)
-<figures/timeseries.png, id=887, 1004.0712pt x 281.6121pt>
+[41] (./tables/timeseries_summary.tex)
+<figures/timeseries.png, id=919, 1004.0712pt x 281.6121pt>
 File: figures/timeseries.png Graphic file (type png)
 <use figures/timeseries.png>
-Package pdftex.def Info: figures/timeseries.png  used on input line 1308.
+Package pdftex.def Info: figures/timeseries.png  used on input line 1359.
 (pdftex.def)             Requested size: 452.9679pt x 127.04225pt.
 
 
-[41 <./figures/next_token.png> <./figures/timeseries.png>]
+[42 <./figures/next_token.png> <./figures/timeseries.png>]
 (./tables/mnist_bytes_summary.tex)
 File: figures/mnist_bytes.png Graphic file (type png)
 <use figures/mnist_bytes.png>
-Package pdftex.def Info: figures/mnist_bytes.png  used on input line 1323.
+Package pdftex.def Info: figures/mnist_bytes.png  used on input line 1378.
 (pdftex.def)             Requested size: 339.72592pt x 212.329pt.
 
 
-[42] (./tables/image_gen_summary.tex)
-<figures/image_gen.png, id=905, 1004.3121pt x 281.853pt>
+[43] (./tables/image_gen_summary.tex)
+<figures/image_gen.png, id=938, 1004.3121pt x 281.853pt>
 File: figures/image_gen.png Graphic file (type png)
 <use figures/image_gen.png>
-Package pdftex.def Info: figures/image_gen.png  used on input line 1353.
+Package pdftex.def Info: figures/image_gen.png  used on input line 1408.
 (pdftex.def)             Requested size: 452.9679pt x 127.12512pt.
 
 
-[43 <./figures/image_gen.png>] (./tables/text_diffusion_summary.tex)
-<figures/text_diffusion.png, id=919, 715.7139pt x 282.0939pt>
+[44 <./figures/image_gen.png>] (./tables/text_diffusion_summary.tex)
+<figures/text_diffusion.png, id=950, 715.7139pt x 282.0939pt>
 File: figures/text_diffusion.png Graphic file (type png)
 <use figures/text_diffusion.png>
-Package pdftex.def Info: figures/text_diffusion.png  used on input line 1379.
+Package pdftex.def Info: figures/text_diffusion.png  used on input line 1438.
 (pdftex.def)             Requested size: 407.66833pt x 160.68327pt.
 
 (./tables/text_diffusion_examples.tex
@@ -1304,38 +1311,60 @@ tion.
 
 )
 
-[44 <./figures/text_diffusion.png>]
-<figures/continuous_final.png, id=929, 1107.1764pt x 598.3956pt>
+[45 <./figures/text_diffusion.png>]
+<figures/continuous_final.png, id=960, 1107.1764pt x 598.3956pt>
 File: figures/continuous_final.png Graphic file (type png)
 <use figures/continuous_final.png>
-Package pdftex.def Info: figures/continuous_final.png  used on input line 1397.
+Package pdftex.def Info: figures/continuous_final.png  used on input line 1456.
 
 (pdftex.def)             Requested size: 452.9679pt x 244.8142pt.
 
+Overfull \hbox (0.52391pt too wide) in paragraph at lines 1475--1475
+[]|\T1/cmr/bx/n/10.95 (-20) Dataset|  
+ []
 
-[45 <./figures/continuous_final.png>]
+
+Overfull \hbox (5.85924pt too wide) in paragraph at lines 1475--1475
+[]|\T1/cmr/bx/n/10.95 (-20) Bits/byte|  
+ []
+
+
+Overfull \hbox (2.6537pt too wide) in paragraph at lines 1475--1475
+[]|\T1/cmr/bx/n/10.95 (-20) Tokens/s|  
+ []
+
+
+Overfull \hbox (5.42155pt too wide) in paragraph at lines 1473--1484
+ [][] 
+ []
+
+
+
+[46 <./figures/continuous_final.png>]
+
+[47]
 Package hyperref Info: bookmark level for unknown algorithm defaults to 0 on in
-put line 1447.
+put line 1565.
 
 
-[46]
+[48]
 
-[47] (./main.aux)
+[49] (./main.aux)
  ***********
 LaTeX2e <2024-11-01> patch level 2
 L3 programming layer <2025-01-18>
  ***********
 Package rerunfilecheck Info: File `main.out' has not changed.
-(rerunfilecheck)             Checksum: B2E7D8C9920330787A5FCDEC1F7F6A6A;11828.
+(rerunfilecheck)             Checksum: 20CCE48A2A67C0A96FC908AAB4FB83B8;12698.
  ) 
 Here is how much of TeX's memory you used:
- 35878 strings out of 473190
- 709161 string characters out of 5715799
- 1145846 words of memory out of 5000000
- 57769 multiletter control sequences out of 15000+600000
- 608460 words of font info for 329 fonts, out of 8000000 for 9000
+ 35917 strings out of 473190
+ 709730 string characters out of 5715799
+ 1159583 words of memory out of 5000000
+ 57784 multiletter control sequences out of 15000+600000
+ 608602 words of font info for 331 fonts, out of 8000000 for 9000
  1141 hyphenation exceptions out of 8191
- 98i,12n,101p,1001b,668s stack positions out of 10000i,1000n,20000p,200000b,200000s
+ 98i,16n,101p,1001b,668s stack positions out of 10000i,1000n,20000p,200000b,200000s
 </usr/local/texlive/2025/texmf-dist/fonts/type1/public/amsfonts/cm/cmbx10.pfb
 ></usr/local/texlive/2025/texmf-dist/fonts/type1/public/amsfonts/cm/cmbx8.pfb><
 /usr/local/texlive/2025/texmf-dist/fonts/type1/public/amsfonts/cm/cmex10.pfb></
@@ -1372,10 +1401,10 @@ e1/public/cm-super/sfti1200.pfb></usr/local/texlive/2025/texmf-dist/fonts/type1
 /public/cm-super/sftt0900.pfb></usr/local/texlive/2025/texmf-dist/fonts/type1/p
 ublic/cm-super/sftt1095.pfb></usr/local/texlive/2025/texmf-dist/fonts/type1/pub
 lic/cm-super/sftt1200.pfb>
-Output written on main.pdf (47 pages, 6196097 bytes).
+Output written on main.pdf (49 pages, 6202922 bytes).
 PDF statistics:
- 1201 PDF objects out of 1440 (max. 8388607)
- 1010 compressed objects within 11 object streams
- 353 named destinations out of 1000 (max. 500000)
- 81114 words of extra memory for PDF output out of 89155 (max. 10000000)
+ 1245 PDF objects out of 1440 (max. 8388607)
+ 1052 compressed objects within 11 object streams
+ 373 named destinations out of 1000 (max. 500000)
+ 81138 words of extra memory for PDF output out of 89155 (max. 10000000)
 
