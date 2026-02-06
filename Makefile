@@ -1,4 +1,4 @@
-.PHONY: install install-dev install-all clean test lint format typecheck demo help
+.PHONY: install install-dev install-all clean test lint format typecheck demo help experiments experiments_dashboard
 
 # Default Python version
 PYTHON := python3.12
@@ -14,19 +14,8 @@ help: ## Show this help message
 
 install: ## Install dependencies using uv
 	$(PYTHON) -m venv $(VENV)
-	$(ACTIVATE) && uv sync --extra experiments
+	$(ACTIVATE) && uv sync
 
-install-dev: ## Install with development dependencies
-	$(PYTHON) -m venv $(VENV)
-	$(ACTIVATE) && uv sync --extra dev
-
-install-viz: ## Install with visualization dependencies
-	$(PYTHON) -m venv $(VENV)
-	$(ACTIVATE) && uv sync --extra viz
-
-install-all: ## Install all optional dependencies
-	$(PYTHON) -m venv $(VENV)
-	$(ACTIVATE) && uv sync --all-extras
 
 clean: ## Remove virtual environment and build artifacts
 	rm -rf $(VENV)
@@ -41,41 +30,29 @@ clean: ## Remove virtual environment and build artifacts
 	find . -type f -name "*.pyc" -delete 2>/dev/null || true
 
 test: ## Run all tests
-	$(ACTIVATE) && pytest thermo_manifold/ -v
+	$(ACTIVATE) && pytest sensorium/ -v
 
 test-cov: ## Run tests with coverage
-	$(ACTIVATE) && pytest thermo_manifold/ -v --cov=thermo_manifold --cov-report=term-missing
+	$(ACTIVATE) && pytest sensorium/ -v --cov=sensorium --cov-report=term-missing
 
 lint: ## Run linter (ruff)
-	$(ACTIVATE) && ruff check thermo_manifold/
+	$(ACTIVATE) && ruff check sensorium/
 
 lint-fix: ## Run linter and fix issues
-	$(ACTIVATE) && ruff check --fix thermo_manifold/
+	$(ACTIVATE) && ruff check --fix sensorium/
 
 format: ## Format code with black and isort
-	$(ACTIVATE) && black thermo_manifold/
-	$(ACTIVATE) && isort thermo_manifold/
+	$(ACTIVATE) && black sensorium/
+	$(ACTIVATE) && isort sensorium/
 
 format-check: ## Check formatting without making changes
-	$(ACTIVATE) && black --check thermo_manifold/
-	$(ACTIVATE) && isort --check-only thermo_manifold/
+	$(ACTIVATE) && black --check sensorium/
+	$(ACTIVATE) && isort --check-only sensorium/
 
 typecheck: ## Run type checking with mypy
-	$(ACTIVATE) && mypy thermo_manifold/
+	$(ACTIVATE) && mypy sensorium/
 
 check: lint format-check typecheck ## Run all checks (lint, format, typecheck)
-
-demo: ## Run the unified demo
-	$(ACTIVATE) && python -m thermo_manifold.demos.unified_demo
-
-demo-rule-shift: ## Run the rule-shift benchmark demo
-	$(ACTIVATE) && python -m thermo_manifold.demos.rule_shift_demo
-
-demo-multimodal: ## Run the unified multimodal demo (image encoding/decoding)
-	$(ACTIVATE) && python -m thermo_manifold.demos.unified_multimodal_demo
-
-demo-cross-modal: ## Run the cross-modal demo (text + image together)
-	$(ACTIVATE) && python -m thermo_manifold.demos.cross_modal_demo
 
 # ============================================================================
 # SIMULATION
@@ -87,21 +64,6 @@ run: ## Run the physics simulation with dashboard
 run-profile: ## Run simulation with GPU profiling
 	$(ACTIVATE) && python run.py --profile
 
-run-bench: ## Run headless benchmark (no dashboard)
-	$(ACTIVATE) && python run.py --no-dashboard --steps 1000 --profile
-
-run-quick: ## Quick test run (100 steps, 500 particles)
-	$(ACTIVATE) && python run.py --steps 100 --particles 500
-
-run-continuous: ## Run indefinitely with random file injections
-	$(ACTIVATE) && python run.py --continuous --particles 200 --dashboard-video artifacts/dashboard.mp4 --dashboard-fps 30
-
-run-continuous-fast: ## Continuous mode with faster injections (5-20s)
-	$(ACTIVATE) && python run.py --continuous --particles 100 --inject-min 5 --inject-max 20
-
-run-script: ## Deterministic scripted injections (integrity check)
-	$(ACTIVATE) && python run.py --particles 200 --dashboard-video artifacts/dashboard_script.mp4 --dashboard-fps 30 --seed 0 --injection-script artifacts/injection_script_example.json
-
 # ============================================================================
 # EXPERIMENTS (Metal/MPS kernel-based)
 # ============================================================================
@@ -110,42 +72,9 @@ experiments: ## Run all kernel experiments
 	@mkdir -p paper/figures paper/tables
 	$(ACTIVATE) && python -m sensorium.experiments --experiment all
 
-experiments-v: ## Run all kernel experiments (verbose)
-	@mkdir -p paper/figures paper/tables
-	$(ACTIVATE) && python -m sensorium.experiments --experiment all
-
-exp-rule-shift: ## Run rule shift experiment only
-	$(ACTIVATE) && python -m sensorium.experiments --experiment rule_shift
-
-exp-ablation: ## Run ablation study only
-	$(ACTIVATE) && python -m sensorium.experiments --experiment ablation
-
-exp-continuous: ## Run continuous simulation experiment
-	$(ACTIVATE) && python -m sensorium.experiments --experiment continuous
-
-exp-timeseries: ## Run time series experiment only
-	$(ACTIVATE) && python -m sensorium.experiments --experiment timeseries
-
-exp-next-token: ## Run next token prediction experiment only
-	$(ACTIVATE) && python -m sensorium.experiments --experiment next_token
-
-exp-mnist: ## Run MNIST bytes experiment only
-	$(ACTIVATE) && python -m sensorium.experiments --experiment mnist_bytes
-
-exp-image: ## Run image generation experiment only
-	$(ACTIVATE) && python -m sensorium.experiments --experiment image_gen
-
-exp-audio: ## Run audio generation experiment only
-	$(ACTIVATE) && python -m sensorium.experiments --experiment audio_gen
-
-exp-text-diffusion: ## Run text diffusion experiment only
-	$(ACTIVATE) && python -m sensorium.experiments --experiment text_diffusion
-
-exp-cocktail: ## Run cocktail party (source separation) experiment
-	$(ACTIVATE) && python -m sensorium.experiments --experiment cocktail_party
-
-exp-collision: ## Run Universal Tokenizer TOY collision sweep
-	$(ACTIVATE) && python -m sensorium.experiments --experiment collision
+experiments_dashboard: ## Run all experiments with live dashboard + video recording
+	@mkdir -p paper/figures paper/tables paper/videos
+	$(ACTIVATE) && python -m sensorium.experiments --experiment all --dashboard --dashboard-fps 30
 
 # ============================================================================
 # PAPER GENERATION

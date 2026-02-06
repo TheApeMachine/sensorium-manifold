@@ -1,177 +1,169 @@
 """MNIST trie recall experiment (paper-ready).
 
-This keeps the experiment file small by delegating:
-- MNIST parsing + splits to `sensorium.dataset.mnist_idx`
-- Recall metrics + plotting to `sensorium.observers.mnist_trie`
+This experiment uses the clean composable pattern:
+- Datasets: FilesystemDataset for MNIST train and holdout
+- Observers: DehashObserver + EnergyObserver for reconstruction
+- Projectors: ReconstructionProjector for image output
+
+Produces:
+- `artifacts/mnist_recall.png`
 """
 
 from __future__ import annotations
 
-import numpy as np
-import torch
+from pathlib import Path
 
 from sensorium.experiments.base import Experiment
+
+# 1. DATASETS
+from sensorium.dataset import FilesystemDataset, FilesystemConfig
+
+# MNIST image constants
+MNIST_IMAGE_SIZE = 28 * 28  # 784 bytes per image
+
+# 2. OBSERVERS
+from sensorium.observers.inference import InferenceObserver
+from sensorium.observers.modes import ModeObserver
+from sensorium.observers.energy import EnergyObserver
+from sensorium.observers.metrics import DehashObserver
+
+# 3. MANIFOLD
 from optimizer.manifold import (
     Manifold,
     SimulationConfig,
     GeometricSimulationConfig,
-    SpectralSimulationConfig,
+    CoherenceSimulationConfig,
 )
 from optimizer.tokenizer import TokenizerConfig
-from sensorium.observers.inference import InferenceObserver
-from sensorium.observers.carrier import CarrierObserver
-from sensorium.dataset.filesystem import FilesystemDataset
-from sensorium.dataset.base import DatasetConfig
-from sensorium.dataset.mnist_idx import (
-    MNIST_IMAGE_SIZE,
-)
-from sensorium.observers.energy import EnergyObserver
+
+# 4. PROJECTORS
+from sensorium.projectors import PipelineProjector, ConsoleProjector
+from sensorium.projectors.reconstruction import ReconstructionProjector, ReconstructionConfig
 
 
 class MNISTTrieRecallExperiment(Experiment):
-    """MNIST holdout recall from a compressed thermodynamic trie."""
+    """MNIST holdout recall from a compressed thermodynamic trie.
+    
+    Clean pattern:
+    - datasets: FilesystemDataset for train and holdout MNIST
+    - manifold: Runs simulation
+    - inference: DehashObserver + EnergyObserver for reconstruction
+    - projector: ReconstructionProjector for image output
+    """
 
-    def __init__(self, experiment_name: str, profile: bool = False):
-        super().__init__(experiment_name, profile)
+    def __init__(self, experiment_name: str, profile: bool = False, dashboard: bool = False):
+        super().__init__(experiment_name, profile, dashboard=dashboard)
+        
         self.data_dir = self.repo_root / "data" / "mnist"
-        self.train = FilesystemDataset(
-            config=DatasetConfig(
-                path=self.data_dir / "MNIST" / "raw" / "train-images-idx3-ubyte",
-                header_size=16,
-                limit=100,  # Reduced for byte-level ingestion
-                segment_size=784,
-            )
+        
+        # 1. DATASETS
+        self.train_dataset = FilesystemDataset(FilesystemConfig(
+            path=self.data_dir / "MNIST" / "raw" / "train-images-idx3-ubyte",
+            header_size=16,
+            limit=100,
+            segment_size=MNIST_IMAGE_SIZE,
+        ))
+        
+        self.holdout_dataset = FilesystemDataset(FilesystemConfig(
+            path=self.data_dir / "MNIST" / "raw" / "t10k-images-idx3-ubyte",
+            header_size=16,
+            offset=1000,
+            limit=5,
+            segment_size=MNIST_IMAGE_SIZE,
+        ))
+        
+        # 2. OBSERVERS
+        self.inference = InferenceObserver(
+            DehashObserver(
+                prime=31,
+                vocab=4096,
+                segment_size=MNIST_IMAGE_SIZE,
+            ),
         )
-        self.holdout = FilesystemDataset(
-            config=DatasetConfig(
-                path=self.data_dir / "MNIST" / "raw" / "t10k-images-idx3-ubyte",
-                header_size=16,
-                offset=1000,
-                limit=5,
-                segment_size=784,
-            )
+        
+        # 3. PROJECTORS
+        self.projector = PipelineProjector(
+            ConsoleProjector(),
+            ReconstructionProjector(
+                config=ReconstructionConfig(
+                    name="mnist_recall",
+                    output_type="image",
+                    field="reconstructed",
+                    image_size=(28, 28),
+                    colormap="gray",
+                ),
+                output_dir=Path("artifacts"),
+            ),
         )
 
-        self.manifold = Manifold(
+    def run(self):
+        """Run MNIST trie recall experiment."""
+        print("[mnist_trie_recall] Starting experiment...")
+        
+        # 2. MANIFOLD
+        manifold = Manifold(
             SimulationConfig(
-                dashboard=True,
+                dashboard=self.dashboard,
+                video_path=self.video_path,
                 generator=None,
                 geometric=GeometricSimulationConfig(grid_size=(32, 32, 32), dt=0.01),
-                spectral=SpectralSimulationConfig(grid_size=(32, 32, 32), dt=0.01),
+                coherence=CoherenceSimulationConfig(grid_size=(32, 32, 32), dt=0.01),
                 tokenizer=TokenizerConfig(
                     hash_vocab_size=4096,
                     hash_prime=31,
                 ),
             ),
             observers={
-                "spectral": InferenceObserver([CarrierObserver(None)]),
+                "coherence": InferenceObserver(ModeObserver()),
             },
         )
+        
+        # Run on train data first
+        print("[mnist_trie_recall] Training on train set...")
+        manifold.set_generator(self.train_dataset.generate)
+        manifold.run(settle=False, inference=False)
+        
+        # Then on holdout for inference
+        print("[mnist_trie_recall] Running inference on holdout...")
+        manifold.set_generator(self.holdout_dataset.generate)
+        state = manifold.run(settle=True, inference=True)
+        
+        # 3. OBSERVE - delegate to InferenceObserver
+        observation = self.inference.observe({
+            "token_ids": state.get("token_ids"),
+            "energies": state.get("energies"),
+        })
+        
+        # Add energy-based reconstruction
+        dehash_result = observation.as_dict()
+        prompt_flat = dehash_result.get("prompt_flat")
+        energy_by_tid = dehash_result.get("energy_by_tid")
+        
+        if prompt_flat is not None and energy_by_tid is not None:
+            energy_observer = EnergyObserver(
+                prime=31,
+                vocab=4096,
+                MNIST_IMAGE_SIZE=MNIST_IMAGE_SIZE,
+            )
+            energy_observer.prompt_flat = prompt_flat
+            energy_observer.prompt_len = MNIST_IMAGE_SIZE
+            energy_observer.energy_by_tid = energy_by_tid
+            
+            reconstructed = energy_observer.observe()
+            self.inference.observe({}, reconstructed=reconstructed)
+            
+            print(f"  Reconstructed image shape: {reconstructed.shape}")
+        
+        # 4. PROJECT
+        result = self.projector.project(self.inference)
+        
+        print("[mnist_trie_recall] Experiment complete.")
+        return result
 
-    def observe(self, manifold):
-        # We generate visualizations at the end.
-        state = manifold.state
-        token_ids = state.get("token_ids")
-        energies = state.get("energies")
-        
-        if token_ids is None or energies is None:
-            print("Warning: Missing required state fields")
-            return
-        
-        # Dehash token_ids back to bytes
-        # Hash formula: token_id = (byte * prime + pos) & mask
-        # Inverse: byte = ((token_id - pos) * inv_prime) & mask
-        prime = 31
-        vocab = 4096
-        mask = vocab - 1
-        segment_size = 784
-        inv_prime = pow(prime, -1, vocab)
-        
-        if isinstance(token_ids, torch.Tensor):
-            token_ids_t = token_ids
-            device = token_ids_t.device
-        else:
-            token_ids_t = torch.tensor(token_ids, dtype=torch.int64)
-            device = torch.device("cpu")
-        
-        # Calculate positions (wrapping every segment_size bytes)
-        n = len(token_ids_t)
-        indices = torch.arange(n, device=device, dtype=torch.int64)
-        pos = torch.remainder(indices, segment_size)
-        
-        # Dehash: byte = ((token_id - pos) * inv_prime) & mask
-        # Note: We need to handle the subtraction carefully to avoid negative values
-        # The formula: token_id = (byte * prime + pos) & mask
-        # Reverse: (token_id - pos) mod vocab = (byte * prime) mod vocab
-        # So: byte = ((token_id - pos) mod vocab * inv_prime) mod vocab
-        
-        # Handle subtraction with proper wrapping
-        diff = token_ids_t - pos
-        target = diff & mask  # This handles negative values correctly due to two's complement
-        
-        recovered_vals = (target * inv_prime) & mask
-        
-        # Filter valid bytes (should be < 256)
-        valid_mask = recovered_vals < 256
-        num_invalid = (~valid_mask).sum().item()
-        if num_invalid > 0:
-            print(f"Warning: {num_invalid} invalid bytes recovered (>= 256) out of {n} total")
-        
-        # Use all recovered values, but clamp invalid ones to 0-255 range
-        recovered_vals_clamped = torch.clamp(recovered_vals, 0, 255)
-        prompt_flat = recovered_vals_clamped.cpu().numpy().astype(np.uint8)
-        
-        # Debug: check first few values
-        if n > 0:
-            print(f"First 10 token_ids: {token_ids_t[:10].cpu().numpy()}")
-            print(f"First 10 positions: {pos[:10].cpu().numpy()}")
-            print(f"First 10 recovered bytes: {prompt_flat[:10]}")
-            print(f"Recovered bytes range: [{prompt_flat.min()}, {prompt_flat.max()}]")
-        
-        # Convert energies to numpy
-        energy_by_tid = energies.cpu().numpy() if isinstance(energies, torch.Tensor) else np.array(energies)
-        
-        # Create observer and set required attributes
-        observer = EnergyObserver(
-            prime=31,
-            vocab=4096,
-            MNIST_IMAGE_SIZE=784,
-        )
-        observer.prompt_flat = prompt_flat
-        observer.prompt_len = 784  # Full image for now
-        observer.energy_by_tid = energy_by_tid
-        
-        out = observer.observe()
+    def observe(self, state: dict):
+        """Observer interface for compatibility."""
+        pass
 
-        print(f"Reconstructed image shape: {out.shape}, dtype: {out.dtype}, min: {out.min()}, max: {out.max()}")
-
-        # Save as PNG using PIL
-        try:
-            from PIL import Image
-            # Ensure values are in [0, 255] range
-            img_array = np.clip(out, 0, 255).astype(np.uint8)
-            img = Image.fromarray(img_array, mode='L')  # 'L' mode for grayscale
-            img.save("out.png")
-            print(f"Saved image to out.png")
-        except ImportError:
-            # Fallback to matplotlib if PIL not available
-            try:
-                import matplotlib
-                matplotlib.use('Agg')
-                import matplotlib.pyplot as plt
-                plt.imsave("out.png", out, cmap='gray', vmin=0, vmax=255)
-                plt.close()
-                print(f"Saved image to out.png (using matplotlib)")
-            except ImportError:
-                print("Warning: Neither PIL nor matplotlib available, cannot save image")
-                print(f"Image array: shape={out.shape}, dtype={out.dtype}")
-
-    def run(self):
-        idx = 0
-
-        for dataset in [self.train, self.holdout]:
-            self.manifold.set_generator(dataset.generate)
-            self.manifold.run(settle=idx == 1, inference=idx == 1)
-            idx += 1
-
-        self.observe(self.manifold)
+    def project(self) -> dict:
+        """Project observation to artifacts."""
+        return self.projector.project(self.inference)

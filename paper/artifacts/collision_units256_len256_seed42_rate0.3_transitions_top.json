@@ -1,0 +1,265 @@
+{
+  "top_edges": [
+    {
+      "src": {
+        "pos": 1867772,
+        "byte": 237,
+        "label": "0xed"
+      },
+      "dst": {
+        "pos": 283005,
+        "byte": 193,
+        "label": "0xc1"
+      },
+      "count": 1
+    },
+    {
+      "src": {
+        "pos": 294539,
+        "byte": 41,
+        "label": ")"
+      },
+      "dst": {
+        "pos": 655529,
+        "byte": 141,
+        "label": "0x8d"
+      },
+      "count": 1
+    },
+    {
+      "src": {
+        "pos": 294637,
+        "byte": 157,
+        "label": "0x9d"
+      },
+      "dst": {
+        "pos": 340759,
+        "byte": 115,
+        "label": "s"
+      },
+      "count": 1
+    },
+    {
+      "src": {
+        "pos": 294631,
+        "byte": 123,
+        "label": "{"
+      },
+      "dst": {
+        "pos": 145948,
+        "byte": 212,
+        "label": "0xd4"
+      },
+      "count": 1
+    },
+    {
+      "src": {
+        "pos": 294629,
+        "byte": 12,
+        "label": "0x0c"
+      },
+      "dst": {
+        "pos": 89791,
+        "byte": 37,
+        "label": "%"
+      },
+      "count": 1
+    },
+    {
+      "src": {
+        "pos": 294628,
+        "byte": 40,
+        "label": "("
+      },
+      "dst": {
+        "pos": 1098995,
+        "byte": 245,
+        "label": "0xf5"
+      },
+      "count": 1
+    },
+    {
+      "src": {
+        "pos": 294614,
+        "byte": 175,
+        "label": "0xaf"
+      },
+      "dst": {
+        "pos": 573105,
+        "byte": 69,
+        "label": "E"
+      },
+      "count": 1
+    },
+    {
+      "src": {
+        "pos": 294605,
+        "byte": 253,
+        "label": "0xfd"
+      },
+      "dst": {
+        "pos": 1376885,
+        "byte": 45,
+        "label": "-"
+      },
+      "count": 1
+    },
+    {
+      "src": {
+        "pos": 294602,
+        "byte": 187,
+        "label": "0xbb"
+      },
+      "dst": {
+        "pos": 1382953,
+        "byte": 242,
+        "label": "0xf2"
+      },
+      "count": 1
+    },
+    {
+      "src": {
+        "pos": 294602,
+        "byte": 53,
+        "label": "5"
+      },
+      "dst": {
+        "pos": 552509,
+        "byte": 183,
+        "label": "0xb7"
+      },
+      "count": 1
+    },
+    {
+      "src": {
+        "pos": 294579,
+        "byte": 124,
+        "label": "|"
+      },
+      "dst": {
+        "pos": 416274,
+        "byte": 221,
+        "label": "0xdd"
+      },
+      "count": 1
+    },
+    {
+      "src": {
+        "pos": 294577,
+        "byte": 28,
+        "label": "0x1c"
+      },
+      "dst": {
+        "pos": 74866,
+        "byte": 125,
+        "label": "}"
+      },
+      "count": 1
+    },
+    {
+      "src": {
+        "pos": 294558,
+        "byte": 48,
+        "label": "0"
+      },
+      "dst": {
+        "pos": 1847230,
+        "byte": 204,
+        "label": "0xcc"
+      },
+      "count": 1
+    },
+    {
+      "src": {
+        "pos": 294556,
+        "byte": 48,
+        "label": "0"
+      },
+      "dst": {
+        "pos": 170766,
+        "byte": 191,
+        "label": "0xbf"
+      },
+      "count": 1
+    },
+    {
+      "src": {
+        "pos": 294542,
+        "byte": 61,
+        "label": "="
+      },
+      "dst": {
+        "pos": 947549,
+        "byte": 77,
+        "label": "M"
+      },
+      "count": 1
+    },
+    {
+      "src": {
+        "pos": 294538,
+        "byte": 55,
+        "label": "7"
+      },
+      "dst": {
+        "pos": 335136,
+        "byte": 93,
+        "label": "]"
+      },
+      "count": 1
+    },
+    {
+      "src": {
+        "pos": 294642,
+        "byte": 95,
+        "label": "_"
+      },
+      "dst": {
+        "pos": 717444,
+        "byte": 9,
+        "label": "0x09"
+      },
+      "count": 1
+    },
+    {
+      "src": {
+        "pos": 294526,
+        "byte": 220,
+        "label": "0xdc"
+      },
+      "dst": {
+        "pos": 938932,
+        "byte": 188,
+        "label": "0xbc"
+      },
+      "count": 1
+    },
+    {
+      "src": {
+        "pos": 294522,
+        "byte": 153,
+        "label": "0x99"
+      },
+      "dst": {
+        "pos": 27075,
+        "byte": 128,
+        "label": "0x80"
+      },
+      "count": 1
+    },
+    {
+      "src": {
+        "pos": 294514,
+        "byte": 125,
+        "label": "}"
+      },
+      "dst": {
+        "pos": 577353,
+        "byte": 30,
+        "label": "0x1e"
+      },
+      "count": 1
+    }
+  ],
+  "total_edges": 65280
+}

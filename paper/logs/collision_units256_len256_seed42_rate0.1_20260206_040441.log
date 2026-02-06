@@ -1,0 +1,6 @@
+
+--- kernel_log (step=1, dt=0.00018341, halvings=5) ---
+0000     PIC base gid=0      a=9.6121 b=0.960826 c=-2.45651e-07 d=-2.3385e-05
+
+--- kernel_log (step=2, dt=2.88936) ---
+0000     PIC base gid=0      a=9.08384 b=0 c=-7.14036e-07 d=-2.35364e-05

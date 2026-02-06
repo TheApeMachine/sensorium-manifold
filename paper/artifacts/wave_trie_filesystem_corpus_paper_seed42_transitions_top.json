@@ -1,0 +1,265 @@
+{
+  "top_edges": [
+    {
+      "src": {
+        "pos": 3,
+        "byte": 103,
+        "label": "g"
+      },
+      "dst": {
+        "pos": 4,
+        "byte": 105,
+        "label": "i"
+      },
+      "count": 23
+    },
+    {
+      "src": {
+        "pos": 2,
+        "byte": 101,
+        "label": "e"
+      },
+      "dst": {
+        "pos": 3,
+        "byte": 103,
+        "label": "g"
+      },
+      "count": 23
+    },
+    {
+      "src": {
+        "pos": 7,
+        "byte": 116,
+        "label": "t"
+      },
+      "dst": {
+        "pos": 8,
+        "byte": 97,
+        "label": "a"
+      },
+      "count": 23
+    },
+    {
+      "src": {
+        "pos": 5,
+        "byte": 110,
+        "label": "n"
+      },
+      "dst": {
+        "pos": 6,
+        "byte": 123,
+        "label": "{"
+      },
+      "count": 23
+    },
+    {
+      "src": {
+        "pos": 8,
+        "byte": 97,
+        "label": "a"
+      },
+      "dst": {
+        "pos": 9,
+        "byte": 98,
+        "label": "b"
+      },
+      "count": 23
+    },
+    {
+      "src": {
+        "pos": 4,
+        "byte": 105,
+        "label": "i"
+      },
+      "dst": {
+        "pos": 5,
+        "byte": 110,
+        "label": "n"
+      },
+      "count": 23
+    },
+    {
+      "src": {
+        "pos": 6,
+        "byte": 123,
+        "label": "{"
+      },
+      "dst": {
+        "pos": 7,
+        "byte": 116,
+        "label": "t"
+      },
+      "count": 23
+    },
+    {
+      "src": {
+        "pos": 1,
+        "byte": 98,
+        "label": "b"
+      },
+      "dst": {
+        "pos": 2,
+        "byte": 101,
+        "label": "e"
+      },
+      "count": 23
+    },
+    {
+      "src": {
+        "pos": 0,
+        "byte": 92,
+        "label": "0x5c"
+      },
+      "dst": {
+        "pos": 1,
+        "byte": 98,
+        "label": "b"
+      },
+      "count": 23
+    },
+    {
+      "src": {
+        "pos": 10,
+        "byte": 108,
+        "label": "l"
+      },
+      "dst": {
+        "pos": 11,
+        "byte": 101,
+        "label": "e"
+      },
+      "count": 14
+    },
+    {
+      "src": {
+        "pos": 9,
+        "byte": 98,
+        "label": "b"
+      },
+      "dst": {
+        "pos": 10,
+        "byte": 108,
+        "label": "l"
+      },
+      "count": 14
+    },
+    {
+      "src": {
+        "pos": 11,
+        "byte": 101,
+        "label": "e"
+      },
+      "dst": {
+        "pos": 12,
+        "byte": 125,
+        "label": "}"
+      },
+      "count": 14
+    },
+    {
+      "src": {
+        "pos": 12,
+        "byte": 125,
+        "label": "}"
+      },
+      "dst": {
+        "pos": 13,
+        "byte": 91,
+        "label": "["
+      },
+      "count": 14
+    },
+    {
+      "src": {
+        "pos": 28,
+        "byte": 92,
+        "label": "0x5c"
+      },
+      "dst": {
+        "pos": 29,
+        "byte": 99,
+        "label": "c"
+      },
+      "count": 12
+    },
+    {
+      "src": {
+        "pos": 16,
+        "byte": 10,
+        "label": "0x0a"
+      },
+      "dst": {
+        "pos": 17,
+        "byte": 92,
+        "label": "0x5c"
+      },
+      "count": 12
+    },
+    {
+      "src": {
+        "pos": 23,
+        "byte": 114,
+        "label": "r"
+      },
+      "dst": {
+        "pos": 24,
+        "byte": 105,
+        "label": "i"
+      },
+      "count": 12
+    },
+    {
+      "src": {
+        "pos": 17,
+        "byte": 92,
+        "label": "0x5c"
+      },
+      "dst": {
+        "pos": 18,
+        "byte": 99,
+        "label": "c"
+      },
+      "count": 12
+    },
+    {
+      "src": {
+        "pos": 27,
+        "byte": 10,
+        "label": "0x0a"
+      },
+      "dst": {
+        "pos": 28,
+        "byte": 92,
+        "label": "0x5c"
+      },
+      "count": 12
+    },
+    {
+      "src": {
+        "pos": 14,
+        "byte": 116,
+        "label": "t"
+      },
+      "dst": {
+        "pos": 15,
+        "byte": 93,
+        "label": "]"
+      },
+      "count": 12
+    },
+    {
+      "src": {
+        "pos": 29,
+        "byte": 99,
+        "label": "c"
+      },
+      "dst": {
+        "pos": 30,
+        "byte": 97,
+        "label": "a"
+      },
+      "count": 12
+    }
+  ],
+  "total_edges": 120529
+}

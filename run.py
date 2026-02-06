@@ -1,106 +1,42 @@
 #!/usr/bin/env python3
-"""Thermo-Manifold Simulation Entrypoint
+"""Thermo-Manifold Simulation."""
 
-Instrumented simulation runner with:
-- GPU profiling for performance bottleneck identification
-- Real-time dashboard for understanding dynamics
-- Clean separation between physics engine and observations
+import matplotlib.pyplot as plt
 
-Usage:
-    python run.py                    # Run with defaults
-    python run.py --profile          # Run with GPU profiling
-    python run.py --no-dashboard     # Run headless (for benchmarks)
-    python run.py --steps 1000       # Custom step count
-"""
+from sensorium.manifold import Manifold
+from sensorium.tokenizer.universal import UniversalTokenizer, UniversalTokenizerConfig
+from sensorium.dataset.synthetic import SyntheticDataset, SyntheticConfig, SyntheticPattern
+from sensorium.instrument.dashboard.canvas import Canvas
+from sensorium.instrument.dashboard.animation import Animation
 
-from __future__ import annotations
+tokenizer = UniversalTokenizer(config=UniversalTokenizerConfig(
+    datasets=[SyntheticDataset(config=SyntheticConfig(
+        pattern=SyntheticPattern.COLLISION,
+        num_units=100,
+        unit_length=64,
+    ))]
+))
 
-import argparse
-from pathlib import Path
-import torch
-from sensorium.manifold.config import SimulationConfig
-from sensorium.manifold.simulator import run_simulation
+manifold = Manifold(
+    tokenizer=tokenizer,
+)
 
+canvas = Canvas(grid_size=(64, 64, 64), datafn=manifold.step)
 
-def main():
-    parser = argparse.ArgumentParser(
-        description="Thermo-Manifold Simulation",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog=__doc__,
-    )
-    
-    parser.add_argument("--steps", type=int, default=500, help="Number of simulation steps (ignored in continuous mode)")
-    parser.add_argument("--particles", type=int, default=1000, help="Initial number of particles")
-    parser.add_argument("--grid", type=int, default=32, help="Grid size (cubic)")
-    parser.add_argument("--profile", action="store_true", help="Enable GPU profiling")
-    parser.add_argument("--no-dashboard", action="store_true", help="Disable real-time dashboard")
-    parser.add_argument("--dashboard-video", type=str, default=None, help="Record dashboard to video file (e.g. artifacts/dashboard.mp4 or .gif)")
-    parser.add_argument("--dashboard-fps", type=int, default=30, help="Dashboard video FPS (default: 30)")
-    parser.add_argument("--device", type=str, default=None, help="Device (mps, cuda, cpu)")
-    
-    # Continuous mode options
-    parser.add_argument("--continuous", "-c", action="store_true", 
-                        help="Run indefinitely with random file injections")
-    parser.add_argument("--inject-min", type=float, default=10.0,
-                        help="Minimum seconds between file injections (default: 10)")
-    parser.add_argument("--inject-max", type=float, default=60.0,
-                        help="Maximum seconds between file injections (default: 60)")
-    parser.add_argument("--inject-particles-min", type=int, default=30,
-                        help="Minimum particles per injection (default: 30)")
-    parser.add_argument("--inject-particles-max", type=int, default=100,
-                        help="Maximum particles per injection (default: 100)")
+# Add canvas to manifold instrumentation after both are created
+manifold.instrumentation.append(canvas)
 
-    # Scripted injections (deterministic integrity checks)
-    parser.add_argument("--seed", type=int, default=0, help="Random seed for reproducible scripted runs")
-    parser.add_argument(
-        "--injection-script",
-        type=str,
-        default=None,
-        help="Path to JSON injection script (enables deterministic step-based injections)",
-    )
-    parser.add_argument(
-        "--script-loop",
-        action="store_true",
-        help="Loop the injection script forever (period = last_script_step + 1)",
-    )
-    
-    args = parser.parse_args()
-    
-    # Build config
-    device = args.device
-    if device is None:
-        if torch.backends.mps.is_available():
-            device = "mps"
-        elif torch.cuda.is_available():
-            device = "cuda"
-        else:
-            device = "cpu"
-    
-    config = SimulationConfig(
-        grid_size=(args.grid, args.grid, args.grid),
-        num_particles=args.particles,
-        num_steps=args.steps,
-        device=device,
-        profile_enabled=args.profile,
-        dashboard_enabled=not args.no_dashboard,
-        dashboard_video_path=(None if args.dashboard_video is None else Path(args.dashboard_video)),
-        dashboard_video_fps=int(args.dashboard_fps),
-        continuous=args.continuous,
-        inject_interval_min=args.inject_min,
-        inject_interval_max=args.inject_max,
-        inject_particles_min=args.inject_particles_min,
-        inject_particles_max=args.inject_particles_max,
-        seed=int(args.seed),
-        injection_script_path=(None if args.injection_script is None else Path(args.injection_script)),
-        injection_script_loop=bool(args.script_loop),
-    )
-    
-    result = run_simulation(config)
-    print("\nFinal results:")
-    print(f"  Energy: {result['final_energy']:.4f}")
-    print(f"  Heat:   {result['final_heat']:.4f}")
-    print(f"  Total:  {result['final_energy'] + result['final_heat']:.4f}")
+manifold.load()
 
+# Create animation using the Animation wrapper
+anim = Animation(fig=canvas.fig, animate_frame=canvas.animate_frame)
 
-if __name__ == "__main__":
-    main()
+try:
+    plt.show()
+except KeyboardInterrupt:
+    pass
+finally:
+    anim.stop()
+    # Explicitly delete to avoid __del__ issues during shutdown
+    del anim
+

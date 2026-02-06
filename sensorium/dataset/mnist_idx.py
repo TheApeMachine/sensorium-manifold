@@ -109,8 +109,12 @@ def split_holdout_stratified(
     )
 
 
-def iter_images(images: np.ndarray) -> Iterator[bytes]:
-    """Yield raw image bytes (784 bytes/image)."""
+def iter_images(images: np.ndarray) -> Iterator[Tuple[int, int]]:
+    """Yield (byte_value, sequence_index) tuples for images.
+    
+    Each image is 784 bytes. The sequence index resets at each image boundary.
+    """
     for row in images:
-        yield row.tobytes()
+        for idx, byte_val in enumerate(row):
+            yield (int(byte_val), idx)
 

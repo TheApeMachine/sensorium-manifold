@@ -13,7 +13,7 @@ We don't invent rules — we simulate the rules that already work. The reason th
 > 
 
 ### T=0: The Singularity
-- No particles, no carriers, no space
+- No particles, no modes, no space
 - Zero dimension, zero energy
 - Pure potential
 
@@ -36,16 +36,15 @@ We don't invent rules — we simulate the rules that already work. The reason th
 
 The manifold has two distinct but implicitely interacting channels:
 
-### 1. Entanglement (Carriers)
+### 1. Hydrodynamics (ω-space wavefunction Ψ)
 
 A strong informational "bridge" between particles independent of **geometric distance**.
 
 - **Frequency** represents relatedness and governs selection
 - **Phase** represents alignment and governs influence
-- Carriers are pulse waves that travel and sample/deliver at each pulse edge
-- Each pulse is a two-way street:
-  1. First, it acts on oscillators with the sum of sines sampled in the previous step
-  2. Then, it samples from the oscillators (sum of sines at the sampling point)
+- The system maintains a fixed ω-lattice complex field \(\Psi(\omega_k)\)
+- A kinetic (Laplacian) term allows **tunneling/diffusion in ω-space**
+- Complex phase evolution enables **constructive/destructive interference** between concepts
 
 This enables non-local correlation — particles can influence each other regardless of their geometric position.
 
@@ -181,7 +180,7 @@ The complexity of physics should match the complexity of the task:
 - [ ] Heat generation from excitation
 - [ ] Heat flow based on temperature gradient and distance
 - [ ] Energy transport with heat
-- [ ] Carriers for non-local coupling (frequency matching, phase alignment)
+- [ ] Modes for non-local coupling (frequency matching, phase alignment)
 
 Everything else is either derivable from these or unnecessary overhead.
 
@@ -199,7 +198,7 @@ The geometric influence channel (gravity + heat) handles:
 - Pressure preventing collapse
 - Natural clustering into structure
 
-The entanglement channel (carriers) handles:
+The coherence channel (modes) handles:
 - Non-local relationships
 - Frequency-based selection
 - Phase-based influence modulation
@@ -235,7 +234,7 @@ Load all buckets simultaneously. Each particle knows its position because it's e
 When particles arrive:
 - They carry their position in their identity
 - Gravity pulls them toward related particles
-- Carriers couple them based on frequency/phase
+- Modes couple them based on frequency/phase
 - **The physics reconstructs sequential structure**
 
 It's like dumping puzzle pieces on a table — they don't need to arrive in order because each piece knows where it fits.
@@ -278,14 +277,14 @@ No need to wait for all particles. The field IS the accumulated state.
 |-------------------|-------------------------------------------------------------------------|
 | **Gravity**       | Gravitational potential field — particles add mass, respond to gradient |
 | **Heat**          | Temperature field — particles add heat, heat diffuses through field     |
-| **Carriers**      | Wave field — particles couple via frequency/phase, carriers propagate   |
+| **Modes**         | Coherence field — particles couple via frequency/phase, modes persist   |
 
 ### Continuous Processing
 
 ```
 Stream of bytes (parallel or sequential, doesn't matter)
     ↓
-Each byte → particle → updates fields (gravity, heat, carrier)
+Each byte → particle → updates fields (gravity, heat, coherence)
     ↓
 Fields evolve continuously (diffusion, wave propagation)
     ↓
@@ -315,51 +314,34 @@ The physics simulation is implemented with fused GPU kernels for maximum perform
 ┌────────────────────────────────────────────────────────────────────┐
 │                    manifold_step (per timestep)                    │
 ├────────────────────────────────────────────────────────────────────┤
-│  KERNEL 1: scatter_particle                                        │
-│    IN:  particle_pos[N,3], particle_mass[N], particle_heat[N]      │
-│    OUT: gravity_field[X,Y,Z], heat_field[X,Y,Z]                    │
-│    OPS: trilinear weights → atomic add to 8 corners                │
+│  KERNELS 1–4: PIC scatter (conservative to gas grid)               │
+│    scatter_compute_cell_idx / scatter_count_cells /                │
+│    scatter_reorder_particles / scatter_sorted                      │
+│    IN:  particle_pos[N,3], vel[N,3], mass[N], heat[N], energy[N]   │
+│    OUT: rho[X,Y,Z], mom[X,Y,Z,3], E[X,Y,Z]                         │
+│    OPS: CIC weights → per-volume deposits (mass/momentum/energy)   │
 ├────────────────────────────────────────────────────────────────────┤
-│  KERNEL 2: poisson_jacobi_step (repeated for convergence)          │
-│    IN:  gravity_field (mass density), phi_in (potential)           │
-│    OUT: phi_out (updated potential)                                │
-│    OPS: 6-point stencil, Jacobi iteration                          │
+│  HOST: gravity solve (periodic Poisson via FFT)                    │
+│    IN:  rho                                                        │
+│    OUT: gravity_potential φ                                        │
+│    NOTES: k=0 mode handled by subtracting mean(rho)                │
 ├────────────────────────────────────────────────────────────────────┤
-│  KERNEL 3: diffuse_heat_field                                      │
-│    IN:  temperature_in                                             │
-│    OUT: temperature_out                                            │
-│    OPS: 6-point Laplacian, explicit Euler diffusion                │
+│  HOST: compressible ideal-gas Navier–Stokes (RK2)                  │
+│    IN/OUT: rho, mom, E                                             │
+│    NOTES: timestep derived from CFL/positivity numerics            │
 ├────────────────────────────────────────────────────────────────────┤
-│  KERNEL 4: gather_update_particles (FUSED - highest impact)        │
-│    IN:  gravity_potential, temperature_field, particle_state       │
-│    OUT: updated particle_state                                     │
-│    OPS: trilinear gather, gradient computation, all physics:       │
-│         - Force from gravity gradient                              │
-│         - Heat exchange from temperature                           │
-│         - Excitation from temperature                              │
-│         - Energy → heat conversion                                 │
-│         - Viscosity (heat-dependent)                               │
-│         - Velocity integration                                     │
-│         - Position integration                                     │
-│    All in ONE kernel, ONE read per field, minimal memory traffic   │
-├────────────────────────────────────────────────────────────────────┤
-│  KERNEL 5: carrier_oscillator_coupling                             │
-│    IN:  oscillator phases/freqs/amps, carrier state, sparse P      │
-│    OUT: updated carrier amplitudes                                 │
-│    OPS: gated sampling, tuning strength, damped oscillator         │
-├────────────────────────────────────────────────────────────────────┤
-│  KERNEL 6: update_oscillator_phases                                │
-│    IN:  carrier state, oscillator state, sparse P                  │
-│    OUT: updated oscillator phases                                  │
-│    OPS: carrier back-influence, phase integration                  │
+│  KERNEL 5: pic_gather_update_particles                             │
+│    IN:  rho, mom, E, gravity_potential, particle_pos[N,3], mass[N] │
+│    OUT: particle_pos_out[N,3], particle_vel_out[N,3], heat_out[N]  │
+│    OPS: CIC gather → u; apply a=-∇φ (smooth gradient); advect       │
 └────────────────────────────────────────────────────────────────────┘
 ```
 
 ### Files
 
-- `optimizer/metal/manifold_physics.metal` — Metal shader implementations
-- `optimizer/metal/manifold_physics.py` — Python wrapper (Metal-only; raises if Metal unavailable)
-- `optimizer/metal/manifold_physics_test.py` — Unit tests
+- `sensorium/kernels/metal/manifold_physics.metal` — Metal shader implementations
+- `sensorium/kernels/metal/manifold_physics.py` — Python wrapper (Metal-only; raises if Metal unavailable)
+- `sensorium/kernels/metal/ops.mm` — Objective-C++ / pybind bridge
 
 ### Key Optimizations
 
@@ -391,7 +373,7 @@ positions, velocities, energies, heats, excitations = physics.step(
 
 The manifold is a physics simulation where:
 - Inputs become particles
-- Particles interact via gravity and carriers
+- Particles interact via gravity and coherence modes
 - Heat provides pressure against collapse
 - Structure emerges from dynamic equilibrium
 - Observations read out predictions without influencing dynamics

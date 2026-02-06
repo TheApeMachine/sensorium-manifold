@@ -1,10 +1,10 @@
 import torch
-from optimizer.metal.manifold_physics import ManifoldPhysics
+from sensorium.kernels.metal.manifold_physics import ThermodynamicsDomain
 from sensorium.observers.base import ObserverProtocol
 
 
 class StateObserver(ObserverProtocol):
-    def __init__(self, geometric_state: ManifoldPhysics = None):
+    def __init__(self, geometric_state: ThermodynamicsDomain = None):
         self.geometric_state = geometric_state
         self.state_dict = {}
 
@@ -16,10 +16,10 @@ class StateObserver(ObserverProtocol):
         if isinstance(observation, dict):
             self.state_dict.update(observation)
 
-            # Optional: if spectral carrier fields are present, derive a simple
+            # Optional: if mode fields are present, derive a simple
             # confidence proxy (used by some dashboards/experiments).
             amp = observation.get("amplitudes")
-            cs = observation.get("carrier_state")
+            cs = observation.get("mode_state")
             conf = observation.get("conflict")
             if amp is not None and cs is not None:
                 amp_slice = amp[:10].to(torch.float32)

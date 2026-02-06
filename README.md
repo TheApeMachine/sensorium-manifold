@@ -1,119 +1,240 @@
-# Thermo Manifold
+# The Sensorium Manifold
 
-**Thermodynamic Primitives for Neural Computation Without Backpropagation**
+**Native Multimodality via Isomorphism**
 
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![PyTorch](https://img.shields.io/badge/PyTorch-2.0+-ee4c2c.svg)](https://pytorch.org/)
+[![Metal](https://img.shields.io/badge/Metal-Apple_Silicon-black.svg)](https://developer.apple.com/metal/)
+[![Triton](https://img.shields.io/badge/Triton-CUDA-76B900.svg)](https://triton-lang.org/)
 
 ---
 
-## Overview
+## Abstract
 
-Thermo Manifold is a reference implementation exploring an alternative paradigm for machine learning: **thermodynamic computation**. Instead of relying on backpropagation and gradient descent, this framework models learning and inference as physical processes—energy flow, heat diffusion, and homeostatic regulation—operating on sparse graph structures.
+The Sensorium Manifold explores a direct question: if physics is already a system that manages information—through entropy, conservation, and equilibration—how much of it do you need to simulate before useful capabilities emerge?
 
-The core insight is that learning can emerge from local, Hebbian-style dynamics governed by thermodynamic principles, enabling:
+Rather than engineering a learning algorithm, we simulate a thermodynamic substrate governed by *Hamiltonian dynamics*. Data enters as energy distributed across coupled oscillators. Structure emerges not from optimization, but from the system finding equilibrium. What we call "learning" is the crystallization of resonant modes; what we call "inference" is the system's response to perturbation.
 
-- **Online, continuous learning** from streaming data
-- **Emergent structure formation** without explicit supervision
-- **Multi-modal transduction** between semantic and spectral domains
-- **Self-organization** through energy minimization and homeostasis
+The system operates via three principles:
 
-This repository accompanies our paper and serves as the canonical implementation for reproducing experimental results.
+1. **Coherence Coupling** — Distant oscillators couple via shared ω-modes
+2. **Metabolic Gating** — Modes persist only if energetically maintained by resonance
+3. **Crystallization** — Generation is a Boundary Value Problem, not serial autoregression
+
+This crystallization implements a *Holographic Content Addressable Memory*: partial inputs retrieve complete patterns because information is distributed across the entire resonant field. The physics handles self-regulation (homeostasis prevents runaway dynamics), adaptation (the system re-equilibrates when distributions shift), and parallelism (all oscillators relax simultaneously, achieving O(k) latency independent of sequence length).
 
 ---
 
-## Key Concepts
+## Core Insight
 
-### Thermodynamic Learning
+> *Physics is already a system that manages information.*
 
-Traditional neural networks compute gradients through the entire network via backpropagation. Thermo Manifold takes a different approach: each component operates as a thermodynamic system where:
+This project does not attempt to build a learning system that borrows metaphors from physics. The premise is simpler and stranger: physics already solves the problem of information—through entropy, conservation, diffusion, and equilibration. These are not analogies to computation; they *are* computation, operating at the most fundamental level.
 
-- **Energy** represents activation strength and information salience
-- **Heat** captures uncertainty and exploratory noise
-- **Homeostasis** maintains stable operating regimes through adaptive baselines
-- **Surprise** modulates plasticity, enabling rapid adaptation to novel patterns
+The question then becomes: how much physics do you need to simulate before useful capabilities emerge? Not a gratuitous amount. Not a simplified toy model. Just enough to be functional—no more, no less. The hypothesis is that a system with sufficient thermodynamic structure will naturally equilibrate into states that exhibit what we recognize as intelligence: pattern completion, associative recall, generalization, adaptation.
 
-### Sparse Bond Graphs
+We do not train this system. We do not optimize a loss function. We simulate physics, and the system settles into configurations that happen to be useful. What an outside observer calls "learning" is the system finding equilibrium. What they call "inference" is the system responding to perturbation.
 
-Rather than dense weight matrices, relationships are encoded in sparse directed graphs:
+The theoretical framework maps onto machine learning concepts, but the causality is reversed:
 
-```
-Token A ──[bond strength]──▶ Token B
-```
-
-Bonds strengthen through co-activation and weaken through disuse, implementing a form of Hebbian learning. This representation scales efficiently and naturally captures the sparsity of real-world sequential patterns.
-
-### Hierarchical Abstraction
-
-The system discovers compositional structure through **chunk formation**:
-
-1. Frequently co-occurring token sequences condense into chunks
-2. Chunks participate in higher-level bond graphs
-3. Top-down biases from chunks guide token-level predictions
-
-This emerges from binding energy dynamics rather than explicit segmentation algorithms.
+| Physics Term | ML Analogue | Key Difference |
+|-------------|-------------|----------------|
+| Oscillator | Input Token | Has phase/frequency; exists in continuous time |
+| Mode (well) | Hidden State / Weight | A standing wave pattern that couples oscillators |
+| Hamiltonian (H) | Loss Function | Conserved quantity; system minimizes potential V |
+| Spectral Coupling | Attention Mechanism | Non-local entanglement via frequency resonance |
+| Crystallization | Inference | Global parallel relaxation, not serial generation |
+| Holographic CAM | Associative Memory | Content-addressable; partial input retrieves full pattern |
+| Metabolism | Regularization | Modes decay if they do not receive energy |
+| Universal Tokenizer | Embedding Layer | Deterministic hashing of raw bytes; no training |
+| Phase Locking | Pattern Matching | Information encoded in relative phase angles |
+| Symplectic Integrator | Optimizer | Preserves energy phase-space; no gradient descent |
 
 ---
 
 ## Architecture
 
-Thermo Manifold consists of four interconnected manifolds:
+The implementation consists of two primary layers:
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                        INPUT (Tokens)                           │
-└─────────────────────────────┬───────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                    SEMANTIC MANIFOLD                            │
-│  • Sparse bond graphs (token → token)                           │
-│  • Thermodynamic flow propagation                               │
-│  • Surprise-driven plasticity                                   │
-│  • Idle pondering (transitive closure, dream rollouts)          │
-└─────────────────────────────┬───────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────────┐
-│               HIERARCHICAL SEMANTIC MANIFOLD                    │
-│  • Variable-length chunks (2-4 tokens)                          │
-│  • Chunk ↔ token bipartite bonds                                │
-│  • Binding energy condensation                                  │
-│  • Multi-resolution representation                              │
-└─────────────────────────────┬───────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                     BRIDGE MANIFOLD                             │
-│  • Semantic vectors ↔ spectral frequencies                      │
-│  • Carrier population (not lookup tables)                       │
-│  • Co-activation learning                                       │
-│  • Event-horizon locality                                       │
-└─────────────────────────────┬───────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                    SPECTRAL MANIFOLD                            │
-│  • 1D thermodynamic diffusion                                   │
-│  • Frequency attractor dynamics                                 │
-│  • Audio synthesis from spectral energy                         │
-└─────────────────────────────┬───────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                       OUTPUT (Audio)                            │
-└─────────────────────────────────────────────────────────────────┘
+thermo_manifold/
+├── sensorium/
+│   ├── kernels/            # GPU physics engine (the "substrate")
+│   │   ├── gas_dynamics.py # Compressible ideal-gas Navier–Stokes (reference)
+│   │   ├── metal/          # Apple Silicon (Metal Shading Language)
+│   │   └── triton/         # CUDA (Triton JIT)
+│   ├── dataset/            # Universal byte-stream datasets
+│   ├── tokenizer/          # Universal byte→token hashing
+│   ├── observers/          # Observer pattern (the "interface")
+│   └── experiments/        # Paper/benchmark pipelines
+│
+└── optimizer/              # Temporary legacy shim for experiments (will be removed)
 ```
 
-### Component Details
+### The Kernels: GPU Physics Engine
 
-| Manifold | Purpose | Key Innovation |
-|----------|---------|----------------|
-| **SemanticManifold** | Token-level sequential grammar | Sparse bond graphs with thermodynamic flow |
-| **HierarchicalSemanticManifold** | Multi-scale abstraction | Emergent chunk formation via binding energy |
-| **BridgeManifold** | Cross-modal transduction | Carrier-based coupling without lookup tables |
-| **SpectralManifold** | Audio generation | Particle diffusion toward frequency attractors |
+The physics engine has two coupled domains:
+
+**ThermodynamicsDomain (spatial / classical)**
+- Particle↔grid coupling (PIC) into a periodic Eulerian grid
+- Compressible **ideal-gas Navier–Stokes** update on the grid
+- Grid→particle gather updates particle motion + heat proxy
+
+**OmegaWaveDomain (ω-space / quantum-inspired coherence layer)**
+- A fixed ω-lattice complex field \(\Psi(\omega_k)\)
+- A dissipative **Gross–Pitaevskii-style** update with a kinetic (Laplacian) tunneling term
+- Phase-torque feedback updates oscillator phases from \(\Psi\)
+
+These two domains share the same oscillator frequencies \(\omega_i\) (excitations) and energies.
+
+### The Sensorium: Observer Pattern
+
+The `sensorium/` module provides a composable, fluent interface for observing simulation state. Think of it as a query language for inference:
+
+```python
+from sensorium.observers import Modes, Crystallized, TopK, Statistics, MODE_CRYSTALLIZED
+
+# SQL-like composition:
+# SELECT amplitude, phase WHERE state == CRYSTALLIZED
+# ORDER BY amplitude DESC LIMIT 5
+
+result = (
+    Modes()
+    .observe(state)
+    .where(lambda m: m["state"] == MODE_CRYSTALLIZED)
+    .sort_by("amplitude", descending=True)
+    .take(5)
+    .statistics("phase")
+)
+```
+
+This decouples *what you observe* from *how the system evolves*. The observer decides what matters; the physics proceeds regardless.
+
+---
+
+## The Universal Tokenizer
+
+All sensory modalities can be represented as spectral distributions:
+
+- **Audio**: Energy over temporal frequencies (Hz)
+- **Images**: Energy over 2D spatial frequencies (u, v)
+- **Video**: Energy over 3D spatiotemporal frequencies (u, v, t)
+- **Text**: Energy over semantic embedding dimensions
+
+The Universal Tokenizer maps raw bytes to oscillator frequencies via deterministic hashing:
+
+```
+ID = h(Byte, Index) mod N
+```
+
+No learned embeddings. No tokenizer training. Adding a new modality requires only a spectral encoder (decomposition) and decoder (reconstruction). Cross-modal relationships emerge from Hebbian co-activation, not architectural coupling.
+
+---
+
+## Physics Implementation
+
+### Spatial Dynamics
+
+The spatial substrate is a compressible ideal-gas model (periodic grid) coupled to particles via PIC.
+
+At a high level, the grid evolves conserved quantities \((\rho, \rho \mathbf{u}, E)\) under an ideal-gas EOS and explicit time stepping; particles deposit/gather these fields with trilinear/CIC weights.
+
+### Hydrodynamic ω-Field (Quantum Coherence)
+
+We evolve a complex wavefunction over a fixed ω-lattice:
+
+$$
+i\hbar \,\partial_t \Psi(\omega) =
+\left(
+-\frac{\hbar^2}{2m}\nabla_\omega^2
+ + V_{\text{ext}}(\omega)
+ + g|\Psi(\omega)|^2
+ - \mu
+\right)\Psi(\omega)
+$$
+
+Discretely, \(\nabla_\omega^2\) is a 1D Laplacian on neighboring ω-bins. This provides:
+- **superposition & interference** (complex phase dynamics)
+- **tunneling through ω-space** (kinetic term couples neighbors)
+- **soliton-like attractors** when the nonlinearity and kinetic term balance
+
+Implementation detail: the Metal and Triton kernels use a **symmetric split-step** (Strang-style) ordering to improve phase fidelity.
+
+### Thermal-Oscillator Equilibrium
+
+Heat Q and oscillator energy E_osc exchange bidirectionally toward the Planck distribution:
+
+$$E_{\text{osc,eq}}(\omega, T) = \frac{\hbar\omega}{\exp(\hbar\omega / k_B T) - 1}$$
+
+This quantum-inspired equilibrium ensures that high-frequency modes require more energy to excite—a natural regularization.
+
+### Homeostatic Regulation
+
+The homeostatic ratio prevents runaway dynamics:
+
+$$\rho = \frac{\log(1 + E_{\text{total}})}{\log(1 + \mathcal{B}) + \varepsilon}$$
+
+where B is an exponential moving average baseline. When ρ > 1, the system is "overheated" and damping increases. When ρ < 1, the system is "cold" and damping decreases. No learned parameters—self-regulation emerges from the dynamics.
+
+---
+
+## Inference as Boundary Value Problem
+
+Classical autoregressive inference: clamp prefix, generate suffix token-by-token.
+
+Crystallization inference: clamp *any* subset of oscillators (the "boundary conditions"), relax *all others* in parallel toward the nearest energy minimum.
+
+```python
+from sensorium.observers import infer, Modes, TopK
+
+# Inject query as "dark particles" (invisible to regular observers)
+# System responds; observe the crystallized modes
+result = infer(
+    b"The capital of France is",
+    Modes(),
+    TopK(5, by="amplitude"),
+    steps=10,
+).observe(state, manifold=manifold)
+```
+
+**Dark particles** perturb the system but do not couple to modes. They are filtered from all observations. The observable response *is* the inference result.
+
+This enables:
+- **Causal generation**: Clamp past, relax future
+- **Inpainting**: Clamp start/end, relax middle
+- **Super-resolution**: Clamp low-frequency, relax high-frequency
+- **Semantic constraint**: Clamp specific mode to high amplitude
+
+All modes use the same physics. The observer decides which constraints to impose.
+
+---
+
+## GPU Backends
+
+### Metal (Apple Silicon)
+
+`sensorium/kernels/metal/manifold_physics.metal` — Metal Shading Language kernels:
+
+- Particle-to-field scatter (gravity potential ρ, temperature field T)
+- FFT-based Poisson solver for gravitational forces
+- Hardware texture3D sampler for trilinear field interpolation
+- Velocity Verlet integration with Strang-split drag
+- Adaptive 2-pass statistics reduction (mean, std, energy)
+- Fail-fast NaN detection
+
+### Triton (CUDA)
+
+`sensorium/kernels/triton/` — Triton JIT kernels:
+
+- Periodic boundary conditions (torus topology)
+- Poisson-Jacobi iteration for gravity
+- Temperature-dependent viscosity: μ(T) = μ_ref · √T
+- Stefan-Boltzmann radiation: P = εσAT⁴
+- Newton's law of cooling: Q̇ = 4πκr(T_env - T_particle)
+- Physics-based thermalization timescale: τ = (m·c_v)/(4πκr)
+- GPU parallel reduction for statistics
+
+Both backends share the same physics; dispatch is determined at configuration time.
 
 ---
 
@@ -123,369 +244,123 @@ Thermo Manifold consists of four interconnected manifolds:
 
 - Python 3.10+ (3.12 recommended)
 - PyTorch 2.0+
-- [uv](https://github.com/astral-sh/uv) package manager
-- CUDA-capable GPU (recommended)
+- Apple Silicon (Metal) or CUDA GPU (Triton)
+- [uv](https://github.com/astral-sh/uv) package manager (recommended)
 
 ### Quick Setup
 
 ```bash
-# Clone the repository
 git clone https://github.com/theapemachine/thermo_manifold.git
 cd thermo_manifold
-
-# Install using make (creates venv and syncs dependencies)
 make install
-```
-
-### Installation Options
-
-```bash
-make install          # Base dependencies only
-make install-dev      # Include development tools (pytest, black, mypy, etc.)
-make install-viz      # Include visualization (matplotlib)
-make install-all      # Install everything
 ```
 
 ### Manual Setup
 
-If you prefer not to use `make`:
-
 ```bash
 python3.12 -m venv .venv
-. .venv/bin/activate && uv sync
-
-# With optional dependencies
-. .venv/bin/activate && uv sync --extra dev --extra viz
+source .venv/bin/activate
+uv sync --extra dev --extra viz
 ```
 
 ---
 
-## Quick Start
+## Usage
 
-### Basic Usage
+### Basic Simulation
 
 ```python
-from thermo_manifold import SemanticManifold, PhysicsConfig
+from optimizer.manifold import Manifold, GeometricSimulationConfig
 
-# Initialize configuration
-config = PhysicsConfig(
-    dt=0.02,                        # Integration timestep
-    tau=0.95,                       # Homeostasis time constant
-    dream_sampling_temperature=1.0, # Exploration temperature
-    dream_energy_budget=100,        # Pondering compute budget
+config = GeometricSimulationConfig(
+    grid_dims=(64, 64, 64),
+    particle_count=10000,
+    dt=0.001,
 )
 
-# Create semantic manifold
-manifold = SemanticManifold(
-    vocab_size=10000,
-    embed_dim=256,
-    config=config,
-)
+manifold = Manifold(config)
+state = manifold.build_initial_state()
 
-# Training: observe token sequences
-for sequence in training_data:
-    manifold.observe(sequence)
-
-# Inference: predict next token
-context = [token_a, token_b, token_c]
-prediction = manifold.predict(context)
+for _ in range(1000):
+    state = manifold.step(state)
 ```
 
-### End-to-End Demo
-
-```bash
-python -m thermo_manifold.demos.unified_demo
-```
-
-This demonstrates the complete pipeline: text tokens → semantic manifold → bridge → spectral manifold → audio synthesis.
-
-### Rule-Shift Benchmark
-
-```bash
-python -m thermo_manifold.demos.rule_shift_demo
-```
-
-Evaluates adaptation to distributional shifts, with diagnostic output for analysis.
-
----
-
-## Project Structure
-
-```
-thermo_manifold/
-├── __init__.py                 # Package exports
-├── core/
-│   ├── config.py              # PhysicsConfig, PhysicsMedium
-│   ├── state.py               # BatchState container
-│   ├── scatter.py             # Scatter operations (sum, max, softmax)
-│   ├── diagnostics.py         # Logging (CSV/JSONL)
-│   └── viz.py                 # Visualization utilities
-├── physics/
-│   └── engine.py              # ThermodynamicEngine base class
-├── semantic/
-│   ├── manifold.py            # SemanticManifold (token-level)
-│   ├── hierarchical.py        # HierarchicalSemanticManifold
-│   ├── bond_graph.py          # SparseBondGraph
-│   ├── bipartite_graph.py     # SparseBipartiteBondGraph
-│   ├── chunk_store.py         # ChunkStore (variable-length sequences)
-│   └── radix_trie.py          # RadixTrie for efficient chunk lookup
-├── bridge/
-│   └── manifold.py            # BridgeManifold (semantic ↔ spectral)
-├── spectral/
-│   └── manifold.py            # SpectralManifold (audio synthesis)
-├── demos/
-│   ├── unified_demo.py        # End-to-end demonstration
-│   └── rule_shift_demo.py     # Benchmark with diagnostics
-└── tests/
-    ├── test_bridge_heat.py
-    ├── test_hunger.py
-    ├── test_multi_resolution_chunks.py
-    └── test_transitive_closure.py
-```
-
----
-
-## Configuration
-
-The `PhysicsConfig` class controls all thermodynamic parameters:
+### Observation
 
 ```python
-from thermo_manifold import PhysicsConfig, PhysicsMedium
+from sensorium.observers import Particles, Modes, Statistics
 
-config = PhysicsConfig(
-    # Core dynamics
-    dt=0.02,                # Integration timestep
-    tau=0.95,               # Homeostasis decay (higher = slower adaptation)
-    eps=1e-8,               # Numerical stability
-    
-    # Idle pondering
-    dream_sampling_temperature=1.0,  # Exploration randomness
-    dream_energy_budget=100,         # Compute budget for pondering
-    
-    # Carrier dynamics (for BridgeManifold)
-    carrier_tau=0.9,        # Per-carrier homeostasis
-    
-    # Physical medium properties
-    medium=PhysicsMedium(
-        thermal_resistance=0.1,
-        viscosity=0.05,
-        diffusion_rate=0.01,
-    ),
+# Observe particle energy distribution
+energy_stats = (
+    Particles()
+    .observe(state)
+    .statistics("energy")
+)
+
+# Observe crystallized modes
+crystallized = (
+    Modes()
+    .observe(state)
+    .where(lambda m: m["state"] == 2)
+    .top_k(10, by="amplitude")
 )
 ```
 
----
-
-## Physics Model
-
-The core of Thermo Manifold is a rigorous thermodynamic simulation. This is not metaphor—it is accurate physics. All learning emerges from these fundamental rules.
-
-### Core Entities
-
-| Entity | Description |
-|--------|-------------|
-| **Particle** | A token/concept. Has position (embedding), energy, heat, and excitation. |
-| **Carrier** | Intermediary node mediating transport. Has position, energy, and heat. |
-| **Bond** | Connection between particle and carrier. Determines flow distribution. |
-
-### The Thermodynamic Cascade
-
-**Heat is the transport mechanism.** Heat carries energy as it flows. The cascade:
-
-```
-Heat arrives → Energy transfers → Temperature rises → Excitation rises → Heat generated → Heat flows out
-     ↑                                                                                           ↓
-     └───────────────────────────────────────────────────────────────────────────────────────────┘
-```
-
-This cycle applies to **every entity** (particles, carriers). Each step:
-
-1. Heat arrives at entity
-2. Energy transfers with heat
-3. Temperature rises (kinetic energy = heat)
-4. Excitation rises with temperature
-5. Excitation generates heat
-6. Heat flows out via bonds (split by attraction/gravity)
-
-### Rule 1: Particles Bond to Carriers via Attraction
-
-Bonds form based on **attraction** (cosine similarity = gravity):
-
-```
-attraction = (particle_position · carrier_position + 1) / 2
-```
-
-Attraction determines how heat/energy **splits** when flowing to multiple targets.
-
-### Rule 2: Heat Flows via Bonds
-
-Heat flows from hot to cold, carrying energy with it. Flow is split by attraction:
-
-```
-For particle p with heat H bonded to carriers c₁, c₂, c₃:
-
-heat_to_c₁ = H × dt × (attraction(p, c₁) / total_attraction)
-heat_to_c₂ = H × dt × (attraction(p, c₂) / total_attraction)
-heat_to_c₃ = H × dt × (attraction(p, c₃) / total_attraction)
-```
-
-**Energy transfers with heat** in the same proportions.
-
-### Rule 3: Temperature Drives Excitation
-
-Temperature = heat (assuming unit mass). Excitation rises with temperature:
-
-```
-excitation += temperature × dt
-```
-
-### Rule 4: Excitation Generates Heat
-
-Excitation converts to heat (excitation is consumed in the process):
-
-```
-heat_generated = excitation × dt
-excitation -= heat_generated
-heat += heat_generated
-```
-
-This is self-limiting: high excitation generates heat quickly, depleting itself.
-
-### Rule 5: Carriers Follow the Same Physics
-
-Carriers are not passive conduits. They have their own:
-- Heat (which drives their excitation)
-- Excitation (which generates more heat)
-- Energy (which transfers with heat flow)
-
-The cascade continues: particle → carrier → particle → carrier → ...
-
-### Rule 6: Heat Decreases Viscosity
-
-Hot entities move faster in embedding space:
-
-```
-effective_viscosity = base_viscosity / (1 + temperature)
-```
-
-### Rule 7: Bonds Snap When No Heat/Energy Flows
-
-Bonds break when nothing flows through them:
-
-```
-if last_heat_flow == 0 and last_energy_flow == 0:
-    bond.snap()
-```
-
-### Rule 8: Conservation Laws
-
-**Energy is conserved**: Total energy (all particles + all carriers + all heat) only increases from external input.
-
-**Heat only increases** (second law): Processes generate heat; heat cannot spontaneously convert back to usable energy.
-
-### Rule 9: Homeostasis
-
-Adaptive baselines prevent runaway dynamics:
-
-```
-homeostasis_ratio = current_energy / baseline_energy
-baseline_energy ← τ × baseline_energy + (1-τ) × current_energy
-```
-
-### The Complete Cycle
-
-Each timestep:
-
-1. **Input** → External data injects energy/heat into active particles
-2. **Bond Formation** → Active particles bond to carriers (attraction = gravity)
-3. **Particle Thermodynamics** → Temperature → excitation → heat generation
-4. **Heat Flows Out** → Heat flows via bonds to carriers (split by attraction)
-5. **Energy Flows With Heat** → Energy transfers with heat
-6. **Carrier Thermodynamics** → Carriers process heat → excitation → more heat
-7. **Heat Flows to Particles** → Heat flows back to all bonded particles
-8. **Bond Snapping** → Dead bonds (no flow) break
-9. **Repeat** → Continuous cascade through the network
-
-This creates a self-organizing system where structure emerges from thermodynamic flow patterns.
-
----
-
-## Design Principles
-
-1. **No Backpropagation**: All updates are local and Hebbian-style
-2. **Sparse Structures**: Avoid dense V×V matrices; use directed graphs
-3. **Emergent Behavior**: Structure forms from dynamics, not design
-4. **Online Learning**: Continuous adaptation to streaming data
-5. **Homeostatic Regulation**: Adaptive baselines prevent runaway activation
-6. **Event-Horizon Locality**: Efficient neighbor search for scalability
-7. **Scale-Free Operation**: Adaptive normalization, no hard thresholds
-
----
-
-## Idle Pondering
-
-A distinctive feature of Thermo Manifold is **idle pondering**—computation that occurs between observations to consolidate knowledge:
-
-| Mechanism | Description | Benefit |
-|-----------|-------------|---------|
-| **Transitive Closure** | Infers shortcuts (A→C from A→B, B→C) | Accelerates future traversals |
-| **Conflict Resolution** | Resolves ambiguous predictions | Improves consistency |
-| **Dream Rollouts** | Explores hypothetical sequences | Discovers dead-ends, builds hunger signals |
-
-This enables the system to improve without additional training data, similar to memory consolidation during sleep.
-
----
-
-## Benchmarks
-
-### Rule-Shift Adaptation
-
-The `rule_shift_demo.py` evaluates how quickly the system adapts when underlying patterns change:
-
-```
-Step 1000: Pre-shift accuracy: 94.2%
-Step 1001: Rule shift applied
-Step 1010: Post-shift accuracy: 67.3%
-Step 1050: Recovered accuracy: 89.1%
-Step 1100: Recovered accuracy: 93.8%
-```
-
-Diagnostic metrics are logged to CSV/JSONL for analysis.
-
----
-
-## Diagnostics
-
-Enable comprehensive logging:
+### Inference via Dark Particle Injection
 
 ```python
-from thermo_manifold.core.diagnostics import DiagnosticsLogger
+from sensorium.observers import infer, Modes, TopK
 
-logger = DiagnosticsLogger(
-    output_dir="./logs",
-    format="jsonl",  # or "csv"
-)
+result = infer(
+    b"query input bytes",
+    Modes(),
+    TopK(5, by="amplitude"),
+    steps=10,
+).observe(state, manifold=manifold)
 
-manifold.attach_diagnostics(logger)
+# Result contains top-5 coupled modes by amplitude
+for mode in result.get():
+    print(f"ω={mode['omega']:.2f}, A={mode['amplitude']:.4f}")
 ```
 
-Captured metrics include:
-- Bond graph statistics (edges, mean strength, pruning rate)
-- Energy and heat distributions
-- Chunk formation events
-- Pondering outcomes (shortcuts found, dead-ends explored)
+---
+
+## Experiments
+
+The `sensorium/experiments/` directory contains 20+ experiment modules:
+
+| Experiment | Description |
+|-----------|-------------|
+| `kernel_next_token.py` | Next-byte prediction (text) |
+| `kernel_image_gen.py` | Image generation |
+| `kernel_audio_gen.py` | Audio synthesis from coherence modes |
+| `kernel_text_diffusion.py` | Text diffusion via boundary conditions |
+| `kernel_cross_modal.py` | Text ↔ Audio transduction |
+| `kernel_rule_shift.py` | Online adaptation to distribution shift |
+| `kernel_cocktail_party.py` | Source separation |
+| `kernel_timeseries.py` | Time series prediction |
+
+---
+
+## Theoretical Foundation
+
+See `The_Sensorium_Manifold.pdf` for the complete theoretical treatment, including:
+
+- Spectral Isomorphism Principle (Principle 1)
+- Hamiltonian formulation and symplectic integration
+- Proof of holographic content-addressability
+- Crystallization convergence analysis
+- Experimental validation across modalities
 
 ---
 
 ## Citation
 
-If you use Thermo Manifold in your research, please cite:
-
 ```bibtex
-@article{thermomanifold2026,
-  title={Thermodynamic Primitives for Neural Computation Without Backpropagation},
-  author={[Authors]},
-  journal={[Journal/Conference]},
+@article{vandommelen2026sensorium,
+  title={The Sensorium Manifold: Native Multimodality via Isomorphism},
+  author={van Dommelen, Daniel Owen},
+  journal={Independent Research},
   year={2026},
   url={https://github.com/theapemachine/thermo_manifold}
 }
@@ -493,51 +368,12 @@ If you use Thermo Manifold in your research, please cite:
 
 ---
 
-## Contributing
-
-We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
-
-### Development Setup
-
-```bash
-# Install with development dependencies
-make install-dev
-
-# Run tests
-make test
-
-# Run tests with coverage
-make test-cov
-
-# Format code
-make format
-
-# Run linter
-make lint
-
-# Type checking
-make typecheck
-
-# Run all checks
-make check
-```
-
-Run `make help` to see all available commands.
-
----
-
 ## License
 
-This project is licensed under the MIT License. See [LICENSE](LICENSE) for details.
-
----
-
-## Acknowledgments
-
-This work builds on insights from thermodynamic computing, Hebbian learning theory, and sparse representation research. We thank [acknowledgments] for valuable discussions and feedback.
+MIT License. See [LICENSE](LICENSE) for details.
 
 ---
 
 <p align="center">
-  <i>Learning as physics, not optimization.</i>
+  <i>"Physics already manages information. Simulate enough of it, and what emerges is what we've been calling AI."</i>
 </p>

@@ -23,9 +23,15 @@ class KernelContinuous(Experiment):
         self, 
         experiment_name: str, 
         profile: bool = False,
+        dashboard: bool = False,
     ):
-        super().__init__(experiment_name, profile)
-        self.cfg = ManifoldConfig(generator=self.load(), ready="crystallized")
+        super().__init__(experiment_name, profile, dashboard=dashboard)
+        self.cfg = ManifoldConfig(
+            generator=self.load(),
+            ready="crystallized",
+            dashboard=self.dashboard,
+            video_path=self.video_path,
+        )
 
     def load(self) -> Iterator[Tuple[Path, bytes]]:
         for i in range(10):

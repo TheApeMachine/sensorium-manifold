@@ -1,0 +1,36 @@
+
+--- kernel_log (step=1, dt=0.00018341, halvings=5) ---
+0000     PIC base gid=0      a=9.6121 b=0.960826 c=-2.45651e-07 d=-2.3385e-05
+
+--- kernel_log (step=2, dt=2.88936) ---
+0000     PIC base gid=0      a=9.08384 b=0 c=-7.14036e-07 d=-2.35364e-05
+
+--- kernel_log (step=3, dt=0.000150635, halvings=4) ---
+0000     PIC base gid=0      a=9.20556 b=4.9903 c=-3.86776e-06 d=-0.000152902
+
+--- kernel_log (step=4, dt=0.653269) ---
+0000     PIC base gid=0      a=8.70894 b=0 c=-5.97663e-06 d=-0.000152911
+
+--- kernel_log (step=5, dt=0.944387) ---
+0000     PIC base gid=0      a=8.19151 b=0 c=-8.02324e-06 d=-0.000151873
+
+--- kernel_log (step=6, dt=1.16797) ---
+0000     PIC base gid=0      a=7.63299 b=0 c=-9.44279e-06 d=-0.000149698
+
+--- kernel_log (step=7, dt=1.24568) ---
+0000     PIC base gid=0      a=7.09778 b=0 c=-1.04151e-05 d=-0.000146078
+
+--- kernel_log (step=8, dt=1.30287) ---
+0000     PIC base gid=0      a=6.5774 b=0 c=-1.1438e-05 d=-0.00014035
+
+--- kernel_log (step=9, dt=1.37772) ---
+0000     PIC base gid=0      a=6.07301 b=0 c=-1.29645e-05 d=-0.000131417
+
+--- kernel_log (step=10, dt=1.40344) ---
+0000     PIC base gid=0      a=5.62945 b=0 c=-1.52335e-05 d=-0.000118276
+
+--- kernel_log (step=11, dt=1.42805) ---
+0000     PIC base gid=0      a=5.24129 b=0 c=-1.78386e-05 d=-0.000102259
+
+--- kernel_log (step=12, dt=1.47588) ---
+0000     PIC base gid=0      a=4.90856 b=0 c=-2.07042e-05 d=-8.35746e-05

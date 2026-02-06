@@ -1,0 +1,14 @@
+\begin{table}[htbp]
+\centering
+\caption{Easy-proof wave-trie metrics (map vs path) without changing physics.}
+\label{tab:wave_trie}
+\begin{tabular}{cccccccccccc}
+\toprule
+Scenario & Tokens & Samples & Unique keys & Key coll. & Edges & Top edge p & Edge H & Fold top1 & Fold PR & Fold H & $||\Delta\Psi||/||\Psi||$ \\
+\midrule
+repeated\_AB & 262144 & 1024 & 256 & $0.999$ & 255 & $0.004$ & $7.994$ & $0.004$ & $256.000$ & $8.000$ & $715753.946$ \\
+text\_prefix\_AB\_CvD & 196608 & 65536 & 4 & $1.000$ & 3 & $0.500$ & $1.500$ & $0.333$ & $3.600$ & $1.918$ & $105586.713$ \\
+filesystem\_corpus\_paper & 120554 & 25 & 115920 & $0.038$ & 118404 & $1.91e-04$ & $16.825$ & $1.91e-04$ & $99767.058$ & $16.774$ & $1.010$ \\
+\bottomrule
+\end{tabular}
+\end{table}

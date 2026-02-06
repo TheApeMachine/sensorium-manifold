@@ -1,21 +1,21 @@
-\begin{table}[t]
-\centering
-\caption{Next-byte prediction via thermodynamic trie. The system achieves 92.4\% overall accuracy, with 99.3\% on deterministic paths and 55.8\% at branch points where multiple continuations are valid.}
-\label{tab:next_token}
 \begin{tabular}{l r}
 \toprule
-\textbf{Metric} & \textbf{Value} \\
+Metric & Value \\
 \midrule
-Overall accuracy & 92.4\% \\
-Unambiguous accuracy & 99.3\% \\
-Ambiguous (branch point) accuracy & 55.8\% \\
-Top-3 accuracy & 99.4\% \\
-\midrule
-\textit{Configuration} & \\
-\quad Segment size & 16 bytes \\
-\quad Number of patterns & 7 \\
-\quad Context length & 8 bytes \\
-\quad Collision ratio & 39.0$\times$ \\
+accuracy & 0.9238 \\
+ambiguous\_accuracy & 0.5577 \\
+ambiguous\_cases & 52 \\
+collision\_ratio & 39.02 \\
+context\_length & 8 \\
+num\_carriers & 52798 \\
+num\_crystallized & 64 \\
+num\_patterns & 7 \\
+perplexity & 102.904755 \\
+segment\_size & 16 \\
+top3\_accuracy & 0.9939 \\
+top5\_accuracy & 0.9939 \\
+total\_predictions & 328 \\
+unambiguous\_accuracy & 0.9928 \\
+unique\_token\_ids & 41 \\
 \bottomrule
 \end{tabular}
-\end{table}

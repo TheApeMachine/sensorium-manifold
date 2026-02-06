@@ -1,4 +1,4 @@
-\begin{thebibliography}{37}
+\begin{thebibliography}{47}
 \providecommand{\natexlab}[1]{#1}
 \providecommand{\url}[1]{\texttt{#1}}
 \expandafter\ifx\csname urlstyle\endcsname\relax
@@ -19,6 +19,19 @@ Jean-Baptiste Alayrac, Jeff Donahue, Pauline Luc, Antoine Miech, Iain Barr,
 \newblock \emph{Advances in Neural Information Processing Systems},
   35:\penalty0 23716--23736, 2022.
 
+\bibitem[Bolya and Hoffman(2023)]{bolya2023token_diffusion}
+Daniel Bolya and Judy Hoffman.
+\newblock Token merging for fast stable diffusion.
+\newblock In \emph{CVPR Workshop on Efficient Deep Learning for Computer
+  Vision}, 2023.
+
+\bibitem[Bolya et~al.(2023)Bolya, Fu, Dai, Zhang, Feichtenhofer, and
+  Hoffman]{bolya2023token}
+Daniel Bolya, Cheng-Yang Fu, Xiaoliang Dai, Peizhao Zhang, Christoph
+  Feichtenhofer, and Judy Hoffman.
+\newblock Token merging: Your {ViT} but faster.
+\newblock In \emph{International Conference on Learning Representations}, 2023.
+
 \bibitem[Boyd et~al.(2022)Boyd, Patra, Jarzynski, and
   Crutchfield]{boyd2022thermodynamic}
 Alexander~B. Boyd, Ayoti Patra, Christopher Jarzynski, and James~P.
@@ -26,6 +39,14 @@ Alexander~B. Boyd, Ayoti Patra, Christopher Jarzynski, and James~P.
 \newblock Thermodynamic machine learning through maximum work production.
 \newblock \emph{New Journal of Physics}, 24\penalty0 (8):\penalty0 083040,
   2022.
+
+\bibitem[Bryan et~al.(1995)Bryan, Norman, Stone, Cen, and
+  Ostriker]{bryan1995ppm}
+Greg~L. Bryan, Michael~L. Norman, James~M. Stone, Renyue Cen, and Jeremiah~P.
+  Ostriker.
+\newblock A piecewise parabolic method for cosmological hydrodynamics.
+\newblock \emph{Computer Physics Communications}, 89:\penalty0 149--165, 1995.
+\newblock \doi{10.1016/0010-4655(94)00191-4}.
 
 \bibitem[Bulatov et~al.(2024)Bulatov, Kuratov, and Burtsev]{bulatov2024armt}
 Aydar Bulatov, Yuri Kuratov, and Mikhail~S. Burtsev.
@@ -112,6 +133,13 @@ John~J. Hopfield.
 \newblock \emph{Proceedings of the National Academy of Sciences}, 79\penalty0
   (8):\penalty0 2554--2558, 1982.
 
+\bibitem[Indyk and Motwani(1998)]{indyk1998approximate}
+Piotr Indyk and Rajeev Motwani.
+\newblock Approximate nearest neighbors: Towards removing the curse of
+  dimensionality.
+\newblock In \emph{Proceedings of the Thirtieth Annual ACM Symposium on Theory
+  of Computing}, pages 604--613, 1998.
+
 \bibitem[Ioffe and Szegedy(2015)]{ioffe2015batch}
 Sergey Ioffe and Christian Szegedy.
 \newblock Batch normalization: Accelerating deep network training by reducing
@@ -126,11 +154,24 @@ Pengzhan Jin, Zhen Zhang, Aiqing Zhu, Yifa Tang, and George~Em Karniadakis.
   identifying hamiltonian systems.
 \newblock In \emph{Neural Networks}, volume 132, pages 166--179, 2020.
 
+\bibitem[Kitaev et~al.(2020)Kitaev, Kaiser, and Levskaya]{kitaev2020reformer}
+Nikita Kitaev, {\L}ukasz Kaiser, and Anselm Levskaya.
+\newblock Reformer: The efficient transformer.
+\newblock In \emph{International Conference on Learning Representations}, 2020.
+
 \bibitem[Kuramoto(1975)]{kuramoto1975international}
 Yoshiki Kuramoto.
 \newblock Self-entrainment of a population of coupled non-linear oscillators.
 \newblock \emph{International Symposium on Mathematical Problems in Theoretical
   Physics}, pages 420--422, 1975.
+
+\bibitem[Lauterbach et~al.(2009)Lauterbach, Garland, Sengupta, Luebke, and
+  Manocha]{lauterbach2009fast}
+Christian Lauterbach, Michael Garland, Shubhabrata Sengupta, David Luebke, and
+  Dinesh Manocha.
+\newblock Fast bvh construction on gpus.
+\newblock \emph{Computer Graphics Forum}, 28\penalty0 (2):\penalty0 375--384,
+  2009.
 
 \bibitem[LeCun et~al.(2006)LeCun, Chopra, Hadsell, Ranzato, and
   Huang]{lecun2006tutorial}
@@ -165,6 +206,13 @@ Takeru Miyato, Priyank Jaini, Chin-Wei Huang, and Yee~Whye Teh.
 \newblock Artificial kuramoto oscillatory neurons.
 \newblock \emph{International Conference on Learning Representations}, 2025.
 \newblock Oral presentation at ICLR 2025.
+
+\bibitem[Morton(1966)]{morton1966computer}
+Guy~Macdonald Morton.
+\newblock A computer oriented geodetic data base and a new technique in file
+  sequencing.
+\newblock Technical report, IBM Ltd., 1966.
+\newblock IBM Canada Technical Report.
 
 \bibitem[Nie et~al.(2024)Nie, Liu, Gong, Wang, Deng, Yuan, Wang, and
   Xie]{nie2024scaling}
@@ -218,6 +266,11 @@ Subham~Sekhar Sahoo, Marianne Arriola, Yair Schiff, Aaron Gokaslan, Edgar
 \newblock Simple and effective masked diffusion language models.
 \newblock \emph{Advances in Neural Information Processing Systems}, 2024.
 
+\bibitem[Samet(2006)]{samet2006foundations}
+Hanan Samet.
+\newblock \emph{Foundations of Multidimensional and Metric Data Structures}.
+\newblock Morgan Kaufmann, San Francisco, CA, 2006.
+
 \bibitem[Santos et~al.(2024)Santos, Niculae, McCallum, and
   Martins]{santos2024sparse}
 Saul Santos, Vlad Niculae, Andrew McCallum, and Andr{\'e} F.~T. Martins.
@@ -244,12 +297,26 @@ Yang Song, Jascha Sohl-Dickstein, Diederik~P. Kingma, Abhishek Kumar, Stefano
   equations.
 \newblock \emph{International Conference on Learning Representations}, 2021.
 
+\bibitem[Stone and Norman(1992)]{stone1992zeus2d}
+James~M. Stone and Michael~L. Norman.
+\newblock {ZEUS-2D}: A radiation magnetohydrodynamics code for astrophysical
+  flows in two space dimensions. {I}. the hydrodynamic algorithms and tests.
+\newblock \emph{The Astrophysical Journal Supplement Series}, 80:\penalty0
+  753--790, 1992.
+\newblock \doi{10.1086/191680}.
+
 \bibitem[Strogatz(2000)]{strogatz2000kuramoto}
 Steven~H. Strogatz.
 \newblock From kuramoto to crawford: Exploring the onset of synchronization in
   populations of coupled oscillators.
 \newblock \emph{Physica D: Nonlinear Phenomena}, 143\penalty0 (1-4):\penalty0
   1--20, 2000.
+
+\bibitem[van Dommelen and Shen(1980)]{vandommelen1980singularity}
+L.~L. van Dommelen and S.~F. Shen.
+\newblock The spontaneous generation of the singularity in a separating laminar
+  boundary layer.
+\newblock \emph{Journal of Computational Physics}, 1980.
 
 \bibitem[Wang(2010)]{wang2010neurophysiological}
 Xiao-Jing Wang.
