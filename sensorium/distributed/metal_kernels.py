@@ -147,3 +147,51 @@ def jacobi_step_halo_metal(
         float(dx),
     )
     return out
+
+
+def advance_interior_halo_metal(
+    *,
+    rho_ext: torch.Tensor,
+    mom_ext: torch.Tensor,
+    e_ext: torch.Tensor,
+    phi_ext: torch.Tensor,
+    dt: float,
+    dx: float,
+    gamma: float,
+    rho_min: float,
+    viscosity: float,
+    thermal_diffusivity: float,
+    halo: int,
+    out_rho: torch.Tensor,
+    out_mom: torch.Tensor,
+    out_e: torch.Tensor,
+) -> None:
+    if rho_ext.device.type != "mps":
+        raise RuntimeError("advance_interior_halo_metal requires MPS tensors")
+    ops = _ops()
+    out_mx = torch.empty_like(out_rho)
+    out_my = torch.empty_like(out_rho)
+    out_mz = torch.empty_like(out_rho)
+    ops.distributed_advance_interior_halo(
+        rho_ext.contiguous(),
+        mom_ext[..., 0].contiguous(),
+        mom_ext[..., 1].contiguous(),
+        mom_ext[..., 2].contiguous(),
+        e_ext.contiguous(),
+        phi_ext.contiguous(),
+        out_rho,
+        out_mx,
+        out_my,
+        out_mz,
+        out_e,
+        int(halo),
+        float(dt),
+        float(dx),
+        float(gamma),
+        float(rho_min),
+        float(viscosity),
+        float(thermal_diffusivity),
+    )
+    out_mom[..., 0].copy_(out_mx)
+    out_mom[..., 1].copy_(out_my)
+    out_mom[..., 2].copy_(out_mz)

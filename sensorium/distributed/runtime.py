@@ -33,6 +33,16 @@ _PHASE_ID: dict[TickPhase, int] = {
 }
 _FACE_ID: dict[Face, int] = {face: idx for idx, face in enumerate(FACES)}
 
+_PARTICLE_FIELDS: tuple[str, ...] = (
+    "positions",
+    "velocities",
+    "masses",
+    "heats",
+    "energies",
+    "excitations",
+    "phase",
+)
+
 
 @dataclass(frozen=True)
 class RankConfig:
@@ -83,6 +93,10 @@ class Transport(ABC):
         payloads_by_rank: dict[int, dict[str, torch.Tensor]],
         device: torch.device,
     ) -> list[dict[str, torch.Tensor]]:
+        raise NotImplementedError
+
+    @abstractmethod
+    def allreduce_tensor_sum(self, tensor: torch.Tensor) -> torch.Tensor:
         raise NotImplementedError
 
     @property
@@ -143,6 +157,9 @@ class LoopbackTransport(Transport):
         if not own:
             return []
         return [{key: value.clone() for key, value in own.items()}]
+
+    def allreduce_tensor_sum(self, tensor: torch.Tensor) -> torch.Tensor:
+        return tensor.clone()
 
 
 class TorchDistributedTransport(Transport):
@@ -229,17 +246,41 @@ class TorchDistributedTransport(Transport):
             neighbor = neighbors.get(face, -1)
             if neighbor < 0:
                 continue
-            send_obj = _cpu_payload(payloads.get(face, {}))
-            recv_holder: list[dict[str, torch.Tensor]] = [{}]
+            send_payload = _normalize_particle_payload(
+                payloads.get(face, {}), device=device
+            )
+            send_n = int(send_payload["positions"].shape[0])
+
+            send_count = torch.tensor([send_n], dtype=torch.int64)
+            recv_count = torch.zeros((1,), dtype=torch.int64)
+
             if self.rank < neighbor:
-                dist.send_object_list([send_obj], dst=neighbor, group=self._group)
-                dist.recv_object_list(recv_holder, src=neighbor, group=self._group)
+                dist.send(send_count, dst=neighbor, group=self._group)
+                dist.recv(recv_count, src=neighbor, group=self._group)
             else:
-                dist.recv_object_list(recv_holder, src=neighbor, group=self._group)
-                dist.send_object_list([send_obj], dst=neighbor, group=self._group)
+                dist.recv(recv_count, src=neighbor, group=self._group)
+                dist.send(send_count, dst=neighbor, group=self._group)
+
+            recv_n = int(recv_count.item())
+            recv_payload_cpu = _empty_particle_payload_cpu(recv_n)
+
+            for key in _PARTICLE_FIELDS:
+                send_tensor = send_payload[key]
+                recv_tensor = recv_payload_cpu[key]
+                if self.rank < neighbor:
+                    if send_n > 0:
+                        dist.send(send_tensor, dst=neighbor, group=self._group)
+                    if recv_n > 0:
+                        dist.recv(recv_tensor, src=neighbor, group=self._group)
+                else:
+                    if recv_n > 0:
+                        dist.recv(recv_tensor, src=neighbor, group=self._group)
+                    if send_n > 0:
+                        dist.send(send_tensor, dst=neighbor, group=self._group)
+
             received[face] = {
                 key: value.to(device, non_blocking=False)
-                for key, value in recv_holder[0].items()
+                for key, value in recv_payload_cpu.items()
             }
         return received
 
@@ -251,33 +292,102 @@ class TorchDistributedTransport(Transport):
         device: torch.device,
     ) -> list[dict[str, torch.Tensor]]:
         del tick
-        outbound = {
-            dst: _cpu_payload(payload)
-            for dst, payload in payloads_by_rank.items()
-            if payload
-        }
-        gathered: list[dict[int, dict[str, torch.Tensor]] | None] = [
-            None for _ in range(self.world_size)
-        ]
-        dist.all_gather_object(gathered, outbound, group=self._group)
-        inbound: list[dict[str, torch.Tensor]] = []
-        for src_map in gathered:
-            if not src_map:
-                continue
-            payload = src_map.get(self.rank)
+        mode_fields: tuple[str, ...] = ("mode_idx", "real", "imag")
+        send_counts = torch.zeros((self.world_size,), dtype=torch.int64)
+        normalized: dict[int, dict[str, torch.Tensor]] = {}
+        for dst, payload in payloads_by_rank.items():
             if not payload:
                 continue
+            mode_idx = payload.get("mode_idx")
+            real = payload.get("real")
+            imag = payload.get("imag")
+            if mode_idx is None or real is None or imag is None:
+                continue
+            n = int(mode_idx.numel())
+            if n == 0:
+                continue
+            send_counts[dst] = n
+            normalized[dst] = {
+                "mode_idx": mode_idx.detach().contiguous(),
+                "real": real.detach().contiguous(),
+                "imag": imag.detach().contiguous(),
+            }
+
+        comm_device = self._comm_device_for_backend()
+        send_counts_dev = send_counts.to(comm_device)
+        recv_counts_dev = torch.zeros_like(send_counts_dev)
+        dist.all_to_all_single(
+            recv_counts_dev,
+            send_counts_dev,
+            group=self._group,
+        )
+        recv_counts = recv_counts_dev.to("cpu")
+
+        inbound: list[dict[str, torch.Tensor]] = []
+        self_payload = normalized.get(self.rank)
+        if self_payload is not None:
             inbound.append(
-                {
-                    key: value.to(device, non_blocking=False)
-                    for key, value in payload.items()
-                }
+                {k: v.to(device, non_blocking=False) for k, v in self_payload.items()}
             )
+
+        for peer in range(self.world_size):
+            if peer == self.rank:
+                continue
+            send_n = int(send_counts[peer].item())
+            recv_n = int(recv_counts[peer].item())
+            recv_payload: dict[str, torch.Tensor] = {}
+            send_payload = normalized.get(peer)
+
+            for key in mode_fields:
+                send_tensor = None
+                if send_n > 0 and send_payload is not None:
+                    send_tensor = send_payload[key].to(comm_device, non_blocking=False)
+
+                recv_tensor = None
+                if recv_n > 0:
+                    dtype = torch.int64 if key == "mode_idx" else torch.float32
+                    recv_tensor = torch.empty(
+                        (recv_n,), dtype=dtype, device=comm_device
+                    )
+
+                if self.rank < peer:
+                    if send_tensor is not None:
+                        dist.send(send_tensor, dst=peer, group=self._group)
+                    if recv_tensor is not None:
+                        dist.recv(recv_tensor, src=peer, group=self._group)
+                else:
+                    if recv_tensor is not None:
+                        dist.recv(recv_tensor, src=peer, group=self._group)
+                    if send_tensor is not None:
+                        dist.send(send_tensor, dst=peer, group=self._group)
+
+                if recv_tensor is not None:
+                    recv_payload[key] = recv_tensor.to(device, non_blocking=False)
+
+            if recv_n > 0:
+                inbound.append(recv_payload)
+
         return inbound
+
+    def allreduce_tensor_sum(self, tensor: torch.Tensor) -> torch.Tensor:
+        src = tensor.contiguous()
+        if self._use_direct_device_transfer(src):
+            out = src.clone()
+            dist.all_reduce(out, op=dist.ReduceOp.SUM, group=self._group)
+            return out
+        cpu = src.to("cpu", non_blocking=False)
+        dist.all_reduce(cpu, op=dist.ReduceOp.SUM, group=self._group)
+        return cpu.to(src.device, non_blocking=False)
 
     def _use_direct_device_transfer(self, tensor: torch.Tensor) -> bool:
         backend = str(self._backend).lower()
         return tensor.device.type == "cuda" and backend == "nccl"
+
+    def _comm_device_for_backend(self) -> torch.device:
+        backend = str(self._backend).lower()
+        if backend == "nccl" and torch.cuda.is_available():
+            return torch.device("cuda")
+        return torch.device("cpu")
 
 
 @dataclass
@@ -320,4 +430,34 @@ def _cpu_payload(payload: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]:
     return {
         key: value.detach().contiguous().to("cpu", non_blocking=False)
         for key, value in payload.items()
+    }
+
+
+def _normalize_particle_payload(
+    payload: dict[str, torch.Tensor], *, device: torch.device
+) -> dict[str, torch.Tensor]:
+    pos = payload.get("positions")
+    n = int(pos.shape[0]) if pos is not None else 0
+    out = _empty_particle_payload_cpu(n)
+    if n == 0:
+        return out
+
+    for key in _PARTICLE_FIELDS:
+        src = payload.get(key)
+        if src is None:
+            continue
+        out[key] = src.detach().contiguous().to("cpu", non_blocking=False)
+    del device
+    return out
+
+
+def _empty_particle_payload_cpu(n: int) -> dict[str, torch.Tensor]:
+    return {
+        "positions": torch.empty((n, 3), dtype=torch.float32),
+        "velocities": torch.empty((n, 3), dtype=torch.float32),
+        "masses": torch.empty((n,), dtype=torch.float32),
+        "heats": torch.empty((n,), dtype=torch.float32),
+        "energies": torch.empty((n,), dtype=torch.float32),
+        "excitations": torch.empty((n,), dtype=torch.float32),
+        "phase": torch.empty((n,), dtype=torch.float32),
     }

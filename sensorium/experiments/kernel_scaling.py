@@ -46,6 +46,8 @@ class KernelScaling(Experiment):
         self.mode_counts = (64, 128, 256, 512)
         self.pattern_counts = (1, 2, 4, 8, 16, 32)
         self.sequence_lengths = (1000, 4000, 16000, 64000)
+        self.settle_max_steps_cap = 4096
+        self.settle_growth = 2
         self._run_rows: list[dict[str, Any]] = []
         self._dashboard_tags: set[str] = set()
 
@@ -108,53 +110,7 @@ class KernelScaling(Experiment):
         dashboard_tag: str | None = None,
         termination_policy: str = "either",
     ):
-        history: dict[str, list[float]] = {
-            "step": [],
-            "n_modes": [],
-            "n_volatile": [],
-            "n_stable": [],
-            "n_crystallized": [],
-            "n_births": [],
-            "n_deaths": [],
-            "conflict_score": [],
-        }
-        prev_modes = 0
-
-        def on_step(state: dict):
-            nonlocal prev_modes
-            amps = state.get("amplitudes")
-            mstate = state.get("mode_state")
-            conflict = state.get("conflict")
-            step = int(state.get("step", 0))
-
-            n_modes = 0
-            n_volatile = 0
-            n_stable = 0
-            n_crystallized = 0
-            conflict_score = 0.0
-            if amps is not None:
-                active = amps > 1e-6
-                n_modes = int(active.sum().item())
-                if mstate is not None and n_modes > 0:
-                    states = mstate[:n_modes]
-                    n_volatile = int((states == 0).sum().item())
-                    n_stable = int((states == 1).sum().item())
-                    n_crystallized = int((states == 2).sum().item())
-                if conflict is not None and n_modes > 0:
-                    conflict_score = float(conflict[:n_modes].mean().item())
-            n_births = max(0, n_modes - prev_modes)
-            n_deaths = max(0, prev_modes - n_modes)
-            prev_modes = n_modes
-
-            history["step"].append(step)
-            history["n_modes"].append(float(n_modes))
-            history["n_volatile"].append(float(n_volatile))
-            history["n_stable"].append(float(n_stable))
-            history["n_crystallized"].append(float(n_crystallized))
-            history["n_births"].append(float(n_births))
-            history["n_deaths"].append(float(n_deaths))
-            history["conflict_score"].append(float(conflict_score))
-
+        history: dict[str, list[float]] = {}
         run_name = f"{self.experiment_name}_{test_name}_s{seed}"
         record_dashboard = (
             bool(self.dashboard)
@@ -162,45 +118,115 @@ class KernelScaling(Experiment):
             and bool(dashboard_tag)
             and dashboard_tag not in self._dashboard_tags
         )
-        on_step_cb = on_step
-        if record_dashboard:
-            self.start_dashboard(grid_size=grid_size, run_name=run_name)
+        attempt_steps = int(max(1, max_steps))
+        attempts = 0
+        state: dict[str, Any] = {}
+        meta: dict[str, Any] = {}
+        while True:
+            attempts += 1
+            history = {
+                "step": [],
+                "n_modes": [],
+                "n_volatile": [],
+                "n_stable": [],
+                "n_crystallized": [],
+                "n_births": [],
+                "n_deaths": [],
+                "conflict_score": [],
+            }
+            prev_modes = 0
 
-            def _cb(state: dict) -> None:
-                on_step(state)
-                self.dashboard_update(state)
+            def on_step(state: dict):
+                nonlocal prev_modes
+                amps = state.get("amplitudes")
+                mstate = state.get("mode_state")
+                conflict = state.get("conflict")
+                step = int(state.get("step", 0))
 
-            on_step_cb = _cb
-        try:
-            state, meta = run_stream_on_manifold(
-                dataset.generate(),
-                config=ManifoldRunConfig(
-                    grid_size=grid_size,
-                    max_steps=max_steps,
-                    min_steps=min(4, max_steps),
-                    allow_analysis_fallback=False,
-                    omega_num_modes=(
-                        int(omega_num_modes)
-                        if isinstance(omega_num_modes, int) and omega_num_modes > 0
-                        else None
-                    ),
-                ),
-                on_step=on_step_cb,
-            )
-        finally:
+                n_modes = 0
+                n_volatile = 0
+                n_stable = 0
+                n_crystallized = 0
+                conflict_score = 0.0
+                if amps is not None:
+                    active = amps > 1e-6
+                    n_modes = int(active.sum().item())
+                    if mstate is not None and n_modes > 0:
+                        states = mstate[:n_modes]
+                        n_volatile = int((states == 0).sum().item())
+                        n_stable = int((states == 1).sum().item())
+                        n_crystallized = int((states == 2).sum().item())
+                    if conflict is not None and n_modes > 0:
+                        conflict_score = float(conflict[:n_modes].mean().item())
+                n_births = max(0, n_modes - prev_modes)
+                n_deaths = max(0, prev_modes - n_modes)
+                prev_modes = n_modes
+
+                history["step"].append(step)
+                history["n_modes"].append(float(n_modes))
+                history["n_volatile"].append(float(n_volatile))
+                history["n_stable"].append(float(n_stable))
+                history["n_crystallized"].append(float(n_crystallized))
+                history["n_births"].append(float(n_births))
+                history["n_deaths"].append(float(n_deaths))
+                history["conflict_score"].append(float(conflict_score))
+
+            on_step_cb = on_step
             if record_dashboard:
-                self.close_dashboard()
-                self._dashboard_tags.add(dashboard_tag)
+                self.start_dashboard(grid_size=grid_size, run_name=run_name)
+
+                def _cb(state: dict) -> None:
+                    on_step(state)
+                    self.dashboard_update(state)
+
+                on_step_cb = _cb
+
+            try:
+                state, meta = run_stream_on_manifold(
+                    dataset.generate(),
+                    config=ManifoldRunConfig(
+                        grid_size=grid_size,
+                        max_steps=int(attempt_steps),
+                        min_steps=min(50, int(attempt_steps)),
+                        allow_analysis_fallback=False,
+                        omega_num_modes=(
+                            int(omega_num_modes)
+                            if isinstance(omega_num_modes, int) and omega_num_modes > 0
+                            else None
+                        ),
+                    ),
+                    on_step=on_step_cb,
+                )
+            finally:
+                if record_dashboard:
+                    self.close_dashboard()
+
+            termination = str(meta.get("run_termination", ""))
+            if (
+                termination_policy == "quiet"
+                and termination != "quiet"
+                and int(attempt_steps) < int(self.settle_max_steps_cap)
+            ):
+                attempt_steps = min(
+                    int(self.settle_max_steps_cap),
+                    int(max(int(attempt_steps) + 1, int(attempt_steps) * int(self.settle_growth))),
+                )
+                continue
+            break
+
+        if record_dashboard:
+            self._dashboard_tags.add(dashboard_tag)
+
         termination = str(meta.get("run_termination", ""))
         if termination_policy == "quiet" and termination != "quiet":
             raise RuntimeError(
                 f"[{test_name}] expected quiet termination but got '{termination}' "
-                f"(seed={seed}, grid={grid_size}, max_steps={max_steps})"
+                f"(seed={seed}, grid={grid_size}, max_steps={attempt_steps}, attempts={attempts})"
             )
         if termination_policy == "budget" and termination != "budget":
             raise RuntimeError(
                 f"[{test_name}] expected fixed-budget termination but got '{termination}' "
-                f"(seed={seed}, grid={grid_size}, max_steps={max_steps})"
+                f"(seed={seed}, grid={grid_size}, max_steps={attempt_steps}, attempts={attempts})"
             )
         self._run_rows.append(
             {
@@ -215,6 +241,8 @@ class KernelScaling(Experiment):
                 "run_backend": str(meta.get("run_backend", "")),
                 "run_steps": int(meta.get("run_steps", 0) or 0),
                 "run_termination": str(meta.get("run_termination", "")),
+                "run_max_steps_budget": int(attempt_steps),
+                "run_attempts": int(attempts),
                 "init_ms": float(meta.get("init_ms", 0.0) or 0.0),
                 "simulate_ms": float(meta.get("simulate_ms", 0.0) or 0.0),
                 "ms_per_step": float(meta.get("simulate_ms", 0.0) or 0.0)

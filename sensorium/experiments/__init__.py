@@ -16,6 +16,7 @@ __all__ = [
     "KernelRuleShift",
     "KernelScaling",
     "KernelCrossModal",
+    "KernelImageGen",
 ]
 
 _CLASS_TO_MODULE = {
@@ -25,6 +26,7 @@ _CLASS_TO_MODULE = {
     "KernelRuleShift": ".kernel_rule_shift",
     "KernelScaling": ".kernel_scaling",
     "KernelCrossModal": ".kernel_cross_modal",
+    "KernelImageGen": ".kernel_image_gen",
 }
 
 

@@ -1,4 +1,4 @@
-This is pdfTeX, Version 3.141592653-2.6-1.40.27 (TeX Live 2025) (preloaded format=pdflatex 2025.12.17)  7 FEB 2026 05:23
+This is pdfTeX, Version 3.141592653-2.6-1.40.27 (TeX Live 2025) (preloaded format=pdflatex 2025.12.17)  7 FEB 2026 06:54
 entering extended mode
  restricted \write18 enabled.
  %&-line parsing enabled.
@@ -1123,7 +1123,7 @@ LaTeX Warning: Reference `tab:image_collision' on page 1 undefined on input lin
 e 894.
 
 (./tables/CollisionExperiment_summary.tex
-Overfull \hbox (1555.73pt too wide) in paragraph at lines 5--14
+Overfull \hbox (1589.50575pt too wide) in paragraph at lines 5--26
  [][] 
  []
 
@@ -1156,12 +1156,12 @@ Overfull \hbox (345.53047pt too wide) in paragraph at lines 5--16
  []
 
 )
-<figures/rule_shift.png, id=713, 990.099pt x 587.5551pt>
+<figures/rule_shift.png, id=712, 990.099pt x 587.5551pt>
 File: figures/rule_shift.png Graphic file (type png)
 <use figures/rule_shift.png>
 Package pdftex.def Info: figures/rule_shift.png  used on input line 1002.
 (pdftex.def)             Requested size: 452.9679pt x 268.79933pt.
-<figures/rule_shift_realworld.png, id=715, 585.387pt x 288.1164pt>
+<figures/rule_shift_realworld.png, id=714, 585.387pt x 288.1164pt>
 File: figures/rule_shift_realworld.png Graphic file (type png)
 <use figures/rule_shift_realworld.png>
 Package pdftex.def Info: figures/rule_shift_realworld.png  used on input line 1
@@ -1187,19 +1187,19 @@ LaTeX Warning: Reference `tab:cocktail_party' on page 1 undefined on input line
 
 [24]
 
-LaTeX Warning: Reference `tab:cross_modal' on page 1 undefined on input line 11
-15.
+[25] (./tables/scaling_summary.tex
+Overfull \hbox (452.15825pt too wide) in paragraph at lines 5--44
+ [][] 
+ []
 
-
-
-[25] (./tables/scaling_summary.tex)
-<figures/scaling_dynamics.png, id=757, 860.013pt x 638.8668pt>
+)
+<figures/scaling_dynamics.png, id=759, 860.013pt x 638.8668pt>
 File: figures/scaling_dynamics.png Graphic file (type png)
 <use figures/scaling_dynamics.png>
 Package pdftex.def Info: figures/scaling_dynamics.png  used on input line 1185.
 
 (pdftex.def)             Requested size: 452.9679pt x 336.49216pt.
-<figures/scaling_compute.png, id=758, 1075.8594pt x 335.3328pt>
+<figures/scaling_compute.png, id=760, 1075.8594pt x 335.3328pt>
 File: figures/scaling_compute.png Graphic file (type png)
 <use figures/scaling_compute.png>
 Package pdftex.def Info: figures/scaling_compute.png  used on input line 1196.
@@ -1293,55 +1293,66 @@ L3 programming layer <2025-01-18>
 
 LaTeX Warning: There were undefined references.
 
+
+LaTeX Warning: Label(s) may have changed. Rerun to get cross-references right.
+
 Package rerunfilecheck Info: File `main.out' has not changed.
 (rerunfilecheck)             Checksum: 02BD751242A9FF27EC5514A2FC79E551;12738.
  ) 
 Here is how much of TeX's memory you used:
- 35773 strings out of 473190
- 706841 string characters out of 5715799
- 1179083 words of memory out of 5000000
- 57704 multiletter control sequences out of 15000+600000
+ 35776 strings out of 473190
+ 706890 string characters out of 5715799
+ 1213138 words of memory out of 5000000
+ 57705 multiletter control sequences out of 15000+600000
  604352 words of font info for 314 fonts, out of 8000000 for 9000
  1141 hyphenation exceptions out of 8191
- 98i,16n,101p,1001b,650s stack positions out of 10000i,1000n,20000p,200000b,200000s
-</usr/local/texlive/2025/texmf-dist/fonts/type1/public/amsfonts/cm/cmbx10.pfb
-></usr/local/texlive/2025/texmf-dist/fonts/type1/public/amsfonts/cm/cmbx8.pfb><
-/usr/local/texlive/2025/texmf-dist/fonts/type1/public/amsfonts/cm/cmex10.pfb></
-usr/local/texlive/2025/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi10.pfb></u
-sr/local/texlive/2025/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi12.pfb></us
-r/local/texlive/2025/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi6.pfb></usr/
-local/texlive/2025/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi8.pfb></usr/lo
-cal/texlive/2025/texmf-dist/fonts/type1/public/amsfonts/cm/cmmib10.pfb></usr/lo
-cal/texlive/2025/texmf-dist/fonts/type1/public/amsfonts/cmextra/cmmib8.pfb></us
-r/local/texlive/2025/texmf-dist/fonts/type1/public/amsfonts/cm/cmr10.pfb></usr/
-local/texlive/2025/texmf-dist/fonts/type1/public/amsfonts/cm/cmr6.pfb></usr/loc
-al/texlive/2025/texmf-dist/fonts/type1/public/amsfonts/cm/cmr8.pfb></usr/local/
-texlive/2025/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy10.pfb></usr/local/t
-exlive/2025/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy8.pfb></usr/local/tex
-live/2025/texmf-dist/fonts/type1/public/amsfonts/symbols/msbm10.pfb></usr/local
-/texlive/2025/texmf-dist/fonts/type1/public/cm-super/sfbi1095.pfb></usr/local/t
-exlive/2025/texmf-dist/fonts/type1/public/cm-super/sfbx1000.pfb></usr/local/tex
-live/2025/texmf-dist/fonts/type1/public/cm-super/sfbx1095.pfb></usr/local/texli
-ve/2025/texmf-dist/fonts/type1/public/cm-super/sfbx1200.pfb></usr/local/texlive
-/2025/texmf-dist/fonts/type1/public/cm-super/sfbx1440.pfb></usr/local/texlive/2
-025/texmf-dist/fonts/type1/public/cm-super/sfbx1728.pfb></usr/local/texlive/202
-5/texmf-dist/fonts/type1/public/cm-super/sfit1095.pfb></usr/local/texlive/2025/
-texmf-dist/fonts/type1/public/cm-super/sfrm0800.pfb></usr/local/texlive/2025/te
-xmf-dist/fonts/type1/public/cm-super/sfrm0900.pfb></usr/local/texlive/2025/texm
-f-dist/fonts/type1/public/cm-super/sfrm1000.pfb></usr/local/texlive/2025/texmf-
-dist/fonts/type1/public/cm-super/sfrm1095.pfb></usr/local/texlive/2025/texmf-di
-st/fonts/type1/public/cm-super/sfrm1200.pfb></usr/local/texlive/2025/texmf-dist
-/fonts/type1/public/cm-super/sfrm1728.pfb></usr/local/texlive/2025/texmf-dist/f
-onts/type1/public/cm-super/sfti0800.pfb></usr/local/texlive/2025/texmf-dist/fon
-ts/type1/public/cm-super/sfti1000.pfb></usr/local/texlive/2025/texmf-dist/fonts
-/type1/public/cm-super/sfti1095.pfb></usr/local/texlive/2025/texmf-dist/fonts/t
-ype1/public/cm-super/sfti1200.pfb></usr/local/texlive/2025/texmf-dist/fonts/typ
-e1/public/cm-super/sftt1095.pfb></usr/local/texlive/2025/texmf-dist/fonts/type1
-/public/cm-super/sftt1200.pfb>
-Output written on main.pdf (43 pages, 2494822 bytes).
+ 98i,16n,101p,1001b,646s stack positions out of 10000i,1000n,20000p,200000b,200000s
+
+pdfTeX warning (dest): name{table.caption.59} has been referenced but does not 
+exist, replaced by a fixed one
+
+
+pdfTeX warning (dest): name{table.caption.52} has been referenced but does not 
+exist, replaced by a fixed one
+
+</usr/local/texlive/2025/texmf-dist/fonts/type1/public/amsfonts/cm/cmbx10.pfb><
+/usr/local/texlive/2025/texmf-dist/fonts/type1/public/amsfonts/cm/cmbx8.pfb></u
+sr/local/texlive/2025/texmf-dist/fonts/type1/public/amsfonts/cm/cmex10.pfb></us
+r/local/texlive/2025/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi10.pfb></usr
+/local/texlive/2025/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi12.pfb></usr/
+local/texlive/2025/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi6.pfb></usr/lo
+cal/texlive/2025/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi8.pfb></usr/loca
+l/texlive/2025/texmf-dist/fonts/type1/public/amsfonts/cm/cmmib10.pfb></usr/loca
+l/texlive/2025/texmf-dist/fonts/type1/public/amsfonts/cmextra/cmmib8.pfb></usr/
+local/texlive/2025/texmf-dist/fonts/type1/public/amsfonts/cm/cmr10.pfb></usr/lo
+cal/texlive/2025/texmf-dist/fonts/type1/public/amsfonts/cm/cmr6.pfb></usr/local
+/texlive/2025/texmf-dist/fonts/type1/public/amsfonts/cm/cmr8.pfb></usr/local/te
+xlive/2025/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy10.pfb></usr/local/tex
+live/2025/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy8.pfb></usr/local/texli
+ve/2025/texmf-dist/fonts/type1/public/amsfonts/symbols/msbm10.pfb></usr/local/t
+exlive/2025/texmf-dist/fonts/type1/public/cm-super/sfbi1095.pfb></usr/local/tex
+live/2025/texmf-dist/fonts/type1/public/cm-super/sfbx1000.pfb></usr/local/texli
+ve/2025/texmf-dist/fonts/type1/public/cm-super/sfbx1095.pfb></usr/local/texlive
+/2025/texmf-dist/fonts/type1/public/cm-super/sfbx1200.pfb></usr/local/texlive/2
+025/texmf-dist/fonts/type1/public/cm-super/sfbx1440.pfb></usr/local/texlive/202
+5/texmf-dist/fonts/type1/public/cm-super/sfbx1728.pfb></usr/local/texlive/2025/
+texmf-dist/fonts/type1/public/cm-super/sfit1095.pfb></usr/local/texlive/2025/te
+xmf-dist/fonts/type1/public/cm-super/sfrm0800.pfb></usr/local/texlive/2025/texm
+f-dist/fonts/type1/public/cm-super/sfrm0900.pfb></usr/local/texlive/2025/texmf-
+dist/fonts/type1/public/cm-super/sfrm1000.pfb></usr/local/texlive/2025/texmf-di
+st/fonts/type1/public/cm-super/sfrm1095.pfb></usr/local/texlive/2025/texmf-dist
+/fonts/type1/public/cm-super/sfrm1200.pfb></usr/local/texlive/2025/texmf-dist/f
+onts/type1/public/cm-super/sfrm1728.pfb></usr/local/texlive/2025/texmf-dist/fon
+ts/type1/public/cm-super/sfti0800.pfb></usr/local/texlive/2025/texmf-dist/fonts
+/type1/public/cm-super/sfti1000.pfb></usr/local/texlive/2025/texmf-dist/fonts/t
+ype1/public/cm-super/sfti1095.pfb></usr/local/texlive/2025/texmf-dist/fonts/typ
+e1/public/cm-super/sfti1200.pfb></usr/local/texlive/2025/texmf-dist/fonts/type1
+/public/cm-super/sftt1095.pfb></usr/local/texlive/2025/texmf-dist/fonts/type1/p
+ublic/cm-super/sftt1200.pfb>
+Output written on main.pdf (43 pages, 2503852 bytes).
 PDF statistics:
- 1263 PDF objects out of 1440 (max. 8388607)
- 1028 compressed objects within 11 object streams
- 363 named destinations out of 1000 (max. 500000)
+ 1266 PDF objects out of 1440 (max. 8388607)
+ 1031 compressed objects within 11 object streams
+ 365 named destinations out of 1000 (max. 500000)
  72891 words of extra memory for PDF output out of 74296 (max. 10000000)
 

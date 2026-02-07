@@ -149,24 +149,71 @@ class ParticleMigrator:
                 lo=(float(lo[0]), float(lo[1]), float(lo[2])),
                 hi=(float(hi[0]), float(hi[1]), float(hi[2])),
             )
-        masks: dict[Face, torch.Tensor] = {
-            "x-": codes == 1,
-            "x+": codes == 2,
-            "y-": codes == 3,
-            "y+": codes == 4,
-            "z-": codes == 5,
-            "z+": codes == 6,
-        }
-        outbound_any = torch.zeros(
-            (batch.size(),), device=self.device, dtype=torch.bool
-        )
-        for m in masks.values():
-            outbound_any = outbound_any | m
+        return self._split_by_codes(batch, codes)
 
-        kept = self._select(batch, ~outbound_any)
+    def _split_by_codes(
+        self, batch: ParticleBatch, codes: torch.Tensor
+    ) -> tuple[ParticleBatch, dict[Face, dict[str, torch.Tensor]]]:
+        if codes.numel() == 0:
+            empty = self._select(
+                batch, torch.zeros((0,), device=self.device, dtype=torch.bool)
+            )
+            return empty, {
+                face: self._payload_dict(empty)
+                for face in ("x-", "x+", "y-", "y+", "z-", "z+")
+            }
+
+        order = torch.argsort(codes.to(torch.int64), stable=True)
+        sorted_codes = codes[order]
+        sorted_batch = ParticleBatch(
+            positions=batch.positions[order],
+            velocities=batch.velocities[order],
+            masses=batch.masses[order],
+            heats=batch.heats[order],
+            energies=batch.energies[order],
+            excitations=batch.excitations[order],
+            phase=batch.phase[order],
+        )
+
+        counts = torch.bincount(sorted_codes.to(torch.int64), minlength=7)
+        offsets = torch.cumsum(counts, dim=0)
+
+        def sl(code: int) -> slice:
+            end = int(offsets[code].item())
+            start = int(offsets[code - 1].item()) if code > 0 else 0
+            return slice(start, end)
+
+        kept = ParticleBatch(
+            positions=sorted_batch.positions[sl(0)],
+            velocities=sorted_batch.velocities[sl(0)],
+            masses=sorted_batch.masses[sl(0)],
+            heats=sorted_batch.heats[sl(0)],
+            energies=sorted_batch.energies[sl(0)],
+            excitations=sorted_batch.excitations[sl(0)],
+            phase=sorted_batch.phase[sl(0)],
+        )
+        code_to_face: dict[int, Face] = {
+            1: "x-",
+            2: "x+",
+            3: "y-",
+            4: "y+",
+            5: "z-",
+            6: "z+",
+        }
         payloads: dict[Face, dict[str, torch.Tensor]] = {}
-        for face, mask in masks.items():
-            payloads[face] = self._payload_dict(self._select(batch, mask))
+        for code, face in code_to_face.items():
+            s = sl(code)
+            payloads[face] = self._payload_dict(
+                ParticleBatch(
+                    positions=sorted_batch.positions[s],
+                    velocities=sorted_batch.velocities[s],
+                    masses=sorted_batch.masses[s],
+                    heats=sorted_batch.heats[s],
+                    energies=sorted_batch.energies[s],
+                    excitations=sorted_batch.excitations[s],
+                    phase=sorted_batch.phase[s],
+                )
+            )
         return kept, payloads
 
     def merge_inbound(
@@ -174,33 +221,64 @@ class ParticleMigrator:
         batch: ParticleBatch,
         inbound_payloads: dict[Face, dict[str, torch.Tensor]],
     ) -> ParticleBatch:
-        chunks: list[ParticleBatch] = [batch]
-        for payload in inbound_payloads.values():
-            if not payload:
-                continue
-            if payload["positions"].numel() == 0:
-                continue
-            chunks.append(
-                ParticleBatch(
-                    positions=payload["positions"],
-                    velocities=payload["velocities"],
-                    masses=payload["masses"],
-                    heats=payload["heats"],
-                    energies=payload["energies"],
-                    excitations=payload["excitations"],
-                    phase=payload["phase"],
-                )
+        local_n = batch.size()
+        inbound_faces: tuple[Face, ...] = ("x-", "x+", "y-", "y+", "z-", "z+")
+        inbound_counts: dict[Face, int] = {}
+        total = local_n
+        for face in inbound_faces:
+            payload = inbound_payloads.get(face, {})
+            n = int(
+                payload.get("positions", torch.empty(0, device=self.device)).shape[0]
             )
-        if len(chunks) == 1:
+            inbound_counts[face] = n
+            total += n
+
+        if total == local_n:
             return batch
+
+        positions = batch.positions.new_empty((total, 3))
+        velocities = batch.velocities.new_empty((total, 3))
+        masses = batch.masses.new_empty((total,))
+        heats = batch.heats.new_empty((total,))
+        energies = batch.energies.new_empty((total,))
+        excitations = batch.excitations.new_empty((total,))
+        phase = batch.phase.new_empty((total,))
+
+        write = 0
+        if local_n > 0:
+            end = write + local_n
+            positions[write:end].copy_(batch.positions)
+            velocities[write:end].copy_(batch.velocities)
+            masses[write:end].copy_(batch.masses)
+            heats[write:end].copy_(batch.heats)
+            energies[write:end].copy_(batch.energies)
+            excitations[write:end].copy_(batch.excitations)
+            phase[write:end].copy_(batch.phase)
+            write = end
+
+        for face in inbound_faces:
+            n = inbound_counts[face]
+            if n <= 0:
+                continue
+            payload = inbound_payloads[face]
+            end = write + n
+            positions[write:end].copy_(payload["positions"])
+            velocities[write:end].copy_(payload["velocities"])
+            masses[write:end].copy_(payload["masses"])
+            heats[write:end].copy_(payload["heats"])
+            energies[write:end].copy_(payload["energies"])
+            excitations[write:end].copy_(payload["excitations"])
+            phase[write:end].copy_(payload["phase"])
+            write = end
+
         return ParticleBatch(
-            positions=torch.cat([c.positions for c in chunks], dim=0),
-            velocities=torch.cat([c.velocities for c in chunks], dim=0),
-            masses=torch.cat([c.masses for c in chunks], dim=0),
-            heats=torch.cat([c.heats for c in chunks], dim=0),
-            energies=torch.cat([c.energies for c in chunks], dim=0),
-            excitations=torch.cat([c.excitations for c in chunks], dim=0),
-            phase=torch.cat([c.phase for c in chunks], dim=0),
+            positions=positions,
+            velocities=velocities,
+            masses=masses,
+            heats=heats,
+            energies=energies,
+            excitations=excitations,
+            phase=phase,
         )
 
     def _select(self, batch: ParticleBatch, mask: torch.Tensor) -> ParticleBatch:

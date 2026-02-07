@@ -305,6 +305,7 @@ class CrossModalTableProjector(BaseProjector):
 
         self.ensure_output_dir()
 
+        ncols = 6
         lines = [
             r"\begin{table}[t]",
             r"\centering",
@@ -329,15 +330,15 @@ class CrossModalTableProjector(BaseProjector):
             tmass = [float(r.get("text_mass_share", 0.0)) for r in bucket]
 
             scenario_tex = _latex_escape_text(scenario.replace("_", " "))
-            row_tex = (
-                f"{scenario_tex}"
-                f" & {pm(float(np.mean(mses)) if mses else 0.0, _ci95(mses), 4)}"
-                f" & {pm(float(np.mean(psnrs)) if psnrs else 0.0, _ci95(psnrs), 2)}"
-                f" & {pm(float(np.mean(covs)) if covs else 0.0, _ci95(covs), 3)}"
-                f" & {pm(float(np.mean(dists)) if dists else 0.0, _ci95(dists), 3)}"
-                f" & {float(np.mean(imass)) if imass else 0.0:.2f}/{float(np.mean(tmass)) if tmass else 0.0:.2f} \\\\\n"
-            )
-            lines.append(row_tex.rstrip("\n"))
+            row_cells = [
+                scenario_tex,
+                pm(float(np.mean(mses)) if mses else 0.0, _ci95(mses), 4),
+                pm(float(np.mean(psnrs)) if psnrs else 0.0, _ci95(psnrs), 2),
+                pm(float(np.mean(covs)) if covs else 0.0, _ci95(covs), 3),
+                pm(float(np.mean(dists)) if dists else 0.0, _ci95(dists), 3),
+                f"{float(np.mean(imass)) if imass else 0.0:.2f}/{float(np.mean(tmass)) if tmass else 0.0:.2f}",
+            ]
+            lines.append(" & ".join(row_cells) + r" \\")
 
         backend_text = _latex_escape_text(
             ", ".join(f"{k}:{int(v)}" for k, v in backend_counts.items())
@@ -345,8 +346,8 @@ class CrossModalTableProjector(BaseProjector):
         lines.extend(
             [
                 r"\midrule",
-                rf"\multicolumn{{6}}{{l}}{{\textit{{Backend counts: {backend_text}}}}} \\",
-                rf"\multicolumn{{6}}{{l}}{{\texttt{{{provenance_tex}}}}} \\",
+                rf"\multicolumn{{{ncols}}}{{l}}{{\textit{{Backend counts: {backend_text}}}}} \\",
+                rf"\multicolumn{{{ncols}}}{{l}}{{\texttt{{{provenance_tex}}}}} \\",
                 r"\bottomrule",
                 r"\end{tabular}",
                 r"\end{table}",

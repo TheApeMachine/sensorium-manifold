@@ -56,6 +56,9 @@ class DistributedManifoldPipeline:
             phase=torch.empty((0,), device=self.device, dtype=torch.float32),
         )
         self.tick = 0
+        self._last_mode_global_stats = torch.zeros(
+            (3,), device=self.device, dtype=torch.float32
+        )
 
     def load_state(self, state: dict[str, torch.Tensor]) -> None:
         self.particles = ParticleBatch.from_state(state, device=self.device)
@@ -131,7 +134,14 @@ class DistributedManifoldPipeline:
         self.wave.route_particle_mode_accumulations(self.tick, self.particles)
 
     def allreduce_mode_accums(self) -> None:
-        return
+        local = torch.stack(
+            (
+                torch.sum(self.wave.accum_real),
+                torch.sum(self.wave.accum_imag),
+                torch.tensor(float(self.wave.accum_real.numel()), device=self.device),
+            )
+        ).to(torch.float32)
+        self._last_mode_global_stats = self.worker.transport.allreduce_tensor_sum(local)
 
     def advance_wave(self) -> None:
         self.wave.advance_wave(self.config.dt)
@@ -161,6 +171,9 @@ class DistributedManifoldPipeline:
                 "gravity_potential": self.thermo.gravity_potential,
                 "psi_real_local": self.wave.psi_real,
                 "psi_imag_local": self.wave.psi_imag,
+                "mode_accum_global_real_sum": self._last_mode_global_stats[0],
+                "mode_accum_global_imag_sum": self._last_mode_global_stats[1],
+                "mode_accum_global_count": self._last_mode_global_stats[2],
             }
         )
         out.update(self.wave.diagnostics())

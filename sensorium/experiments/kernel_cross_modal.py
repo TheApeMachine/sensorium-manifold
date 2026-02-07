@@ -9,6 +9,7 @@ This version is strict:
 
 from __future__ import annotations
 
+from dataclasses import replace
 import math
 from pathlib import Path
 from typing import Any
@@ -76,6 +77,8 @@ class KernelCrossModal(Experiment):
             min_steps=50,
             allow_analysis_fallback=False,
         )
+        self.settle_max_steps_cap = 4096
+        self.settle_growth = 2
         self.dataset_config = CrossModalConfig(top_k_freq=96, image_size=32)
         self.scenarios = (
             {
@@ -345,34 +348,62 @@ class KernelCrossModal(Experiment):
                 )
                 run_name = f"{self.experiment_name}_{name}_s{int(seed)}"
                 record_dashboard = bool(self.dashboard) and name not in self._dashboard_tags
-                on_step = None
-                if record_dashboard:
-                    self.start_dashboard(
-                        grid_size=self.run_config.grid_size,
-                        run_name=run_name,
-                    )
-
-                    def _on_step(state: dict) -> None:
-                        self.dashboard_update(state)
-
-                    on_step = _on_step
-
-                try:
-                    state, meta = run_stream_on_manifold(
-                        dataset.generate(),
-                        config=self.run_config,
-                        on_step=on_step,
-                    )
-                finally:
+                attempts = 0
+                attempt_steps = int(max(1, int(self.run_config.max_steps)))
+                state: dict[str, Any] = {}
+                meta: dict[str, Any] = {}
+                while True:
+                    attempts += 1
+                    on_step = None
                     if record_dashboard:
-                        self.close_dashboard()
-                        self._dashboard_tags.add(name)
+                        self.start_dashboard(
+                            grid_size=self.run_config.grid_size,
+                            run_name=run_name,
+                        )
+
+                        def _on_step(state: dict) -> None:
+                            self.dashboard_update(state)
+
+                        on_step = _on_step
+
+                    try:
+                        attempt_cfg = replace(
+                            self.run_config,
+                            max_steps=int(attempt_steps),
+                            min_steps=min(50, int(attempt_steps)),
+                        )
+                        state, meta = run_stream_on_manifold(
+                            dataset.generate(),
+                            config=attempt_cfg,
+                            on_step=on_step,
+                        )
+                    finally:
+                        if record_dashboard:
+                            self.close_dashboard()
+                    termination = str(meta.get("run_termination", ""))
+                    if (
+                        termination != "quiet"
+                        and int(attempt_steps) < int(self.settle_max_steps_cap)
+                    ):
+                        attempt_steps = min(
+                            int(self.settle_max_steps_cap),
+                            int(
+                                max(
+                                    int(attempt_steps) + 1,
+                                    int(attempt_steps) * int(self.settle_growth),
+                                )
+                            ),
+                        )
+                        continue
+                    break
+                if record_dashboard:
+                    self._dashboard_tags.add(name)
 
                 termination = str(meta.get("run_termination", ""))
                 if termination != "quiet":
                     raise RuntimeError(
                         f"[cross_modal] expected quiet termination but got '{termination}' "
-                        f"(scenario={name}, seed={seed}, max_steps={self.run_config.max_steps})"
+                        f"(scenario={name}, seed={seed}, max_steps={attempt_steps}, attempts={attempts})"
                     )
 
                 analysis = self._analyze_run(dataset=dataset, state=state)
@@ -384,6 +415,8 @@ class KernelCrossModal(Experiment):
                     "run_backend": str(meta.get("run_backend", "")),
                     "run_steps": int(meta.get("run_steps", 0) or 0),
                     "run_termination": termination,
+                    "run_max_steps_budget": int(attempt_steps),
+                    "run_attempts": int(attempts),
                     "init_ms": float(meta.get("init_ms", 0.0) or 0.0),
                     "simulate_ms": float(meta.get("simulate_ms", 0.0) or 0.0),
                     "n_particles": int(analysis["n_particles"]),

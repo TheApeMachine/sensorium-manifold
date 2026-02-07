@@ -6,10 +6,11 @@ import math
 import torch
 
 from .runtime import FACES, Face, RankConfig, TickPhase, Transport
-from .triton_kernels import jacobi_step_halo, pack_halo_face
+from .triton_kernels import advance_interior_halo, jacobi_step_halo, pack_halo_face
 
 try:
     from .metal_kernels import (
+        advance_interior_halo_metal,
         jacobi_step_halo_metal,
         metal_distributed_available,
         pack_halo_face_scalar_metal,
@@ -42,6 +43,29 @@ except Exception:
         out_t = out if out is not None else phi.clone()
         out_t.copy_(rhs)
         return out_t
+
+    def advance_interior_halo_metal(
+        *,
+        rho_ext: torch.Tensor,
+        mom_ext: torch.Tensor,
+        e_ext: torch.Tensor,
+        phi_ext: torch.Tensor,
+        dt: float,
+        dx: float,
+        gamma: float,
+        rho_min: float,
+        viscosity: float,
+        thermal_diffusivity: float,
+        halo: int,
+        out_rho: torch.Tensor,
+        out_mom: torch.Tensor,
+        out_e: torch.Tensor,
+    ) -> None:
+        del rho_ext, mom_ext, e_ext, phi_ext, dt, dx, gamma, rho_min, viscosity
+        del thermal_diffusivity, halo
+        out_rho.zero_()
+        out_mom.zero_()
+        out_e.zero_()
 
 
 @dataclass(frozen=True)
@@ -308,72 +332,51 @@ class DistributedThermodynamicsDomain:
 
     def advance_grid_interior(self, dt: float) -> None:
         dt_eff = min(float(dt), self.config.dt_max)
+        h = self.rank_config.halo_thickness
         rho_ext = self._extended_scalar(self.rho_field, self._halo_scalar["rho"])
         mom_ext = self._extended_vec3(self.mom_field, self._halo_vec3["mom"])
         e_ext = self._extended_scalar(self.e_int_field, self._halo_scalar["e_int"])
         phi_ext = self._extended_scalar(
             self.gravity_potential, self._halo_scalar["phi"]
         )
+        new_rho = torch.empty_like(self.rho_field)
+        new_mom = torch.empty_like(self.mom_field)
+        new_e = torch.empty_like(self.e_int_field)
 
-        rho = self.rho_field.clamp_min(self.config.rho_min)
-        mom = self.mom_field
-        vel = mom / rho.unsqueeze(-1)
-        pressure = (self.config.gamma - 1.0) * self.e_int_field.clamp_min(0.0)
-
-        p_ext = self._extended_scalar(pressure, self._halo_scalar["e_int"])
-        inv_2dx = 0.5 / self.config.grid_spacing
-
-        grad_px = (p_ext[2:, 1:-1, 1:-1] - p_ext[:-2, 1:-1, 1:-1]) * inv_2dx
-        grad_py = (p_ext[1:-1, 2:, 1:-1] - p_ext[1:-1, :-2, 1:-1]) * inv_2dx
-        grad_pz = (p_ext[1:-1, 1:-1, 2:] - p_ext[1:-1, 1:-1, :-2]) * inv_2dx
-        grad_p = torch.stack((grad_px, grad_py, grad_pz), dim=-1)
-
-        grad_phix = (phi_ext[2:, 1:-1, 1:-1] - phi_ext[:-2, 1:-1, 1:-1]) * inv_2dx
-        grad_phiy = (phi_ext[1:-1, 2:, 1:-1] - phi_ext[1:-1, :-2, 1:-1]) * inv_2dx
-        grad_phiz = (phi_ext[1:-1, 1:-1, 2:] - phi_ext[1:-1, 1:-1, :-2]) * inv_2dx
-        grad_phi = torch.stack((grad_phix, grad_phiy, grad_phiz), dim=-1)
-
-        lap_e = self._laplacian(e_ext)
-        lap_u = torch.stack(
-            (
-                self._laplacian(mom_ext[..., 0]),
-                self._laplacian(mom_ext[..., 1]),
-                self._laplacian(mom_ext[..., 2]),
-            ),
-            dim=-1,
-        )
-
-        flux_x = rho_ext[1:-1, 1:-1, 1:-1] * mom_ext[1:-1, 1:-1, 1:-1, 0] / rho
-        flux_y = rho_ext[1:-1, 1:-1, 1:-1] * mom_ext[1:-1, 1:-1, 1:-1, 1] / rho
-        flux_z = rho_ext[1:-1, 1:-1, 1:-1] * mom_ext[1:-1, 1:-1, 1:-1, 2] / rho
-        div_flux = (
-            (
-                flux_x
-                - rho_ext[:-2, 1:-1, 1:-1]
-                * mom_ext[:-2, 1:-1, 1:-1, 0]
-                / rho_ext[:-2, 1:-1, 1:-1].clamp_min(self.config.rho_min)
+        if self.device.type == "mps" and metal_distributed_available():
+            advance_interior_halo_metal(
+                rho_ext=rho_ext,
+                mom_ext=mom_ext,
+                e_ext=e_ext,
+                phi_ext=phi_ext,
+                dt=dt_eff,
+                dx=self.config.grid_spacing,
+                gamma=self.config.gamma,
+                rho_min=self.config.rho_min,
+                viscosity=self.config.viscosity,
+                thermal_diffusivity=self.config.thermal_diffusivity,
+                halo=h,
+                out_rho=new_rho,
+                out_mom=new_mom,
+                out_e=new_e,
             )
-            + (
-                flux_y
-                - rho_ext[1:-1, :-2, 1:-1]
-                * mom_ext[1:-1, :-2, 1:-1, 1]
-                / rho_ext[1:-1, :-2, 1:-1].clamp_min(self.config.rho_min)
+        else:
+            advance_interior_halo(
+                rho_ext=rho_ext,
+                mom_ext=mom_ext,
+                e_ext=e_ext,
+                phi_ext=phi_ext,
+                dt=dt_eff,
+                dx=self.config.grid_spacing,
+                gamma=self.config.gamma,
+                rho_min=self.config.rho_min,
+                viscosity=self.config.viscosity,
+                thermal_diffusivity=self.config.thermal_diffusivity,
+                halo=h,
+                out_rho=new_rho,
+                out_mom=new_mom,
+                out_e=new_e,
             )
-            + (
-                flux_z
-                - rho_ext[1:-1, 1:-1, :-2]
-                * mom_ext[1:-1, 1:-1, :-2, 2]
-                / rho_ext[1:-1, 1:-1, :-2].clamp_min(self.config.rho_min)
-            )
-        ) / self.config.grid_spacing
-
-        new_rho = (self.rho_field - dt_eff * div_flux).clamp_min(self.config.rho_min)
-        new_mom = mom + dt_eff * (
-            -grad_p - rho.unsqueeze(-1) * grad_phi + self.config.viscosity * lap_u
-        )
-        new_e = (
-            self.e_int_field + dt_eff * (self.config.thermal_diffusivity * lap_e)
-        ).clamp_min(0.0)
 
         self.rho_field.copy_(new_rho)
         self.mom_field.copy_(new_mom)

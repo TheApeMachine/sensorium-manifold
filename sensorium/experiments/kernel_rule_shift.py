@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 import time
 from pathlib import Path
 from typing import Any
@@ -65,6 +66,8 @@ class KernelRuleShift(Experiment):
             min_steps=50,
             allow_analysis_fallback=False,
         )
+        self.settle_max_steps_cap = 4096
+        self.settle_growth = 2
         self.scenarios = self._build_scenarios()
         self._run_rows: list[dict[str, Any]] = []
         self._dashboard_tags: set[str] = set()
@@ -191,23 +194,51 @@ class KernelRuleShift(Experiment):
                 record_dashboard = (
                     bool(self.dashboard) and scenario_tag not in self._dashboard_tags
                 )
-                if record_dashboard:
-                    self.start_dashboard(grid_size=self.grid_size, run_name=run_name)
-                try:
-                    state, meta = run_stream_on_manifold(
-                        dataset.generate(),
-                        config=self.run_config,
-                        on_step=self.dashboard_update if record_dashboard else None,
-                    )
-                finally:
+                attempts = 0
+                attempt_steps = int(max(1, int(self.run_config.max_steps)))
+                state: dict[str, Any] = {}
+                meta: dict[str, Any] = {}
+                while True:
+                    attempts += 1
                     if record_dashboard:
-                        self.close_dashboard()
-                        self._dashboard_tags.add(scenario_tag)
+                        self.start_dashboard(grid_size=self.grid_size, run_name=run_name)
+                    try:
+                        attempt_cfg = replace(
+                            self.run_config,
+                            max_steps=int(attempt_steps),
+                            min_steps=min(50, int(attempt_steps)),
+                        )
+                        state, meta = run_stream_on_manifold(
+                            dataset.generate(),
+                            config=attempt_cfg,
+                            on_step=self.dashboard_update if record_dashboard else None,
+                        )
+                    finally:
+                        if record_dashboard:
+                            self.close_dashboard()
+                    termination = str(meta.get("run_termination", ""))
+                    if (
+                        termination != "quiet"
+                        and int(attempt_steps) < int(self.settle_max_steps_cap)
+                    ):
+                        attempt_steps = min(
+                            int(self.settle_max_steps_cap),
+                            int(
+                                max(
+                                    int(attempt_steps) + 1,
+                                    int(attempt_steps) * int(self.settle_growth),
+                                )
+                            ),
+                        )
+                        continue
+                    break
+                if record_dashboard:
+                    self._dashboard_tags.add(scenario_tag)
                 termination = str(meta.get("run_termination", ""))
                 if termination != "quiet":
                     raise RuntimeError(
                         f"[rule_shift] expected quiet termination but got '{termination}' "
-                        f"(scenario={scenario_tag}, seed={seed}, max_steps={self.run_config.max_steps})"
+                        f"(scenario={scenario_tag}, seed={seed}, max_steps={attempt_steps}, attempts={attempts})"
                     )
                 wall_time_ms = (time.time() - start_time) * 1000.0
                 wall_times.append(float(wall_time_ms))
@@ -220,6 +251,8 @@ class KernelRuleShift(Experiment):
                         "run_backend": str(meta.get("run_backend", "unknown")),
                         "run_steps": int(meta.get("run_steps", 0)),
                         "run_termination": str(meta.get("run_termination", "unknown")),
+                        "run_max_steps_budget": int(attempt_steps),
+                        "run_attempts": int(attempts),
                         "init_ms": float(meta.get("init_ms", 0.0)),
                         "simulate_ms": float(meta.get("simulate_ms", 0.0)),
                         "wall_time_ms": float(wall_time_ms),

@@ -15,6 +15,7 @@ _EXPERIMENT_NAMES = [
     "rule_shift",
     "scaling",
     "cross_modal",
+    "image_gen",
 ]
 
 
@@ -50,6 +51,7 @@ def _resolve_experiments():
         KernelRuleShift,
         KernelScaling,
         KernelCrossModal,
+        KernelImageGen,
     )
 
     experiments = {
@@ -59,6 +61,7 @@ def _resolve_experiments():
         "rule_shift": KernelRuleShift,
         "scaling": KernelScaling,
         "cross_modal": KernelCrossModal,
+        "image_gen": KernelImageGen,
     }
 
     all_experiments = [
@@ -68,6 +71,7 @@ def _resolve_experiments():
         KernelRuleShift,
         KernelScaling,
         KernelCrossModal,
+        KernelImageGen,
     ]
     return experiments, all_experiments
 
