@@ -10,23 +10,11 @@ from importlib import import_module
 from typing import Any
 
 __all__ = [
-    "AblationsExperiment",
-    "CollisionExperiment",
-    "WaveTrieExperiment",
-    "KernelRuleShift",
-    "KernelScaling",
-    "KernelCrossModal",
-    "KernelImageGen",
+    "CollisionExperiment"
 ]
 
 _CLASS_TO_MODULE = {
-    "AblationsExperiment": ".ablations",
     "CollisionExperiment": ".collision",
-    "WaveTrieExperiment": ".wave_trie",
-    "KernelRuleShift": ".kernel_rule_shift",
-    "KernelScaling": ".kernel_scaling",
-    "KernelCrossModal": ".kernel_cross_modal",
-    "KernelImageGen": ".kernel_image_gen",
 }
 
 

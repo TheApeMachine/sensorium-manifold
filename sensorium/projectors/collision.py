@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 import math
+import re
 from typing import Any, Dict, List, Sequence, Union
 
 from sensorium.projectors.base import BaseProjector
@@ -46,6 +47,38 @@ class CollisionFigureProjector(BaseProjector):
             rows = []
 
         written: List[str] = []
+        canonical_written: set[Path] = set()
+
+        def _canonical_run_name(run_name: str) -> str:
+            m = re.match(r"^(.+?)_s\d+_(.+)$", str(run_name))
+            if m:
+                left = str(m.group(1)).strip()
+                right = str(m.group(2)).strip()
+                if left and right:
+                    return f"{left}_{right}"
+            m = re.match(r"^(.+?)_s\d+$", str(run_name))
+            if m:
+                base = str(m.group(1)).strip()
+                if base:
+                    return base
+            return str(run_name)
+
+        def _save(fig, base_name: str) -> None:
+            canonical = _canonical_run_name(base_name)
+            for fmt in self.config.formats:
+                out_path = self.output_dir / f"{base_name}.{fmt}"
+                fig.savefig(out_path, dpi=int(self.config.dpi), bbox_inches="tight")
+                written.append(str(out_path))
+
+                if canonical != base_name:
+                    alias_path = self.output_dir / f"{canonical}.{fmt}"
+                    # First-seed-wins alias keeps deterministic canonical filenames.
+                    if alias_path not in canonical_written and not alias_path.exists():
+                        fig.savefig(
+                            alias_path, dpi=int(self.config.dpi), bbox_inches="tight"
+                        )
+                        written.append(str(alias_path))
+                        canonical_written.add(alias_path)
         for row in rows:
             if not isinstance(row, dict):
                 continue
@@ -78,10 +111,7 @@ class CollisionFigureProjector(BaseProjector):
                 ax.grid(True, axis="y", alpha=0.25)
 
                 out_base = f"{run}_multiplicity"
-                for fmt in self.config.formats:
-                    out_path = self.output_dir / f"{out_base}.{fmt}"
-                    fig.savefig(out_path, dpi=int(self.config.dpi), bbox_inches="tight")
-                    written.append(str(out_path))
+                _save(fig, out_base)
                 plt.close(fig)
 
             # -------------------------------------------------------------
@@ -154,10 +184,7 @@ class CollisionFigureProjector(BaseProjector):
                 fig.text(0.5, -0.03, " | ".join(summary_lines), ha="center")
 
             out_base = f"{run}_folding_evidence"
-            for fmt in self.config.formats:
-                out_path = self.output_dir / f"{out_base}.{fmt}"
-                fig.savefig(out_path, dpi=int(self.config.dpi), bbox_inches="tight")
-                written.append(str(out_path))
+            _save(fig, out_base)
             plt.close(fig)
 
             # -------------------------------------------------------------
@@ -248,10 +275,7 @@ class CollisionFigureProjector(BaseProjector):
                 ax.set_axis_off()
 
             out_base = f"{run}_bifurcation"
-            for fmt in self.config.formats:
-                out_path = self.output_dir / f"{out_base}.{fmt}"
-                fig.savefig(out_path, dpi=int(self.config.dpi), bbox_inches="tight")
-                written.append(str(out_path))
+            _save(fig, out_base)
             plt.close(fig)
 
             # -------------------------------------------------------------
@@ -278,10 +302,7 @@ class CollisionFigureProjector(BaseProjector):
                 ax.grid(True, alpha=0.25)
 
                 out_base = f"{run}_spectrum"
-                for fmt in self.config.formats:
-                    out_path = self.output_dir / f"{out_base}.{fmt}"
-                    fig.savefig(out_path, dpi=int(self.config.dpi), bbox_inches="tight")
-                    written.append(str(out_path))
+                _save(fig, out_base)
                 plt.close(fig)
 
         return {"status": "success", "written": written, "count": len(written)}

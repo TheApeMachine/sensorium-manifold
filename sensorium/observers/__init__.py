@@ -88,9 +88,6 @@ from .dark import (
 # Inference orchestration
 from .inference import (
     InferenceObserver,
-    InferenceConfig,
-    infer,
-    observe_reaction,
 )
 
 __all__ = [
@@ -125,7 +122,4 @@ __all__ = [
     "DarkParticleMask",
     # Inference
     "InferenceObserver",
-    "InferenceConfig",
-    "infer",
-    "observe_reaction",
 ]

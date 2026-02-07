@@ -6,73 +6,26 @@ Runs the experiments defined in the `experiments` package.
 from __future__ import annotations
 
 import argparse
-import os
+from pathlib import Path
 
 _EXPERIMENT_NAMES = [
-    "ablation",
     "collision",
-    "wave_trie",
-    "rule_shift",
-    "scaling",
-    "cross_modal",
-    "image_gen",
 ]
-
-
-def _set_interactive_matplotlib_backend() -> None:
-    """Best-effort: ensure `plt.show()` actually opens a window.
-
-    This must run before importing `matplotlib.pyplot` anywhere.
-    """
-    try:
-        import matplotlib
-    except Exception:
-        return
-
-    # If the user already forced a backend, respect it.
-    if os.environ.get("MPLBACKEND"):
-        return
-
-    # Prefer native macOS backend; fall back to common interactive ones.
-    for candidate in ("MacOSX", "QtAgg", "TkAgg"):
-        try:
-            matplotlib.use(candidate, force=True)
-            return
-        except Exception:
-            continue
-
 
 def _resolve_experiments():
     # Import lazily so we can set the matplotlib backend first.
     from . import (
-        AblationsExperiment,
         CollisionExperiment,
-        WaveTrieExperiment,
-        KernelRuleShift,
-        KernelScaling,
-        KernelCrossModal,
-        KernelImageGen,
     )
 
     experiments = {
-        "ablation": AblationsExperiment,
         "collision": CollisionExperiment,
-        "wave_trie": WaveTrieExperiment,
-        "rule_shift": KernelRuleShift,
-        "scaling": KernelScaling,
-        "cross_modal": KernelCrossModal,
-        "image_gen": KernelImageGen,
     }
 
     all_experiments = [
-        AblationsExperiment,
         CollisionExperiment,
-        WaveTrieExperiment,
-        KernelRuleShift,
-        KernelScaling,
-        KernelCrossModal,
-        KernelImageGen,
     ]
+
     return experiments, all_experiments
 
 
@@ -108,13 +61,8 @@ def main():
             print(f"  - {name}")
         return
 
-    if bool(args.dashboard):
-        # Ensure an interactive backend before any pyplot import.
-        _set_interactive_matplotlib_backend()
-        # Experiments use this env var for dashboard cadence.
-        os.environ["THERMO_MANIFOLD_DASHBOARD_FPS"] = str(int(args.dashboard_fps))
-
     EXPERIMENTS, ALL_EXPERIMENTS = _resolve_experiments()
+    repo_root = Path(__file__).resolve().parents[2]
 
     if args.experiment == "all":
         experiments = ALL_EXPERIMENTS
@@ -126,14 +74,7 @@ def main():
             exp = experiment(
                 experiment_name=experiment.__name__, dashboard=bool(args.dashboard)
             )
-            try:
-                exp.run()
-            finally:
-                # Ensure dashboard recording is finalized even on errors.
-                try:
-                    exp.close_dashboard()
-                except Exception:
-                    pass
+            exp.run()
         except Exception as exc:
             if args.experiment == "all":
                 print(f"[error] {experiment.__name__} failed: {exc}")

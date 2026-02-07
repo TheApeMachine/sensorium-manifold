@@ -59,6 +59,9 @@ class DistributedManifoldPipeline:
         self._last_mode_global_stats = torch.zeros(
             (3,), device=self.device, dtype=torch.float32
         )
+        self._last_wave_global_stats = torch.zeros(
+            (3,), device=self.device, dtype=torch.float32
+        )
 
     def load_state(self, state: dict[str, torch.Tensor]) -> None:
         self.particles = ParticleBatch.from_state(state, device=self.device)
@@ -148,6 +151,20 @@ class DistributedManifoldPipeline:
         if self.particles.size() > 0:
             self.wave.update_particle_phases(self.particles, self.config.dt)
 
+    def allreduce_wave_diagnostics(self) -> None:
+        amp2 = (
+            self.wave.psi_real * self.wave.psi_real
+            + self.wave.psi_imag * self.wave.psi_imag
+        )
+        local = torch.stack(
+            (
+                torch.sum(amp2),
+                torch.sum(torch.sqrt(torch.clamp(amp2, min=0.0))),
+                torch.tensor(float(amp2.numel()), device=self.device),
+            )
+        ).to(torch.float32)
+        self._last_wave_global_stats = self.worker.transport.allreduce_tensor_sum(local)
+
     def step(self, state: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]:
         self.load_state(state)
         self.deposit_particles_to_grid()
@@ -158,6 +175,7 @@ class DistributedManifoldPipeline:
         self.particle_to_mode_accumulate()
         self.allreduce_mode_accums()
         self.advance_wave()
+        self.allreduce_wave_diagnostics()
         self.tick += 1
         return self.state_dict()
 
@@ -174,6 +192,9 @@ class DistributedManifoldPipeline:
                 "mode_accum_global_real_sum": self._last_mode_global_stats[0],
                 "mode_accum_global_imag_sum": self._last_mode_global_stats[1],
                 "mode_accum_global_count": self._last_mode_global_stats[2],
+                "psi_amp2_global_sum": self._last_wave_global_stats[0],
+                "psi_amp_global_sum": self._last_wave_global_stats[1],
+                "psi_global_count": self._last_wave_global_stats[2],
             }
         )
         out.update(self.wave.diagnostics())

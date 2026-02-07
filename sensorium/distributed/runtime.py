@@ -199,6 +199,9 @@ class TorchDistributedTransport(Transport):
             if neighbor < 0 or face not in send_buffers:
                 continue
             send_tensor = send_buffers[face].contiguous()
+            if neighbor == self.rank:
+                recv_buffers[face] = send_tensor.clone()
+                continue
             if self._use_direct_device_transfer(send_tensor):
                 send_buf = send_tensor
                 recv_buf = torch.empty_like(send_tensor)
@@ -240,47 +243,143 @@ class TorchDistributedTransport(Transport):
         neighbors: dict[Face, int],
         device: torch.device,
     ) -> dict[Face, dict[str, torch.Tensor]]:
-        del tick
+        comm_device = self._comm_device_for_backend()
         received: dict[Face, dict[str, torch.Tensor]] = {}
+        send_payloads: dict[Face, dict[str, torch.Tensor]] = {}
+        send_counts: dict[Face, int] = {}
+        recv_counts: dict[Face, torch.Tensor] = {}
+        count_reqs: list[dist.Work] = []
+
         for face in FACES:
             neighbor = neighbors.get(face, -1)
             if neighbor < 0:
                 continue
             send_payload = _normalize_particle_payload(
-                payloads.get(face, {}), device=device
+                payloads.get(face, {}), device=comm_device
             )
+            send_payloads[face] = send_payload
             send_n = int(send_payload["positions"].shape[0])
+            send_counts[face] = send_n
+            if neighbor == self.rank:
+                received[face] = {
+                    key: value.to(device, non_blocking=False)
+                    for key, value in send_payload.items()
+                }
+                continue
 
-            send_count = torch.tensor([send_n], dtype=torch.int64)
-            recv_count = torch.zeros((1,), dtype=torch.int64)
+            send_count = torch.tensor(
+                [send_n],
+                dtype=torch.int64,
+                device=comm_device,
+            )
+            recv_count = torch.zeros((1,), dtype=torch.int64, device=comm_device)
+            recv_counts[face] = recv_count
+            tag_send = _particle_message_tag(tick=tick, face=face, kind=1)
+            tag_recv = _particle_message_tag(
+                tick=tick,
+                face=OPPOSITE_FACE[face],
+                kind=1,
+            )
+            send_req = dist.isend(
+                send_count,
+                dst=neighbor,
+                tag=tag_send,
+                group=self._group,
+            )
+            recv_req = dist.irecv(
+                recv_count,
+                src=neighbor,
+                tag=tag_recv,
+                group=self._group,
+            )
+            if send_req is not None:
+                count_reqs.append(send_req)
+            if recv_req is not None:
+                count_reqs.append(recv_req)
 
-            if self.rank < neighbor:
-                dist.send(send_count, dst=neighbor, group=self._group)
-                dist.recv(recv_count, src=neighbor, group=self._group)
-            else:
-                dist.recv(recv_count, src=neighbor, group=self._group)
-                dist.send(send_count, dst=neighbor, group=self._group)
+        for req in count_reqs:
+            req.wait()
 
-            recv_n = int(recv_count.item())
-            recv_payload_cpu = _empty_particle_payload_cpu(recv_n)
+        data_reqs: list[dist.Work] = []
+        recv_vecs: dict[Face, torch.Tensor] = {}
+        recv_scas: dict[Face, torch.Tensor] = {}
 
-            for key in _PARTICLE_FIELDS:
-                send_tensor = send_payload[key]
-                recv_tensor = recv_payload_cpu[key]
-                if self.rank < neighbor:
-                    if send_n > 0:
-                        dist.send(send_tensor, dst=neighbor, group=self._group)
-                    if recv_n > 0:
-                        dist.recv(recv_tensor, src=neighbor, group=self._group)
-                else:
-                    if recv_n > 0:
-                        dist.recv(recv_tensor, src=neighbor, group=self._group)
-                    if send_n > 0:
-                        dist.send(send_tensor, dst=neighbor, group=self._group)
+        for face in FACES:
+            neighbor = neighbors.get(face, -1)
+            if neighbor < 0 or neighbor == self.rank:
+                continue
+            send_payload = send_payloads[face]
+            send_n = send_counts[face]
+            recv_n = int(recv_counts[face].item())
 
+            send_vec, send_sca = _pack_particle_payload(
+                send_payload, device=comm_device
+            )
+            recv_vec = torch.empty((recv_n, 6), dtype=torch.float32, device=comm_device)
+            recv_sca = torch.empty((recv_n, 5), dtype=torch.float32, device=comm_device)
+            recv_vecs[face] = recv_vec
+            recv_scas[face] = recv_sca
+
+            if send_n > 0:
+                tag_vec_send = _particle_message_tag(tick=tick, face=face, kind=2)
+                tag_sca_send = _particle_message_tag(tick=tick, face=face, kind=3)
+                req_sv = dist.isend(
+                    send_vec,
+                    dst=neighbor,
+                    tag=tag_vec_send,
+                    group=self._group,
+                )
+                req_ss = dist.isend(
+                    send_sca,
+                    dst=neighbor,
+                    tag=tag_sca_send,
+                    group=self._group,
+                )
+                if req_sv is not None:
+                    data_reqs.append(req_sv)
+                if req_ss is not None:
+                    data_reqs.append(req_ss)
+
+            if recv_n > 0:
+                tag_vec_recv = _particle_message_tag(
+                    tick=tick,
+                    face=OPPOSITE_FACE[face],
+                    kind=2,
+                )
+                tag_sca_recv = _particle_message_tag(
+                    tick=tick,
+                    face=OPPOSITE_FACE[face],
+                    kind=3,
+                )
+                req_rv = dist.irecv(
+                    recv_vec,
+                    src=neighbor,
+                    tag=tag_vec_recv,
+                    group=self._group,
+                )
+                req_rs = dist.irecv(
+                    recv_sca,
+                    src=neighbor,
+                    tag=tag_sca_recv,
+                    group=self._group,
+                )
+                if req_rv is not None:
+                    data_reqs.append(req_rv)
+                if req_rs is not None:
+                    data_reqs.append(req_rs)
+
+        for req in data_reqs:
+            req.wait()
+
+        for face in FACES:
+            if face in received:
+                continue
+            if face not in recv_vecs:
+                continue
+            recv_payload = _unpack_particle_payload(recv_vecs[face], recv_scas[face])
             received[face] = {
                 key: value.to(device, non_blocking=False)
-                for key, value in recv_payload_cpu.items()
+                for key, value in recv_payload.items()
             }
         return received
 
@@ -316,68 +415,151 @@ class TorchDistributedTransport(Transport):
         comm_device = self._comm_device_for_backend()
         send_counts_dev = send_counts.to(comm_device)
         recv_counts_dev = torch.zeros_like(send_counts_dev)
-        dist.all_to_all_single(
-            recv_counts_dev,
-            send_counts_dev,
-            group=self._group,
-        )
+        try:
+            dist.all_to_all_single(
+                recv_counts_dev,
+                send_counts_dev,
+                group=self._group,
+            )
+        except Exception:
+            return self._route_mode_payloads_object(payloads_by_rank, device)
         recv_counts = recv_counts_dev.to("cpu")
+        send_splits = [int(send_counts[r].item()) for r in range(self.world_size)]
+        recv_splits = [int(recv_counts[r].item()) for r in range(self.world_size)]
+
+        send_idx_parts: list[torch.Tensor] = []
+        send_real_parts: list[torch.Tensor] = []
+        send_imag_parts: list[torch.Tensor] = []
+        for dst in range(self.world_size):
+            n = send_splits[dst]
+            payload = normalized.get(dst)
+            if n <= 0 or payload is None:
+                send_idx_parts.append(
+                    torch.empty((0,), dtype=torch.int64, device=comm_device)
+                )
+                send_real_parts.append(
+                    torch.empty((0,), dtype=torch.float32, device=comm_device)
+                )
+                send_imag_parts.append(
+                    torch.empty((0,), dtype=torch.float32, device=comm_device)
+                )
+                continue
+            send_idx_parts.append(
+                payload["mode_idx"].to(comm_device, non_blocking=False)
+            )
+            send_real_parts.append(payload["real"].to(comm_device, non_blocking=False))
+            send_imag_parts.append(payload["imag"].to(comm_device, non_blocking=False))
+
+        send_idx = (
+            torch.cat(send_idx_parts, dim=0)
+            if send_idx_parts
+            else torch.empty((0,), dtype=torch.int64, device=comm_device)
+        )
+        send_real = (
+            torch.cat(send_real_parts, dim=0)
+            if send_real_parts
+            else torch.empty((0,), dtype=torch.float32, device=comm_device)
+        )
+        send_imag = (
+            torch.cat(send_imag_parts, dim=0)
+            if send_imag_parts
+            else torch.empty((0,), dtype=torch.float32, device=comm_device)
+        )
+
+        recv_total = int(sum(recv_splits))
+        recv_idx = torch.empty((recv_total,), dtype=torch.int64, device=comm_device)
+        recv_real = torch.empty((recv_total,), dtype=torch.float32, device=comm_device)
+        recv_imag = torch.empty((recv_total,), dtype=torch.float32, device=comm_device)
+
+        try:
+            dist.all_to_all_single(
+                recv_idx,
+                send_idx,
+                output_split_sizes=recv_splits,
+                input_split_sizes=send_splits,
+                group=self._group,
+            )
+            dist.all_to_all_single(
+                recv_real,
+                send_real,
+                output_split_sizes=recv_splits,
+                input_split_sizes=send_splits,
+                group=self._group,
+            )
+            dist.all_to_all_single(
+                recv_imag,
+                send_imag,
+                output_split_sizes=recv_splits,
+                input_split_sizes=send_splits,
+                group=self._group,
+            )
+        except Exception:
+            return self._route_mode_payloads_object(payloads_by_rank, device)
 
         inbound: list[dict[str, torch.Tensor]] = []
-        self_payload = normalized.get(self.rank)
-        if self_payload is not None:
-            inbound.append(
-                {k: v.to(device, non_blocking=False) for k, v in self_payload.items()}
-            )
-
-        for peer in range(self.world_size):
-            if peer == self.rank:
+        offset = 0
+        for src in range(self.world_size):
+            n = recv_splits[src]
+            if n <= 0:
                 continue
-            send_n = int(send_counts[peer].item())
-            recv_n = int(recv_counts[peer].item())
-            recv_payload: dict[str, torch.Tensor] = {}
-            send_payload = normalized.get(peer)
+            s = slice(offset, offset + n)
+            inbound.append(
+                {
+                    "mode_idx": recv_idx[s].to(device, non_blocking=False),
+                    "real": recv_real[s].to(device, non_blocking=False),
+                    "imag": recv_imag[s].to(device, non_blocking=False),
+                }
+            )
+            offset += n
+        return inbound
 
-            for key in mode_fields:
-                send_tensor = None
-                if send_n > 0 and send_payload is not None:
-                    send_tensor = send_payload[key].to(comm_device, non_blocking=False)
-
-                recv_tensor = None
-                if recv_n > 0:
-                    dtype = torch.int64 if key == "mode_idx" else torch.float32
-                    recv_tensor = torch.empty(
-                        (recv_n,), dtype=dtype, device=comm_device
-                    )
-
-                if self.rank < peer:
-                    if send_tensor is not None:
-                        dist.send(send_tensor, dst=peer, group=self._group)
-                    if recv_tensor is not None:
-                        dist.recv(recv_tensor, src=peer, group=self._group)
-                else:
-                    if recv_tensor is not None:
-                        dist.recv(recv_tensor, src=peer, group=self._group)
-                    if send_tensor is not None:
-                        dist.send(send_tensor, dst=peer, group=self._group)
-
-                if recv_tensor is not None:
-                    recv_payload[key] = recv_tensor.to(device, non_blocking=False)
-
-            if recv_n > 0:
-                inbound.append(recv_payload)
-
+    def _route_mode_payloads_object(
+        self,
+        payloads_by_rank: dict[int, dict[str, torch.Tensor]],
+        device: torch.device,
+    ) -> list[dict[str, torch.Tensor]]:
+        outbound = {
+            dst: _cpu_payload(payload)
+            for dst, payload in payloads_by_rank.items()
+            if payload
+        }
+        gathered: list[dict[int, dict[str, torch.Tensor]] | None] = [
+            None for _ in range(self.world_size)
+        ]
+        dist.all_gather_object(gathered, outbound, group=self._group)
+        inbound: list[dict[str, torch.Tensor]] = []
+        for src_map in gathered:
+            if not src_map:
+                continue
+            payload = src_map.get(self.rank)
+            if not payload:
+                continue
+            inbound.append(
+                {
+                    key: value.to(device, non_blocking=False)
+                    for key, value in payload.items()
+                }
+            )
         return inbound
 
     def allreduce_tensor_sum(self, tensor: torch.Tensor) -> torch.Tensor:
         src = tensor.contiguous()
+        comm_device = self._comm_device_for_backend()
         if self._use_direct_device_transfer(src):
             out = src.clone()
             dist.all_reduce(out, op=dist.ReduceOp.SUM, group=self._group)
             return out
-        cpu = src.to("cpu", non_blocking=False)
-        dist.all_reduce(cpu, op=dist.ReduceOp.SUM, group=self._group)
-        return cpu.to(src.device, non_blocking=False)
+        work = (
+            src
+            if src.device == comm_device
+            else src.to(comm_device, non_blocking=False)
+        )
+        dist.all_reduce(work, op=dist.ReduceOp.SUM, group=self._group)
+        return (
+            work
+            if work.device == src.device
+            else work.to(src.device, non_blocking=False)
+        )
 
     def _use_direct_device_transfer(self, tensor: torch.Tensor) -> bool:
         backend = str(self._backend).lower()
@@ -426,6 +608,11 @@ def _message_tag(*, tick: int, phase: TickPhase, face: Face) -> int:
     return tick * 1000 + _PHASE_ID[phase] * 10 + _FACE_ID[face]
 
 
+def _particle_message_tag(*, tick: int, face: Face, kind: int) -> int:
+    base = _message_tag(tick=tick, phase="particle_migration", face=face)
+    return base * 10 + int(kind)
+
+
 def _cpu_payload(payload: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]:
     return {
         key: value.detach().contiguous().to("cpu", non_blocking=False)
@@ -446,8 +633,7 @@ def _normalize_particle_payload(
         src = payload.get(key)
         if src is None:
             continue
-        out[key] = src.detach().contiguous().to("cpu", non_blocking=False)
-    del device
+        out[key] = src.detach().contiguous().to(device, non_blocking=False)
     return out
 
 
@@ -460,4 +646,47 @@ def _empty_particle_payload_cpu(n: int) -> dict[str, torch.Tensor]:
         "energies": torch.empty((n,), dtype=torch.float32),
         "excitations": torch.empty((n,), dtype=torch.float32),
         "phase": torch.empty((n,), dtype=torch.float32),
+    }
+
+
+def _pack_particle_payload(
+    payload: dict[str, torch.Tensor], *, device: torch.device
+) -> tuple[torch.Tensor, torch.Tensor]:
+    n = int(payload["positions"].shape[0])
+    vec = torch.empty((n, 6), dtype=torch.float32, device=device)
+    sca = torch.empty((n, 5), dtype=torch.float32, device=device)
+    if n == 0:
+        return vec, sca
+    vec[:, 0:3].copy_(payload["positions"])
+    vec[:, 3:6].copy_(payload["velocities"])
+    sca[:, 0].copy_(payload["masses"])
+    sca[:, 1].copy_(payload["heats"])
+    sca[:, 2].copy_(payload["energies"])
+    sca[:, 3].copy_(payload["excitations"])
+    sca[:, 4].copy_(payload["phase"])
+    return vec, sca
+
+
+def _unpack_particle_payload(
+    vec: torch.Tensor, sca: torch.Tensor
+) -> dict[str, torch.Tensor]:
+    n = int(vec.shape[0])
+    if n == 0:
+        return {
+            "positions": torch.empty((0, 3), dtype=torch.float32, device=vec.device),
+            "velocities": torch.empty((0, 3), dtype=torch.float32, device=vec.device),
+            "masses": torch.empty((0,), dtype=torch.float32, device=vec.device),
+            "heats": torch.empty((0,), dtype=torch.float32, device=vec.device),
+            "energies": torch.empty((0,), dtype=torch.float32, device=vec.device),
+            "excitations": torch.empty((0,), dtype=torch.float32, device=vec.device),
+            "phase": torch.empty((0,), dtype=torch.float32, device=vec.device),
+        }
+    return {
+        "positions": vec[:, 0:3].contiguous(),
+        "velocities": vec[:, 3:6].contiguous(),
+        "masses": sca[:, 0].contiguous(),
+        "heats": sca[:, 1].contiguous(),
+        "energies": sca[:, 2].contiguous(),
+        "excitations": sca[:, 3].contiguous(),
+        "phase": sca[:, 4].contiguous(),
     }

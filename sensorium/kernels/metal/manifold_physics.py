@@ -1807,53 +1807,8 @@ class ThermodynamicsDomain:
             else "",
         }
 
-    def step_particles(
-        self,
-        positions: "Tensor",
-        velocities: "Tensor",
-        energies: "Tensor",
-        heats: "Tensor",
-        excitations: "Tensor",
-        masses: "Tensor",
-    ) -> tuple["Tensor", "Tensor", "Tensor", "Tensor", "Tensor"]:
-        out = self.step_state(
-            {
-                "positions": positions,
-                "velocities": velocities,
-                "energies": energies,
-                "heats": heats,
-                "excitations": excitations,
-                "masses": masses,
-            }
-        )
-        energies_out = out.get("energies")
-        if energies_out is None:
-            energies_out = out["energy_osc"]
-        exc_out = out.get("excitations")
-        if exc_out is None:
-            exc_out = out["omega"]
-        return (
-            out["positions"],
-            out["velocities"],
-            energies_out,
-            out["heats"],
-            exc_out,
-        )
-
     def step(self, *args: Any, **state: Any):
-        # Backward compatible overload:
-        # - `step(state_dict)` -> state_dict
-        # - `step(**state)` -> state_dict
-        # - `step(pos, vel, e, heat, omega, mass)` -> tuple
-        if len(args) == 1 and not state and isinstance(args[0], dict):
-            return self.step_state(args[0])
-        if len(args) == 0 and state:
-            return self.step_state(state)
-        if len(args) == 6 and not state:
-            return self.step_particles(*args)
-        raise TypeError(
-            "ThermodynamicsDomain.step: expected state dict/kwargs or 6 tensors"
-        )
+        return self.step_state(state)
 
 
 class OmegaWaveDomain:
