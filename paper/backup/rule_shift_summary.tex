@@ -1,0 +1,20 @@
+\begin{table}[t]
+\centering
+\caption{Rule-shift adaptation results. The manifold learns forward transitions, then adapts online when the sequence reverses. Recovery time measures how quickly the system regains baseline accuracy after the rule shift.}
+\label{tab:rule_shift}
+\begin{tabular}{l c c}
+\toprule
+\textbf{Metric} & \textbf{Forward Phase} & \textbf{Reverse Phase} \\
+\midrule
+Mean accuracy & 100.0\% & 90.0\% \\
+Final accuracy & 100.0\% & 100.0\% \\
+Initial accuracy & --- & 0.0\% \\
+\midrule
+\multicolumn{3}{l}{\textit{Adaptation Dynamics}} \\
+\quad Phase switch (rep) & \multicolumn{2}{c}{50} \\
+\quad Recovery (reps after switch) & \multicolumn{2}{c}{5} \\
+\quad Segment size & \multicolumn{2}{c}{24} \\
+\quad Context length & \multicolumn{2}{c}{8} \\
+\bottomrule
+\end{tabular}
+\end{table}

@@ -1,13 +1,14 @@
 \begin{table}[htbp]
 \centering
-\caption{Wave-trie branch/fold summary (analysis mode)}
+\caption{Wave-trie branch/fold summary (real manifold)}
 \label{tab:wave_trie}
-\begin{tabular}{ccccccccccccccccccc}
+\begin{tabular}{cccccccccccccccccccccccccccccccccccc}
 \toprule
-Scenario & N Tokens & N Samples & Compression Ratio & Collision Rate Observed & Unique Keys & Key Collision Rate & Transition Edges & Transition Unique Edges & Transition Top1 Prob & Transition Entropy & Fold Top1 & Fold Pr & Fold Entropy & Mode Participation & Mode Entropy & Sql N Branch Edges & Sql Max Branch Count & Sql Mean Branch Count \\
+Scenario & N Tokens & N Samples & Compression Ratio & Collision Rate Observed & Unique Keys & Key Collision Rate & N Patterns & Families & Branches Per Family & Repeats Per Pattern & Expected Unique Edges & Expected Branch Nodes & Expected Max Out Degree & Transition Edges & Transition Unique Edges & Branch Edge Coverage & Out Degree Coverage & Transition Top1 Prob & Transition Entropy & Fold Top1 & Fold Pr & Fold Entropy & Mode Participation & Mode Entropy & Run Backend & Run Steps & Run Termination & Init Ms & Simulate Ms & Sql N Branch Edges & Sql Max Branch Count & Sql Mean Branch Count & Sql Max Out Degree & Sql Mean Out Degree & Sql N Branch Nodes \\
 \midrule
-abc\_abd\_abe & 1152 & 384 & $0.0043$ & $0.9957$ & 5 & $0.9957$ & 768 & 4 & $0.5000$ & $1.7925$ & $0.3333$ & $3.8571$ & $2.1133$ & $3.8571$ & $2.1133$ & 4 & 384 & $192.0000$ \\
-ab\_repeat\_branch & 1536 & 384 & $0.0046$ & $0.9954$ & 7 & $0.9954$ & 1152 & 6 & $0.3333$ & $2.2516$ & $0.2500$ & $4.9231$ & $2.5000$ & $2.7826$ & $1.7744$ & 6 & 384 & $192.0000$ \\
+concurrent\_3 & 12288 & 768 & $0.0015$ & $0.9985$ & 18 & $0.9985$ & 3 & 1 & 3 & 256 & 19 & 1 & 3 & 11520 & 19 & $1.0000$ & $0.3333$ & $0.0667$ & $4.1182$ & $0.0625$ & $16.6957$ & $4.0991$ & $1.9996$ & $1.2515$ & mps & 14 & budget & $4.3264$ & $9120.7410$ & 19 & 768 & $606.3158$ & 1 & $1.0000$ & $0.0000$ \\
+concurrent\_64 & 65536 & 4096 & $4.12e-04$ & $0.9996$ & 27 & $0.9996$ & 64 & 4 & 16 & 64 & 44 & 10 & 8 & 61440 & 44 & $1.0000$ & $0.1250$ & $0.0667$ & $4.7069$ & $0.0625$ & $18.4505$ & $4.3750$ & $3.0278$ & $2.0946$ & mps & 14 & budget & $6.3639$ & $23212.8862$ & 44 & 4096 & $1396.3636$ & 1 & $1.0000$ & $0.0000$ \\
+concurrent\_256 & 98304 & 6144 & $3.36e-04$ & $0.9997$ & 33 & $0.9997$ & 256 & 8 & 32 & 24 & 70 & 10 & 8 & 92160 & 70 & $1.0000$ & $0.1250$ & $0.0667$ & $4.9736$ & $0.0625$ & $18.9630$ & $4.5000$ & $4.0430$ & $2.1157$ & mps & 14 & budget & $12.2040$ & $32126.2220$ & 70 & 6144 & $1316.5714$ & 1 & $1.0000$ & $0.0000$ \\
 \bottomrule
 \end{tabular}
 \end{table}

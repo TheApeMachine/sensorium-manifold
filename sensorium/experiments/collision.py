@@ -1,137 +1,236 @@
-"""Collision/compression scaling experiment (analysis mode).
+"""Collision experiment for paper-ready artifacts.
 
-This experiment is intentionally backend-agnostic so it can run on CPU-only
-environments while still producing reviewer-relevant scaling curves for:
-- key collisions/compression
-- map-vs-path fold metrics
-- SQL-based inference summaries
+Goal: run a medium-scale (not toy, not full) controlled collision workload and
+write outputs as tables + figures under `paper/` for direct inclusion in the
+paper.
 """
 
 from __future__ import annotations
 
+from sensorium.experiments.base import (
+    Experiment,
+)
 import time
-from pathlib import Path
 
-from sensorium.dataset import SyntheticConfig, SyntheticDataset, SyntheticPattern
-from sensorium.experiments.base import Experiment
-from sensorium.experiments.state_builder import StateBuildConfig, build_observation_state
+from sensorium.dataset import (
+    HuggingFaceConfig,
+    HuggingFaceDataset,
+    SyntheticConfig,
+    SyntheticDataset,
+    SyntheticPattern,
+)
+from sensorium.dataset.base import DatasetProtocol
+from sensorium.manifold import Manifold
+from sensorium.tokenizer.universal import UniversalTokenizer, UniversalTokenizerConfig
 from sensorium.observers.inference import InferenceObserver
-from sensorium.observers.metrics import KeySpec, MapPathMetrics, ParticleCount, TokenDistributionMetrics, WaveFieldMetrics
-from sensorium.observers.sql import SQLObserver, SQLObserverConfig
-from sensorium.projectors import ConsoleProjector, LaTeXTableProjector, PipelineProjector, TableConfig
+from sensorium.observers.metrics import (
+    TokenDistributionMetrics,
+    SpatialClustering,
+    WaveFieldMetrics,
+    MapPathMetrics,
+    KeySpec,
+    CollisionPaperArtifacts,
+)
+from sensorium.projectors import (
+    PipelineProjector,
+    ConsoleProjector,
+    TableConfig,
+    LaTeXTableProjector,
+    TopTransitionsProjector,
+    CollisionFigureConfig,
+    CollisionFigureProjector,
+)
 
 
 class CollisionExperiment(Experiment):
-    """Run collision/compression sweeps at non-trivial token counts."""
+    """Demonstrate Thermodynamic Trie (Collision is Compression)
 
-    def __init__(self, experiment_name: str, profile: bool = False, dashboard: bool = False):
+    To avoid further confusion, when we talk about "collision" in this experiment,
+    we mean physical collision of particles, no hash collisions.
+    In all fairness, we did indeed have a hash collision issue, however that was a spur
+    of the moment idea that we were in no way dependent on. And so, we have since just
+    moved to still using raw bytes, just with the sequence index weaved in.
+    Problem solved. Collision is Compression, yet again (but kinda always was anyway).
+    """
+
+    def __init__(
+        self, experiment_name: str, profile: bool = False, dashboard: bool = False
+    ):
+        reportable = [
+            "scenario",
+            "n_tokens",
+            "n_samples",
+            "n_unique_tokens",
+            "compression_ratio",
+            "collision_rate_observed",
+            "entropy",
+            "unique_keys",
+            "key_collision_rate",
+            "fold_top1",
+            "fold_pr",
+            "transition_top1_prob",
+            "transition_unique_edges",
+            "spatial_clustering",
+            "mode_participation",
+            "mode_entropy",
+            "psi_delta_rel",
+            "run_backend",
+            "run_steps",
+            "run_termination",
+            "simulate_ms",
+        ]
         super().__init__(
             experiment_name,
             profile,
             dashboard=dashboard,
-            reportable=[
-                "scenario",
-                "n_tokens",
-                "num_units",
-                "unit_length",
-                "collision_rate",
-                "compression_ratio",
-                "collision_rate_observed",
-                "n_unique_tokens",
-                "unique_keys",
-                "key_collision_rate",
-                "fold_top1",
-                "fold_pr",
-                "transition_top1_prob",
-                "transition_unique_edges",
-                "mode_participation",
-                "mode_entropy",
-                "build_ms",
-                "observe_ms",
-                "sql_n_particles",
-                "sql_n_unique_tokens",
-                "sql_n_transition_edges",
-                "sql_total_mass",
-            ],
+            reportable=reportable,
         )
 
-        self.collision_rates = [0.1, 0.3, 0.5, 0.7, 0.9]
-        self.scales = [
-            {"name": "scale_032k", "num_units": 64, "unit_length": 512},
-            {"name": "scale_131k", "num_units": 128, "unit_length": 1024},
-        ]
-        self.state_config = StateBuildConfig(grid_size=(64, 64, 64), mode_bins=512)
+        self.grid_size: tuple[int, int, int] = (64, 64, 64)
+        self.max_steps = 12
+        self.min_steps = 4
 
+        # Medium-scale scenarios (run through the actual Manifold wrapper).
+        # 1) Controlled synthetic collision workload
+        self.scenarios: list[tuple[str, DatasetProtocol]] = [
+            (
+                "medium_collision",
+                SyntheticDataset(
+                    SyntheticConfig(
+                        pattern=SyntheticPattern.COLLISION,
+                        num_units=128,
+                        unit_length=512,
+                        collision_rate=0.5,
+                        seed=42,
+                    )
+                ),
+            ),
+            (
+                "medium_repeated_ab",
+                SyntheticDataset(
+                    SyntheticConfig(
+                        pattern=SyntheticPattern.REPEATED,
+                        num_units=128,
+                        unit_length=512,
+                        repeat_sequence=b"AB",
+                        seed=42,
+                    )
+                ),
+            ),
+            # 2) Real text stream at medium scale
+            (
+                "medium_wikitext",
+                HuggingFaceDataset(
+                    HuggingFaceConfig(
+                        name="wikitext",
+                        subset="wikitext-2-raw-v1",
+                        split="train",
+                        field="text",
+                        streaming=True,
+                        max_samples=512,
+                    )
+                ),
+            ),
+        ]
         self.inference = InferenceObserver(
             [
-                ParticleCount(),
-                TokenDistributionMetrics(),
-                MapPathMetrics(key=KeySpec("sequence_byte"), topk=20),
-                WaveFieldMetrics(),
-                SQLObserver(
-                    """
-                    SELECT
-                        n_particles,
-                        n_unique_tokens,
-                        n_transition_edges,
-                        total_mass
-                    FROM simulation;
-                    """,
-                    config=SQLObserverConfig(row_limit=1),
-                ),
+                TokenDistributionMetrics().observe,
+                SpatialClustering().observe,
+                WaveFieldMetrics().observe,
+                MapPathMetrics(
+                    key=KeySpec(kind="spatial_morton_byte"), topk=20
+                ).observe,
+                CollisionPaperArtifacts().observe,
             ]
         )
 
+        # Collision experiment needs paper-ready tables + figures.
         self.projector = PipelineProjector(
-            ConsoleProjector(fields=self.reportable, format="table"),
+            ConsoleProjector(fields=reportable, format="table"),
+            TopTransitionsProjector(),
             LaTeXTableProjector(
                 TableConfig(
-                    name="collision_summary",
-                    columns=self.reportable,
-                    caption="Collision/compression scaling summary (analysis mode)",
-                    label="tab:collision",
-                    precision=4,
+                    name=f"{experiment_name}_summary",
+                    columns=reportable,
+                    caption="Collision experiment summary metrics",
+                    label=f"tab:{experiment_name}",
+                    precision=3,
                 ),
-                output_dir=Path("paper/tables"),
+                output_dir=self.artifact_path("tables"),
+            ),
+            CollisionFigureProjector(
+                CollisionFigureConfig(
+                    name_prefix=experiment_name, formats=("pdf",), dpi=220
+                ),
+                output_dir=self.artifact_path("figures"),
             ),
         )
 
     def run(self):
-        for scale in self.scales:
-            for rate in self.collision_rates:
-                dataset = SyntheticDataset(
-                    SyntheticConfig(
-                        pattern=SyntheticPattern.COLLISION,
-                        num_units=int(scale["num_units"]),
-                        unit_length=int(scale["unit_length"]),
-                        collision_rate=float(rate),
-                        seed=42,
-                    )
+        for scenario_name, dataset in self.scenarios:
+            tokenizer = UniversalTokenizer(
+                datasets=[dataset],
+                config=UniversalTokenizerConfig(
+                    max_tokens=65536,
+                    batch_tokens=65536,
+                    seed=42,
+                ),
+            )
+            instrumentation = []
+            if self.dashboard:
+                self.start_dashboard(
+                    grid_size=self.grid_size,
+                    run_name=f"{self.experiment_name}_{scenario_name}",
+                )
+                instrumentation = (
+                    [self._dashboard_instance]
+                    if self._dashboard_instance is not None
+                    else []
                 )
 
-                t0 = time.perf_counter()
-                state = build_observation_state(dataset.generate(), config=self.state_config)
-                build_ms = (time.perf_counter() - t0) * 1000.0
+            manifold = Manifold(
+                tokenizer=tokenizer,
+                grid_size=self.grid_size,
+                max_steps=self.max_steps,
+                instrumentation=instrumentation,
+            )
 
-                t1 = time.perf_counter()
-                self.inference.observe(
-                    state,
-                    scenario=str(scale["name"]),
-                    run_name=f"{scale['name']}_r{rate:.1f}",
-                    n_tokens=int(state["token_ids"].numel()),
-                    num_units=int(scale["num_units"]),
-                    unit_length=int(scale["unit_length"]),
-                    collision_rate=float(rate),
-                    build_ms=float(build_ms),
-                    observe_ms=0.0,  # set below after observer execution
-                )
-                observe_ms = (time.perf_counter() - t1) * 1000.0
-                self.inference.results[-1]["observe_ms"] = float(observe_ms)
+            t0 = time.perf_counter()
+            state = manifold.run()
+            t1 = time.perf_counter()
+            steps = int(state.get("step", 0))
+
+            termination = "budget" if steps >= int(self.max_steps) else "quiet"
+            if steps < int(self.min_steps):
+                termination = "quiet"  # only a labeling detail
+
+            self.observe(
+                state,
+                scenario=str(scenario_name),
+                run_name=f"{self.experiment_name}_{scenario_name}",
+                run_backend=str(manifold.device_name),
+                run_steps=steps,
+                run_termination=termination,
+                simulate_ms=(t1 - t0) * 1000.0,
+            )
+
+            if self.dashboard:
+                self.close_dashboard()
 
         return self.project()
 
-    def observe(self, state: dict) -> dict:
-        return self.inference.observe(state)
+    def observe(self, state: dict, **meta) -> dict:
+        """Observe the manifold state using composed observers."""
+        grid_dims = state.get("grid_size")
+        if not (isinstance(grid_dims, (tuple, list)) and len(grid_dims) == 3):
+            grid_dims = self.grid_size
+        return self.inference.observe(
+            state,
+            hash_vocab_size=4096,
+            grid_dims=tuple(int(x) for x in grid_dims),
+            **meta,
+        )
 
     def project(self) -> dict:
+        """Project accumulated observations to artifacts."""
         return self.projector.project(self.inference)

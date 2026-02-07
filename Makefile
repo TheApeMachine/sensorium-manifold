@@ -69,8 +69,8 @@ run-profile: ## Run simulation with GPU profiling
 # ============================================================================
 
 experiments: ## Run all kernel experiments
-	@mkdir -p paper/figures paper/tables
-	$(ACTIVATE) && python -m sensorium.experiments --experiment all
+	@mkdir -p paper/figures paper/tables paper/videos
+	$(ACTIVATE) && python -m sensorium.experiments --experiment all --dashboard --dashboard-fps 30
 
 experiments_dashboard: ## Run all experiments with live dashboard + video recording
 	@mkdir -p paper/figures paper/tables paper/videos

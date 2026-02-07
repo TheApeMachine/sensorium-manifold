@@ -1,0 +1,24 @@
+\begin{table}[t]
+\centering
+\caption{Cocktail party separation via STFT-based spectral clustering. The mixed audio is transformed to time-frequency representation, frequency bins are clustered by spectral position, and inverse STFT reconstructs separated streams. Each speaker occupies distinct frequency bands.}
+\label{tab:cocktail_party}
+\begin{tabular}{l r r r}
+\toprule
+\textbf{Metric} & \textbf{Speaker 1} & \textbf{Speaker 2} & \textbf{Total} \\
+\midrule
+\multicolumn{4}{l}{\textit{Time-Frequency Bins}} \\
+\quad Active bins & 6,486 & 6,284 & 12,770 \\
+\quad Energy fraction & 67.4\% & 32.6\% & 100\% \\
+\midrule
+\multicolumn{4}{l}{\textit{Frequency Characteristics}} \\
+\quad Mean frequency (Hz) & 953 & 4458 & --- \\
+\quad Mean frequency (norm.) & 0.086 & 0.404 & --- \\
+\midrule
+\multicolumn{4}{l}{\textit{STFT Parameters}} \\
+\quad FFT size & \multicolumn{3}{c}{1024} \\
+\quad Hop size & \multicolumn{3}{c}{256} \\
+\quad Frames & \multicolumn{3}{c}{134} \\
+\quad Separation score & \multicolumn{3}{c}{3.26} \\
+\bottomrule
+\end{tabular}
+\end{table}

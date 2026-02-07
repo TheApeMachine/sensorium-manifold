@@ -26,7 +26,7 @@ class Canvas:
     """Two-column dashboard: 3D (left 50%) | analysis panels (right 50%)."""
 
     def __init__(self, grid_size: tuple[int, int, int], datafn) -> None:
-        self.fig = plt.figure(figsize=(22, 11), facecolor="#0e0e1a")
+        self.fig = plt.figure(figsize=(22, 11))
 
         # Squeeze margins to near zero
         self.fig.subplots_adjust(
@@ -43,23 +43,33 @@ class Canvas:
         # Left: 3D full height
         self.ax3d = self.fig.add_subplot(gs_main[0, 0], projection="3d")
 
-        # Right: 4 stacked rows, tight (includes settling diagnostics)
+        # Right: 3 rows.
+        # Row 1 is split into 2 columns: Psi phase | Crystallized modes.
+        # Row 2/3 span full width: spectrogram, settling diagnostics.
         gs_right = gs_main[0, 1].subgridspec(
-            4, 1,
-            height_ratios=[30, 30, 22, 18],
-            hspace=0.10,
+            3, 1,
+            height_ratios=[30, 42, 20],
+            # Extra vertical breathing room so spectrogram title/ticks do not collide
+            # with Psi phase tick labels above.
+            hspace=0.18,
         )
-        self.ax_phase = self.fig.add_subplot(gs_right[0])
-        self.ax_spectrogram = self.fig.add_subplot(gs_right[1])
-        self.ax_crystals = self.fig.add_subplot(gs_right[2])
-        self.ax_settling = self.fig.add_subplot(gs_right[3])
 
-        # Apply dark theme to all 2D axes
-        for ax in (self.ax_phase, self.ax_spectrogram, self.ax_crystals, self.ax_settling):
-            ax.set_facecolor("#141424")
-            ax.tick_params(colors="#aaa", labelsize=6)
-            for spine in ax.spines.values():
-                spine.set_color("#333")
+        gs_top = gs_right[0].subgridspec(
+            1, 2,
+            width_ratios=[58, 42],
+            wspace=0.08,
+        )
+        self.ax_phase = self.fig.add_subplot(gs_top[0, 0])
+        self.ax_crystals = self.fig.add_subplot(gs_top[0, 1])
+        self.ax_spectrogram = self.fig.add_subplot(gs_right[1, 0])
+        self.ax_settling = self.fig.add_subplot(gs_right[2, 0])
+
+        # # Apply dark theme to all 2D axes
+        # for ax in (self.ax_phase, self.ax_spectrogram, self.ax_crystals, self.ax_settling):
+        #     ax.set_facecolor("#141424")
+        #     ax.tick_params(colors="#aaa", labelsize=6)
+        #     for spine in ax.spines.values():
+        #         spine.set_color("#333")
 
         self.datafn = datafn
         self.plots = {

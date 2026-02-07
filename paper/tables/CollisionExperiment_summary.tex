@@ -1,0 +1,14 @@
+\begin{table}[htbp]
+\centering
+\caption{Collision experiment summary metrics}
+\label{tab:CollisionExperiment}
+\begin{tabular}{ccccccccccccccccccccc}
+\toprule
+Scenario & N Tokens & N Samples & N Unique Tokens & Compression Ratio & Collision Rate Observed & Entropy & Unique Keys & Key Collision Rate & Fold Top1 & Fold Pr & Transition Top1 Prob & Transition Unique Edges & Spatial Clustering & Mode Participation & Mode Entropy & Psi Delta Rel & Run Backend & Run Steps & Run Termination & Simulate Ms \\
+\midrule
+medium\_collision &  &  & 25994 & $0.397$ & $0.603$ & $12.272$ &  &  &  &  &  &  &  & $5.417$ & $3.503$ & $0.641$ & mps & 12 & budget & $26530.907$ \\
+medium\_repeated\_ab &  &  & 512 & $0.008$ & $0.992$ & $9.000$ &  &  &  &  &  &  &  & $3.258$ & $1.829$ & $1.000$ & mps & 12 & budget & $26405.422$ \\
+medium\_wikitext &  &  & 24427 & $0.373$ & $0.627$ & $13.937$ &  &  &  &  &  &  &  & $11.926$ & $4.006$ & $0.856$ & mps & 12 & budget & $36794.793$ \\
+\bottomrule
+\end{tabular}
+\end{table}

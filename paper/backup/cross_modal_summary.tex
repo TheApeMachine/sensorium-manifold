@@ -1,0 +1,18 @@
+\begin{table}[t]
+\centering
+\caption{Cross-modal reconstruction results. Images are encoded via 2D FFT and processed alongside text tokens in a unified manifold. Reconstruction quality varies by pattern complexity.}
+\label{tab:cross_modal}
+\begin{tabular}{l c c c c}
+\toprule
+\textbf{Pattern} & \textbf{MSE} & \textbf{PSNR (dB)} & \textbf{Image} & \textbf{Text} \\
+ & & & \textbf{Particles} & \textbf{Particles} \\
+\midrule
+Horizontal & 0.0049 & 23.1 & 128 & 24 \\
+Vertical & 0.0049 & 23.1 & 128 & 22 \\
+Diagonal & 0.0025 & 26.0 & 128 & 24 \\
+Checkerboard & 0.0001 & 40.5 & 128 & 25 \\
+\midrule
+\textbf{Average} & \textbf{0.0031} & \textbf{28.2} & -- & -- \\
+\bottomrule
+\end{tabular}
+\end{table}

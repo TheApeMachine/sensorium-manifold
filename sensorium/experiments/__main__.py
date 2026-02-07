@@ -99,13 +99,23 @@ def main():
 
     for experiment in experiments:
         try:
-            exp = experiment(experiment_name=experiment.__name__, dashboard=bool(args.dashboard))
-            exp.run()
+            exp = experiment(
+                experiment_name=experiment.__name__, dashboard=bool(args.dashboard)
+            )
+            try:
+                exp.run()
+            finally:
+                # Ensure dashboard recording is finalized even on errors.
+                try:
+                    exp.close_dashboard()
+                except Exception:
+                    pass
         except Exception as exc:
             if args.experiment == "all":
                 print(f"[error] {experiment.__name__} failed: {exc}")
                 continue
             raise
+
 
 if __name__ == "__main__":
     main()

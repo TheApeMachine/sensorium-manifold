@@ -114,3 +114,44 @@ def test_sql_observer_resolves_query_payload_from_metadata_and_comments():
     )
     payload2 = observer_with_comment.resolve_dark_query({}, metadata={})
     assert payload2 == b"hello"
+
+
+def test_sql_observer_supports_branch_subquery_aggregates():
+    SQLObserver, SQLObserverConfig = _load_sql_observer()
+
+    state = {
+        "byte_values": np.array([65, 66, 65, 67, 65, 66], dtype=np.int64),
+        "sequence_indices": np.array([0, 1, 0, 1, 0, 1], dtype=np.int64),
+        "sample_indices": np.array([0, 0, 1, 1, 2, 2], dtype=np.int64),
+        "token_ids": np.array([65, 322, 65, 323, 65, 322], dtype=np.int64),
+        "masses": np.ones((6,), dtype=np.float32),
+    }
+
+    observer = SQLObserver(
+        """
+        SELECT
+            (SELECT COUNT(*) FROM transitions) AS n_branch_edges,
+            (
+                SELECT COALESCE(MAX(out_degree), 0)
+                FROM (
+                    SELECT src_token_id, COUNT(DISTINCT dst_token_id) AS out_degree
+                    FROM transitions
+                    GROUP BY src_token_id
+                )
+            ) AS max_out_degree,
+            (
+                SELECT COALESCE(SUM(CASE WHEN out_degree > 1 THEN 1 ELSE 0 END), 0)
+                FROM (
+                    SELECT src_token_id, COUNT(DISTINCT dst_token_id) AS out_degree
+                    FROM transitions
+                    GROUP BY src_token_id
+                )
+            ) AS n_branch_nodes;
+        """,
+        config=SQLObserverConfig(row_limit=1),
+    )
+    result = observer.observe(state)
+
+    assert result["sql_n_branch_edges"] == 2
+    assert result["sql_max_out_degree"] == 2
+    assert result["sql_n_branch_nodes"] == 1.0

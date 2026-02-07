@@ -1,0 +1,19 @@
+\begin{table}[t]
+\centering
+\caption{MNIST inpainting via thermodynamic trie. The manifold learns pixel patterns from training images, then reconstructs masked regions in test images using dual-domain inference. PSNR (Peak Signal-to-Noise Ratio) measures reconstruction quality; MAE (Mean Absolute Error) measures pixel-level deviation.}
+\label{tab:image_gen}
+\begin{tabular}{l c c c c}
+\toprule
+\textbf{Metric} & \textbf{10\% Mask} & \textbf{20\% Mask} & \textbf{30\% Mask} & \textbf{50\% Mask} \\
+\midrule
+PSNR (dB) & 21.3 & 18.3 & 16.6 & 14.2 \\
+MAE (pixels) & 4.7 & 9.5 & 14.1 & 23.1 \\
+MSE & 506 & 992 & 1448 & 2515 \\
+\midrule
+\multicolumn{5}{l}{\textit{Dataset}} \\
+\quad Training images & \multicolumn{4}{c}{100} \\
+\quad Test images & \multicolumn{4}{c}{20} \\
+\quad Image size & \multicolumn{4}{c}{28$\times$28 = 784 pixels} \\
+\bottomrule
+\end{tabular}
+\end{table}

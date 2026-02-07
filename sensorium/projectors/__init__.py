@@ -23,7 +23,7 @@ Example:
             y=["accuracy", "loss"],
         )),
     )
-    
+
     # Project from inference observer
     projector.project(inference_observer)
 """
@@ -90,6 +90,10 @@ from sensorium.projectors.transitions import (
     TopTransitionsConfig,
     TopTransitionsProjector,
 )
+from sensorium.projectors.collision import (
+    CollisionFigureConfig,
+    CollisionFigureProjector,
+)
 from sensorium.projectors.omega_labels import (
     OmegaLabelFigureConfig,
     OmegaLabelFigureProjector,
@@ -145,6 +149,9 @@ __all__ = [
     # Transitions artifacts
     "TopTransitionsConfig",
     "TopTransitionsProjector",
+    # Collision figures
+    "CollisionFigureConfig",
+    "CollisionFigureProjector",
     # Labelled ω figures
     "OmegaLabelFigureConfig",
     "OmegaLabelFigureProjector",

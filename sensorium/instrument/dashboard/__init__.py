@@ -18,6 +18,7 @@ Legacy panels (still importable but not instantiated by Canvas):
 
 from sensorium.instrument.dashboard.canvas import Canvas, CanvasAxes
 from sensorium.instrument.dashboard.animation import Animation
+from sensorium.instrument.dashboard.session import DashboardSession
 
 # Active visualizations
 from sensorium.instrument.dashboard.threed import ThreeD
@@ -28,13 +29,14 @@ from sensorium.instrument.dashboard.settling import SettlingPlot
 
 __all__ = [
     # Main
-    'Canvas',
-    'CanvasAxes',
-    'Animation',
+    "Canvas",
+    "CanvasAxes",
+    "Animation",
     # Active panels
-    'ThreeD',
-    'PhasePlot',
-    'SpectrogramPlot',
-    'CrystalContentPlot',
-    'SettlingPlot',
+    "ThreeD",
+    "PhasePlot",
+    "SpectrogramPlot",
+    "CrystalContentPlot",
+    "SettlingPlot",
+    "DashboardSession",
 ]

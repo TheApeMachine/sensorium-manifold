@@ -23,6 +23,8 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Union, TYPE_CHECKING
 
 from sensorium.projectors.base import BaseProjector
+from sensorium.console import console
+
 
 if TYPE_CHECKING:
     from sensorium.observers.inference import InferenceObserver
@@ -91,6 +93,7 @@ class FigureProjector(BaseProjector):
             output_dir: Output directory for figures
             **kwargs: Shortcut for config fields
         """
+        console.info(f"Initializing figure projector with config: {config} and output directory: {output_dir}")
         super().__init__(output_dir or Path("paper/figures"))
         
         if config:
@@ -107,40 +110,53 @@ class FigureProjector(BaseProjector):
         Returns:
             Dict with status and output path
         """
+        console.info(f"Projecting figure with source: {source}")
         import matplotlib.pyplot as plt
         import numpy as np
         
+        console.info(f"Ensuring output directory exists: {self.output_dir}")
         self.ensure_output_dir()
         
         # Get results as list of dicts
+        console.info(f"Getting results list from source: {source}")
         results = self._get_results_list(source)
         
         if not results:
+            console.error("No results to project")
             return {"status": "error", "message": "No results to project"}
         
         # Apply style
         if self.config.style != "default":
+            console.info(f"Using style: {self.config.style}")
             plt.style.use(self.config.style)
         
         # Create figure
+        console.info(f"Creating figure with size: {self.config.figsize}")
         fig, ax = plt.subplots(figsize=self.config.figsize)
         
         # Normalize y to list
+        console.info(f"Normalizing y to list: {self.config.y}")
         y_fields = self.config.y if isinstance(self.config.y, list) else [self.config.y]
         
         # Extract data
+        console.info(f"Extracting data from results: {results} and field: {self.config.x}")
         x_data = self._extract_field(results, self.config.x)
         
         # Default colors and markers
+        console.info(f"Default colors and markers: {default_colors} and {default_markers}")
         default_colors = ["#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd"]
         default_markers = ["o", "s", "^", "D", "v"]
         
+        console.info(f"Colors: {colors} and markers: {markers}")
         colors = self.config.colors or default_colors
         markers = self.config.markers or default_markers
+        console.info(f"Colors: {colors} and markers: {markers}")
         
         # Plot each y field
+        console.info(f"Plotting each y field: {y_fields}")
         for i, y_field in enumerate(y_fields):
             y_data = self._extract_field(results, y_field)
+            console.info(f"Extracted y data: {y_data} for field: {y_field}")
             
             if not y_data:
                 continue
@@ -200,6 +216,7 @@ class FigureProjector(BaseProjector):
         
         # Save
         output_path = self.output_dir / f"{self.config.name}.{self.config.format}"
+        console.info(f"Saving figure to: {output_path}")
         fig.savefig(output_path, dpi=self.config.dpi, bbox_inches="tight")
         plt.close(fig)
         

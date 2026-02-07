@@ -2,15 +2,25 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
+import os
 from pathlib import Path
 
 import numpy as np
 
 from sensorium.dataset import SyntheticConfig, SyntheticDataset, SyntheticPattern
 from sensorium.experiments.base import Experiment
-from sensorium.experiments.state_builder import StateBuildConfig, build_observation_state
+from sensorium.experiments.manifold_runner import (
+    ManifoldRunConfig,
+    run_stream_on_manifold,
+)
 from sensorium.observers.inference import InferenceObserver
-from sensorium.projectors import ConsoleProjector, LaTeXTableProjector, PipelineProjector, TableConfig
+from sensorium.projectors import (
+    ConsoleProjector,
+    LaTeXTableProjector,
+    PipelineProjector,
+    TableConfig,
+)
 
 
 class KeyAblationObserver:
@@ -24,7 +34,12 @@ class KeyAblationObserver:
         byte_values = state.get("byte_values")
         seq_idx = state.get("sequence_indices")
         sample_idx = state.get("sample_indices")
-        if token_ids is None or byte_values is None or seq_idx is None or sample_idx is None:
+        if (
+            token_ids is None
+            or byte_values is None
+            or seq_idx is None
+            or sample_idx is None
+        ):
             return {}
 
         tok = token_ids.detach().to("cpu").numpy()
@@ -53,8 +68,12 @@ class KeyAblationObserver:
         src_byt = byt_o[:-1][ok]
         dst_byt = byt_o[1:][ok]
 
-        edge_tok = (src_tok.astype(np.uint64) << np.uint64(32)) | (dst_tok.astype(np.uint64) & np.uint64(0xFFFFFFFF))
-        edge_byt = (src_byt.astype(np.uint64) << np.uint64(8)) | (dst_byt.astype(np.uint64) & np.uint64(0xFF))
+        edge_tok = (src_tok.astype(np.uint64) << np.uint64(32)) | (
+            dst_tok.astype(np.uint64) & np.uint64(0xFFFFFFFF)
+        )
+        edge_byt = (src_byt.astype(np.uint64) << np.uint64(8)) | (
+            dst_byt.astype(np.uint64) & np.uint64(0xFF)
+        )
 
         uniq_tok = int(np.unique(edge_tok).size)
         uniq_byt = int(np.unique(edge_byt).size)
@@ -74,7 +93,9 @@ class KeyAblationObserver:
 class AblationsExperiment(Experiment):
     """Run key-space ablations used to rebut toy-scale/path-loss objections."""
 
-    def __init__(self, experiment_name: str, profile: bool = False, dashboard: bool = False):
+    def __init__(
+        self, experiment_name: str, profile: bool = False, dashboard: bool = False
+    ):
         super().__init__(
             experiment_name,
             profile,
@@ -88,11 +109,29 @@ class AblationsExperiment(Experiment):
                 "compression_byte_only",
                 "edge_recall_sequence_byte",
                 "edge_recall_byte_only",
+                "run_backend",
+                "run_steps",
+                "run_termination",
+                "simulate_ms",
             ],
         )
 
-        self.state_config = StateBuildConfig(grid_size=(64, 64, 64), mode_bins=256)
-        self.inference = InferenceObserver([KeyAblationObserver()])
+        allow_fallback = os.getenv(
+            "SENSORIUM_ALLOW_ANALYSIS_FALLBACK", ""
+        ).strip().lower() in {
+            "1",
+            "true",
+            "yes",
+            "on",
+        }
+        self.run_config = ManifoldRunConfig(
+            grid_size=(64, 64, 64),
+            max_steps=10,
+            min_steps=3,
+            allow_analysis_fallback=allow_fallback,
+            analysis_mode_bins=256,
+        )
+        self.inference = InferenceObserver([KeyAblationObserver().observe])
         self.projector = PipelineProjector(
             ConsoleProjector(fields=self.reportable, format="table"),
             LaTeXTableProjector(
@@ -123,8 +162,34 @@ class AblationsExperiment(Experiment):
                     seed=42,
                 )
             )
-            state = build_observation_state(dataset.generate(), config=self.state_config)
-            self.inference.observe(state, scenario=name)
+            n_tokens_target = int(units) * int(length)
+            if n_tokens_target >= 200_000:
+                run_cfg = replace(self.run_config, max_steps=6, min_steps=2)
+            else:
+                run_cfg = self.run_config
+            if self.dashboard:
+                self.start_dashboard(
+                    grid_size=run_cfg.grid_size,
+                    run_name=f"{self.experiment_name}_{name}",
+                )
+                state, run_meta = run_stream_on_manifold(
+                    dataset.generate(),
+                    config=run_cfg,
+                    on_step=self.dashboard_update,
+                )
+                self.close_dashboard()
+            else:
+                state, run_meta = run_stream_on_manifold(
+                    dataset.generate(), config=run_cfg
+                )
+            self.inference.observe(
+                state,
+                scenario=name,
+                run_backend=str(run_meta["run_backend"]),
+                run_steps=int(run_meta["run_steps"]),
+                run_termination=str(run_meta["run_termination"]),
+                simulate_ms=float(run_meta["simulate_ms"]),
+            )
 
         return self.project()
 

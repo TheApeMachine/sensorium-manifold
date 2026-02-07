@@ -6,7 +6,12 @@ to compute specific metrics needed for experiments.
 
 from .clustering import SpatialClustering, ClusteringBaseline, ClusteringExcess
 from .entropy import TokenEntropy, NormalizedEntropy
-from .compression import CompressionRatio, CollisionCount, CollisionRate, CollidingTokens
+from .compression import (
+    CompressionRatio,
+    CollisionCount,
+    CollisionRate,
+    CollidingTokens,
+)
 from .energy import EnergyAccumulation, EnergyCorrelation, MeanParticleEnergy
 from .heatmap import CollisionMatrix, TokenPositionDensity
 from .counts import ParticleCount, ModeCount, CrystallizedCount, UniqueTokenCount
@@ -23,7 +28,12 @@ from .dehash import DehashObserver
 from .map_path import MapPathMetrics, KeySpec
 from .token_stats import TokenDistributionMetrics
 from .wave_stats import WaveFieldMetrics
-from .omega_labels import OmegaLabelProbeConfig, OmegaLabelProbe, CoherenceSpectrumSnapshot
+from .collision_paper import CollisionPaperArtifactsConfig, CollisionPaperArtifacts
+from .omega_labels import (
+    OmegaLabelProbeConfig,
+    OmegaLabelProbe,
+    CoherenceSpectrumSnapshot,
+)
 
 __all__ = [
     # Counts
@@ -79,6 +89,9 @@ __all__ = [
     "TokenDistributionMetrics",
     # Wave stats
     "WaveFieldMetrics",
+    # Collision paper artifacts
+    "CollisionPaperArtifactsConfig",
+    "CollisionPaperArtifacts",
     # Labelled ω probes
     "OmegaLabelProbeConfig",
     "OmegaLabelProbe",

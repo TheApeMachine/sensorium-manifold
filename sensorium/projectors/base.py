@@ -26,6 +26,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Protocol, Union, TYPE_CHECKING
 
+from sensorium.console import console
+
+
 if TYPE_CHECKING:
     from sensorium.observers.inference import InferenceObserver
 
@@ -49,10 +52,12 @@ class BaseProjector(ABC):
     """Base class for projectors with common functionality."""
     
     def __init__(self, output_dir: Path | None = None):
+        console.info(f"Initializing projector with output directory: {output_dir}")
         self.output_dir = Path(output_dir) if output_dir else Path("artifacts")
     
     def ensure_output_dir(self):
         """Create output directory if it doesn't exist."""
+        console.info(f"Ensuring output directory exists: {self.output_dir}")
         self.output_dir.mkdir(parents=True, exist_ok=True)
     
     def _extract_data(self, source: Union["InferenceObserver", Dict[str, Any]]) -> Dict[str, Any]:
@@ -60,6 +65,7 @@ class BaseProjector(ABC):
         
         This provides a unified interface for projectors to get data.
         """
+        console.info(f"Extracting data from source: {source}")
         # If it's an InferenceObserver, convert to column-oriented dict
         if hasattr(source, "as_dict"):
             return source.as_dict()
@@ -76,6 +82,7 @@ class BaseProjector(ABC):
     
     def _get_results_list(self, source: Union["InferenceObserver", Dict[str, Any]]) -> List[Dict[str, Any]]:
         """Get results as a list of dicts (row-oriented)."""
+        console.info(f"Getting results list from source: {source}")
         if hasattr(source, "results"):
             return source.results
         elif isinstance(source, dict):
@@ -97,19 +104,24 @@ class PipelineProjector(BaseProjector):
     """Compose multiple projectors into a pipeline."""
     
     def __init__(self, *projectors: ProjectorProtocol, output_dir: Path | None = None):
+        console.info(f"Initializing pipeline projector with output directory: {output_dir}")
         super().__init__(output_dir)
         self.projectors = list(projectors)
     
     def project(self, source: Union["InferenceObserver", Dict[str, Any]]) -> Dict[str, Any]:
         """Run all projectors and collect results."""
+        console.info(f"Running pipeline projector with source: {source}")
         results: Dict[str, Any] = {}
+        console.info(f"Projectors: {self.projectors}")
         
         for projector in self.projectors:
             name = projector.__class__.__name__
+            console.info(f"Running projector: {name}")
             try:
                 result = projector.project(source)
                 results[name] = result
             except Exception as e:
+                console.error(f"Error running projector: {name}: {e}")
                 results[name] = {"error": str(e)}
         
         return results
@@ -129,16 +141,18 @@ class ConsoleProjector(BaseProjector):
             fields: Fields to print (None = all)
             format: Output format ("table", "json", "simple")
         """
+        console.info(f"Initializing console projector with fields: {fields} and format: {format}")
         super().__init__()
         self.fields = fields
         self.format = format
     
     def project(self, source: Union["InferenceObserver", Dict[str, Any]]) -> Dict[str, Any]:
         """Print results to console."""
+        console.info(f"Projecting console with source: {source}")
         results = self._get_results_list(source)
         
         if not results:
-            print("No results to display.")
+            console.error("No results to display.")
             return {"status": "empty"}
         
         # Determine fields to show
@@ -148,16 +162,18 @@ class ConsoleProjector(BaseProjector):
             fields = list(results[0].keys())
         
         if self.format == "table":
+            console.info(f"Printing table with results: {results} and fields: {fields}")
             self._print_table(results, fields)
         elif self.format == "json":
             import json
-            print(json.dumps(results, indent=2, default=str))
+            console.info(f"Printing JSON with results: {results}")
+            console.info(json.dumps(results, indent=2, default=str))
         else:
             for i, r in enumerate(results):
-                print(f"\n--- Result {i+1} ---")
+                console.info(f"\n--- Result {i+1} ---")
                 for f in fields:
                     if f in r:
-                        print(f"  {f}: {r[f]}")
+                        console.info(f"  {f}: {r[f]}")
         
         return {"status": "success", "count": len(results)}
     
@@ -172,10 +188,10 @@ class ConsoleProjector(BaseProjector):
         
         # Print header
         header = " | ".join(f.ljust(widths[f]) for f in fields)
-        print(header)
+        console.info(header)
         print("-" * len(header))
         
         # Print rows
         for r in results:
             row = " | ".join(str(r.get(f, ""))[:20].ljust(widths[f]) for f in fields)
-            print(row)
+            console.info(row)
