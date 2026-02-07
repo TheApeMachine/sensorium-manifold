@@ -1,0 +1,265 @@
+{
+  "top_edges": [
+    {
+      "src": {
+        "pos": 510,
+        "byte": 65,
+        "label": "A"
+      },
+      "dst": {
+        "pos": 511,
+        "byte": 66,
+        "label": "B"
+      },
+      "count": 128
+    },
+    {
+      "src": {
+        "pos": 174,
+        "byte": 65,
+        "label": "A"
+      },
+      "dst": {
+        "pos": 175,
+        "byte": 66,
+        "label": "B"
+      },
+      "count": 128
+    },
+    {
+      "src": {
+        "pos": 161,
+        "byte": 66,
+        "label": "B"
+      },
+      "dst": {
+        "pos": 162,
+        "byte": 65,
+        "label": "A"
+      },
+      "count": 128
+    },
+    {
+      "src": {
+        "pos": 162,
+        "byte": 65,
+        "label": "A"
+      },
+      "dst": {
+        "pos": 163,
+        "byte": 66,
+        "label": "B"
+      },
+      "count": 128
+    },
+    {
+      "src": {
+        "pos": 163,
+        "byte": 66,
+        "label": "B"
+      },
+      "dst": {
+        "pos": 164,
+        "byte": 65,
+        "label": "A"
+      },
+      "count": 128
+    },
+    {
+      "src": {
+        "pos": 164,
+        "byte": 65,
+        "label": "A"
+      },
+      "dst": {
+        "pos": 165,
+        "byte": 66,
+        "label": "B"
+      },
+      "count": 128
+    },
+    {
+      "src": {
+        "pos": 165,
+        "byte": 66,
+        "label": "B"
+      },
+      "dst": {
+        "pos": 166,
+        "byte": 65,
+        "label": "A"
+      },
+      "count": 128
+    },
+    {
+      "src": {
+        "pos": 166,
+        "byte": 65,
+        "label": "A"
+      },
+      "dst": {
+        "pos": 167,
+        "byte": 66,
+        "label": "B"
+      },
+      "count": 128
+    },
+    {
+      "src": {
+        "pos": 167,
+        "byte": 66,
+        "label": "B"
+      },
+      "dst": {
+        "pos": 168,
+        "byte": 65,
+        "label": "A"
+      },
+      "count": 128
+    },
+    {
+      "src": {
+        "pos": 168,
+        "byte": 65,
+        "label": "A"
+      },
+      "dst": {
+        "pos": 169,
+        "byte": 66,
+        "label": "B"
+      },
+      "count": 128
+    },
+    {
+      "src": {
+        "pos": 169,
+        "byte": 66,
+        "label": "B"
+      },
+      "dst": {
+        "pos": 170,
+        "byte": 65,
+        "label": "A"
+      },
+      "count": 128
+    },
+    {
+      "src": {
+        "pos": 170,
+        "byte": 65,
+        "label": "A"
+      },
+      "dst": {
+        "pos": 171,
+        "byte": 66,
+        "label": "B"
+      },
+      "count": 128
+    },
+    {
+      "src": {
+        "pos": 171,
+        "byte": 66,
+        "label": "B"
+      },
+      "dst": {
+        "pos": 172,
+        "byte": 65,
+        "label": "A"
+      },
+      "count": 128
+    },
+    {
+      "src": {
+        "pos": 172,
+        "byte": 65,
+        "label": "A"
+      },
+      "dst": {
+        "pos": 173,
+        "byte": 66,
+        "label": "B"
+      },
+      "count": 128
+    },
+    {
+      "src": {
+        "pos": 173,
+        "byte": 66,
+        "label": "B"
+      },
+      "dst": {
+        "pos": 174,
+        "byte": 65,
+        "label": "A"
+      },
+      "count": 128
+    },
+    {
+      "src": {
+        "pos": 175,
+        "byte": 66,
+        "label": "B"
+      },
+      "dst": {
+        "pos": 176,
+        "byte": 65,
+        "label": "A"
+      },
+      "count": 128
+    },
+    {
+      "src": {
+        "pos": 159,
+        "byte": 66,
+        "label": "B"
+      },
+      "dst": {
+        "pos": 160,
+        "byte": 65,
+        "label": "A"
+      },
+      "count": 128
+    },
+    {
+      "src": {
+        "pos": 176,
+        "byte": 65,
+        "label": "A"
+      },
+      "dst": {
+        "pos": 177,
+        "byte": 66,
+        "label": "B"
+      },
+      "count": 128
+    },
+    {
+      "src": {
+        "pos": 177,
+        "byte": 66,
+        "label": "B"
+      },
+      "dst": {
+        "pos": 178,
+        "byte": 65,
+        "label": "A"
+      },
+      "count": 128
+    },
+    {
+      "src": {
+        "pos": 178,
+        "byte": 65,
+        "label": "A"
+      },
+      "dst": {
+        "pos": 179,
+        "byte": 66,
+        "label": "B"
+      },
+      "count": 128
+    }
+  ],
+  "total_edges": 65408
+}

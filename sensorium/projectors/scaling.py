@@ -38,8 +38,17 @@ class ScalingTableProjector(BaseProjector):
         pop = row.get("population", {})
         inter = row.get("interference", {})
         latency = row.get("latency", {})
+        mode_scaling = row.get("mode_scaling", {})
         gen = row.get("generalization", {})
         cond = row.get("conditions", {})
+        backend_counts = row.get("backend_counts", {})
+        provenance = str(row.get("provenance_jsonl", ""))
+        provenance_tex = (
+            provenance.replace("\\", "/")
+            .replace("_", r"\_")
+            .replace("&", r"\&")
+            .replace("%", r"\%")
+        )
 
         self.ensure_output_dir()
         br = r"\\"
@@ -55,20 +64,41 @@ class ScalingTableProjector(BaseProjector):
             rf"\multicolumn{{2}}{{l}}{{\textit{{Experimental Conditions}}}} {br}",
             rf"\quad Seeds & {', '.join(str(int(s)) for s in cond.get('seeds', []))} {br}",
             rf"\quad Particle sweep & {', '.join(str(int(v)) for v in cond.get('particle_counts', []))} {br}",
+            rf"\quad Mode-count sweep ($k$) & {', '.join(str(int(v)) for v in cond.get('mode_counts', []))} {br}",
             rf"\quad Sequence sweep & {', '.join(str(int(v)) for v in cond.get('sequence_lengths', []))} {br}",
+            rf"\quad Backend counts & {', '.join(f'{k}:{int(v)}' for k, v in backend_counts.items())} {br}",
+            rf"\quad Provenance log & \texttt{{{provenance_tex}}} {br}",
             r"\midrule",
             rf"\multicolumn{{2}}{{l}}{{\textit{{$\omega$-Field Dynamics}}}} {br}",
             rf"\quad Final active modes & {float(pop.get('n_modes_final_mean', 0.0)):.2f} {br}",
             rf"\quad Final crystallized modes & {float(pop.get('n_crystallized_final_mean', 0.0)):.2f} {br}",
             rf"\quad Pruning rate & {float(pop.get('pruning_rate_mean', 0.0)):.3f} {br}",
+            rf"\quad Pruning rate 95\% CI & $\pm$ {float(pop.get('pruning_rate_ci95', 0.0)):.3f} {br}",
             r"\midrule",
             rf"\multicolumn{{2}}{{l}}{{\textit{{Latency Scaling (fixed $k$, tested range)}}}} {br}",
             rf"\quad Power-law exponent $\alpha$ in $t_\mathrm{{step}}(N)=aN^\alpha$ & {float(latency.get('fit_alpha', 0.0)):.3f} {br}",
             rf"\quad 95\% CI for $\alpha$ & [{float(latency.get('fit_alpha_ci_low', 0.0)):.3f}, {float(latency.get('fit_alpha_ci_high', 0.0)):.3f}] {br}",
             rf"\quad Mean coefficient of variation (ms/step) & {100.0 * float(latency.get('cv_mean', 0.0)):.1f}\% {br}",
             r"\midrule",
-            rf"\multicolumn{{2}}{{l}}{{\textit{{Interference at Scale}}}} {br}",
+            rf"\multicolumn{{2}}{{l}}{{\textit{{Mode-Count Scaling (fixed grid)}}}} {br}",
         ]
+
+        mrows = list(mode_scaling.get("rows", []))
+        if mrows:
+            first = mrows[0]
+            last = mrows[-1]
+            lines.append(
+                rf"\quad ms/step at $k={int(first.get('omega_num_modes', 0))}$ & {_pm(float(first.get('ms_per_step_mean', 0.0)), float(first.get('ms_per_step_std', 0.0)))} {br}"
+            )
+            lines.append(
+                rf"\quad ms/step at $k={int(last.get('omega_num_modes', 0))}$ & {_pm(float(last.get('ms_per_step_mean', 0.0)), float(last.get('ms_per_step_std', 0.0)))} {br}"
+            )
+            lines.append(
+                rf"\quad Power-law exponent $\beta$ in $t_\mathrm{{step}}(k)=bk^\beta$ & {float(mode_scaling.get('fit_alpha', 0.0)):.3f} {br}"
+            )
+
+        lines.append(r"\midrule")
+        lines.append(rf"\multicolumn{{2}}{{l}}{{\textit{{Interference at Scale}}}} {br}")
 
         irows = list(inter.get("rows", []))
         if irows:

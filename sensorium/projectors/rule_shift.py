@@ -41,6 +41,16 @@ class RuleShiftTableProjector(BaseProjector):
         arr = np.asarray(values, dtype=np.float64)
         return float(np.mean(arr)), float(np.std(arr))
 
+    @staticmethod
+    def _ci95(values: Sequence[float]) -> float:
+        if not values:
+            return 0.0
+        arr = np.asarray(values, dtype=np.float64)
+        n = int(arr.size)
+        if n <= 1:
+            return 0.0
+        return float(1.96 * np.std(arr, ddof=1) / np.sqrt(float(n)))
+
     def project(self, source: Union[Any, Dict[str, Any]]) -> Dict[str, Any]:
         results = self._get_results_list(source)
         if not results:
@@ -48,16 +58,26 @@ class RuleShiftTableProjector(BaseProjector):
 
         self.ensure_output_dir()
         by_scenario: dict[str, list[dict[str, Any]]] = defaultdict(list)
+        backend_counts: dict[str, int] = defaultdict(int)
         for row in results:
             by_scenario[str(row.get("scenario", "unknown"))].append(row)
+            backend_counts[str(row.get("run_backend", "unknown"))] += 1
+
+        provenance_path = str(results[0].get("provenance_jsonl", ""))
+        provenance_tex = (
+            provenance_path.replace("\\", "/")
+            .replace("_", r"\_")
+            .replace("&", r"\&")
+            .replace("%", r"\%")
+        )
 
         header = r"""\begin{table*}[t]
 \centering
-\caption{Scaled rule-shift matrix with transparent conditions and adaptation metrics (mean $\pm$ std over seeds).}
+\caption{Scaled rule-shift matrix with transparent conditions and adaptation metrics (mean $\pm$ std over seeds; Top-1 CI95 reported).}
 \label{tab:rule_shift}
-\begin{tabular}{l l c c c c c c c c c}
+\begin{tabular}{l l c c c c c c c c c c}
 \toprule
-\textbf{Scenario} & \textbf{Domain} & \textbf{Seeds} & \textbf{Phases} & \textbf{Reps} & \textbf{Seg} & \textbf{Drop} & \textbf{Recovery} & \textbf{Final@1} & \textbf{Final@3} & \textbf{Final MRR} \\
+\textbf{Scenario} & \textbf{Domain} & \textbf{Seeds} & \textbf{Phases} & \textbf{Reps} & \textbf{Seg} & \textbf{Drop} & \textbf{Recovery} & \textbf{Final@1} & \textbf{Top1 CI95} & \textbf{Final@3} & \textbf{Final MRR} \\
 \midrule
 """
         lines: list[str] = []
@@ -85,6 +105,7 @@ class RuleShiftTableProjector(BaseProjector):
             t1_mu, t1_sd = self._mean_std(final_top1)
             t3_mu, t3_sd = self._mean_std(final_top3)
             mrr_mu, mrr_sd = self._mean_std(final_mrr)
+            t1_ci95 = self._ci95(final_top1)
             rec_txt = f"{rec_mu:.1f} $\\pm$ {rec_sd:.1f}" if recoveries else "N/A"
 
             lines.append(
@@ -94,15 +115,24 @@ class RuleShiftTableProjector(BaseProjector):
                 f"{self._fmt_pct(drop_mu)} $\\pm$ {self._fmt_pct(drop_sd)} & "
                 f"{rec_txt} & "
                 f"{self._fmt_pct(t1_mu)} $\\pm$ {self._fmt_pct(t1_sd)} & "
+                f"{self._fmt_pct(t1_ci95)} & "
                 f"{self._fmt_pct(t3_mu)} $\\pm$ {self._fmt_pct(t3_sd)} & "
                 f"{self._fmt_pct(mrr_mu)} $\\pm$ {self._fmt_pct(mrr_sd)} \\\\"
             )
 
+        backend_text = ", ".join(
+            f"{k}:{int(v)}" for k, v in sorted(backend_counts.items())
+        )
         footer = r"""\bottomrule
 \end{tabular}
 \vspace{2pt}
 
-{\footnotesize Conditions are explicit: number of phases, total repetitions, segment length, and seed count are reported per scenario.}
+""" + (
+            r"{\footnotesize Conditions are explicit: number of phases, total repetitions, segment length, and seed count are reported per scenario. "
+            + rf"Backend counts: {backend_text}. "
+            + rf"Provenance log: \texttt{{{provenance_tex}}}.}}"
+            + "\n"
+        ) + r"""
 \end{table*}
 """
         output_path = self.output_dir / f"{self.name}.tex"

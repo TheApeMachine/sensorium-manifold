@@ -40,11 +40,14 @@ class KernelScaling(Experiment):
     ):
         super().__init__(experiment_name, profile, dashboard=dashboard)
 
-        self.seeds = (7, 19, 43)
+        self.seeds = tuple(self.experiment_seeds(default=(7, 19, 43)))
         self.particle_counts = (1000, 2000, 4000, 8000, 16000)
         self.grid_sizes = ((16, 16, 16), (32, 32, 32), (64, 64, 64))
+        self.mode_counts = (64, 128, 256, 512)
         self.pattern_counts = (1, 2, 4, 8, 16, 32)
         self.sequence_lengths = (1000, 4000, 16000, 64000)
+        self._run_rows: list[dict[str, Any]] = []
+        self._dashboard_tags: set[str] = set()
 
         self.inference = InferenceObserver(
             [ParticleCount().observe, ModeCount().observe]
@@ -57,21 +60,36 @@ class KernelScaling(Experiment):
         )
 
     def run(self):
+        self._run_rows = []
+        self._dashboard_tags = set()
         print("[scaling] Starting transparent scaling matrix...")
         results: dict[str, Any] = {
             "conditions": {
                 "seeds": list(self.seeds),
                 "particle_counts": list(self.particle_counts),
                 "grid_sizes": [list(g) for g in self.grid_sizes],
+                "mode_counts": list(self.mode_counts),
                 "pattern_counts": list(self.pattern_counts),
                 "sequence_lengths": list(self.sequence_lengths),
             },
             "population": self._run_population_dynamics(),
             "interference": self._run_interference_test(),
             "compute": self._run_compute_scaling(),
+            "mode_scaling": self._run_mode_scaling(),
             "latency": self._run_latency_test(),
             "generalization": self._run_generalization_test(),
         }
+        self.assert_allowed_backends(self._run_rows, allowed=("mps",))
+        backend_counts: dict[str, int] = {}
+        for row in self._run_rows:
+            key = str(row.get("run_backend", ""))
+            backend_counts[key] = int(backend_counts.get(key, 0) + 1)
+        provenance = self.write_provenance_jsonl(
+            self._run_rows, stem=f"{self.experiment_name}_raw"
+        )
+        results["backend_counts"] = backend_counts
+        results["n_runs"] = int(len(self._run_rows))
+        results["provenance_jsonl"] = str(provenance)
         self.inference.observe({}, **results)
         self.project()
         print("[scaling] Done.")
@@ -80,8 +98,14 @@ class KernelScaling(Experiment):
         self,
         dataset: ScalingDataset,
         *,
+        test_name: str,
+        seed: int,
         grid_size: tuple[int, int, int],
         max_steps: int,
+        sweep_axis: str,
+        sweep_value: float,
+        omega_num_modes: int | None = None,
+        dashboard_tag: str | None = None,
     ):
         history: dict[str, list[float]] = {
             "step": [],
@@ -130,14 +154,60 @@ class KernelScaling(Experiment):
             history["n_deaths"].append(float(n_deaths))
             history["conflict_score"].append(float(conflict_score))
 
-        state, meta = run_stream_on_manifold(
-            dataset.generate(),
-            config=ManifoldRunConfig(
-                grid_size=grid_size,
-                max_steps=max_steps,
-                min_steps=min(4, max_steps),
-            ),
-            on_step=on_step,
+        run_name = f"{self.experiment_name}_{test_name}_s{seed}"
+        record_dashboard = (
+            bool(self.dashboard)
+            and isinstance(dashboard_tag, str)
+            and bool(dashboard_tag)
+            and dashboard_tag not in self._dashboard_tags
+        )
+        on_step_cb = on_step
+        if record_dashboard:
+            self.start_dashboard(grid_size=grid_size, run_name=run_name)
+
+            def _cb(state: dict) -> None:
+                on_step(state)
+                self.dashboard_update(state)
+
+            on_step_cb = _cb
+        try:
+            state, meta = run_stream_on_manifold(
+                dataset.generate(),
+                config=ManifoldRunConfig(
+                    grid_size=grid_size,
+                    max_steps=max_steps,
+                    min_steps=min(4, max_steps),
+                    allow_analysis_fallback=False,
+                    omega_num_modes=(
+                        int(omega_num_modes)
+                        if isinstance(omega_num_modes, int) and omega_num_modes > 0
+                        else None
+                    ),
+                ),
+                on_step=on_step_cb,
+            )
+        finally:
+            if record_dashboard:
+                self.close_dashboard()
+                self._dashboard_tags.add(dashboard_tag)
+        self._run_rows.append(
+            {
+                "scenario": str(test_name),
+                "seed": int(seed),
+                "run_name": str(run_name),
+                "sweep_axis": str(sweep_axis),
+                "sweep_value": float(sweep_value),
+                "n_bytes": int(len(dataset)),
+                "grid_size": f"{int(grid_size[0])}x{int(grid_size[1])}x{int(grid_size[2])}",
+                "omega_num_modes": int(meta.get("omega_num_modes", 0) or 0),
+                "run_backend": str(meta.get("run_backend", "")),
+                "run_steps": int(meta.get("run_steps", 0) or 0),
+                "run_termination": str(meta.get("run_termination", "")),
+                "init_ms": float(meta.get("init_ms", 0.0) or 0.0),
+                "simulate_ms": float(meta.get("simulate_ms", 0.0) or 0.0),
+                "ms_per_step": float(meta.get("simulate_ms", 0.0) or 0.0)
+                / max(1.0, float(meta.get("run_steps", 0) or 0)),
+            }
         )
         return state, meta, history
 
@@ -147,6 +217,16 @@ class KernelScaling(Experiment):
             return 0.0, 0.0
         arr = np.asarray(values, dtype=np.float64)
         return float(np.mean(arr)), float(np.std(arr))
+
+    @staticmethod
+    def _ci95(values: list[float]) -> float:
+        if not values:
+            return 0.0
+        arr = np.asarray(values, dtype=np.float64)
+        n = int(arr.size)
+        if n <= 1:
+            return 0.0
+        return float(1.96 * np.std(arr, ddof=1) / math.sqrt(float(n)))
 
     @staticmethod
     def _fit_power_law(x: np.ndarray, y: np.ndarray) -> tuple[float, float]:
@@ -166,7 +246,16 @@ class KernelScaling(Experiment):
                     seed=int(seed),
                 )
             )
-            _, meta, history = self._run_once(ds, grid_size=(32, 32, 32), max_steps=300)
+            _, meta, history = self._run_once(
+                ds,
+                test_name="population",
+                seed=int(seed),
+                grid_size=(32, 32, 32),
+                max_steps=300,
+                sweep_axis="seed",
+                sweep_value=float(seed),
+                dashboard_tag="population",
+            )
             histories.append(history)
             births = float(np.sum(history["n_births"]))
             deaths = float(np.sum(history["n_deaths"]))
@@ -223,14 +312,19 @@ class KernelScaling(Experiment):
             "n_modes_final_mean": float(np.mean([r["n_modes_final"] for r in finals]))
             if finals
             else 0.0,
+            "n_modes_final_ci95": self._ci95([r["n_modes_final"] for r in finals]),
             "n_crystallized_final_mean": float(
                 np.mean([r["n_crystallized_final"] for r in finals])
             )
             if finals
             else 0.0,
+            "n_crystallized_final_ci95": self._ci95(
+                [r["n_crystallized_final"] for r in finals]
+            ),
             "pruning_rate_mean": float(np.mean([r["pruning_rate"] for r in finals]))
             if finals
             else 0.0,
+            "pruning_rate_ci95": self._ci95([r["pruning_rate"] for r in finals]),
         }
 
     def _run_interference_test(self) -> dict[str, Any]:
@@ -246,7 +340,16 @@ class KernelScaling(Experiment):
                         seed=int(seed),
                     )
                 )
-                _, _, hist = self._run_once(ds, grid_size=(32, 32, 32), max_steps=220)
+                _, _, hist = self._run_once(
+                    ds,
+                    test_name="interference",
+                    seed=int(seed),
+                    grid_size=(32, 32, 32),
+                    max_steps=220,
+                    sweep_axis="n_patterns",
+                    sweep_value=float(n_patterns),
+                    dashboard_tag="interference",
+                )
                 cryst = float(
                     hist["n_crystallized"][-1] if hist["n_crystallized"] else 0.0
                 )
@@ -271,13 +374,20 @@ class KernelScaling(Experiment):
                     "n_crystallized_std": float(
                         np.std([s["n_crystallized"] for s in per_seed])
                     ),
+                    "n_crystallized_ci95": self._ci95(
+                        [s["n_crystallized"] for s in per_seed]
+                    ),
                     "conflict_mean": float(np.mean([s["conflict"] for s in per_seed])),
                     "conflict_std": float(np.std([s["conflict"] for s in per_seed])),
+                    "conflict_ci95": self._ci95([s["conflict"] for s in per_seed]),
                     "efficiency_mean": float(
                         np.mean([s["efficiency"] for s in per_seed])
                     ),
                     "efficiency_std": float(
                         np.std([s["efficiency"] for s in per_seed])
+                    ),
+                    "efficiency_ci95": self._ci95(
+                        [s["efficiency"] for s in per_seed]
                     ),
                 }
             )
@@ -295,7 +405,16 @@ class KernelScaling(Experiment):
                         seed=int(seed),
                     )
                 )
-                _, meta, _ = self._run_once(ds, grid_size=(32, 32, 32), max_steps=16)
+                _, meta, _ = self._run_once(
+                    ds,
+                    test_name="compute_particles",
+                    seed=int(seed),
+                    grid_size=(32, 32, 32),
+                    max_steps=16,
+                    sweep_axis="n_particles",
+                    sweep_value=float(n_particles),
+                    dashboard_tag="compute_particles",
+                )
                 steps = max(1.0, float(meta.get("run_steps", 0)))
                 vals.append(float(meta.get("simulate_ms", 0.0)) / steps)
             mu, sd = self._mean_std(vals)
@@ -304,6 +423,7 @@ class KernelScaling(Experiment):
                     "n_particles": float(n_particles),
                     "ms_per_step_mean": mu,
                     "ms_per_step_std": sd,
+                    "ms_per_step_ci95": self._ci95(vals),
                 }
             )
 
@@ -318,7 +438,16 @@ class KernelScaling(Experiment):
                         seed=int(seed),
                     )
                 )
-                _, meta, _ = self._run_once(ds, grid_size=grid_size, max_steps=16)
+                _, meta, _ = self._run_once(
+                    ds,
+                    test_name="compute_grid",
+                    seed=int(seed),
+                    grid_size=grid_size,
+                    max_steps=16,
+                    sweep_axis="grid_cells",
+                    sweep_value=float(grid_size[0] * grid_size[1] * grid_size[2]),
+                    dashboard_tag="compute_grid",
+                )
                 steps = max(1.0, float(meta.get("run_steps", 0)))
                 vals.append(float(meta.get("simulate_ms", 0.0)) / steps)
             mu, sd = self._mean_std(vals)
@@ -328,6 +457,7 @@ class KernelScaling(Experiment):
                     "grid_cells": float(grid_size[0] * grid_size[1] * grid_size[2]),
                     "ms_per_step_mean": mu,
                     "ms_per_step_std": sd,
+                    "ms_per_step_ci95": self._ci95(vals),
                 }
             )
 
@@ -339,6 +469,58 @@ class KernelScaling(Experiment):
             "by_grid": grid_rows,
             "particle_fit_alpha": float(alpha),
             "particle_fit_coeff": float(coeff),
+        }
+
+    def _run_mode_scaling(self) -> dict[str, Any]:
+        rows: list[dict[str, float]] = []
+        for num_modes in self.mode_counts:
+            vals_ms: list[float] = []
+            vals_modes_final: list[float] = []
+            for seed in self.seeds:
+                ds = ScalingDataset(
+                    ScalingDatasetConfig(
+                        test_type=ScalingTestType.LATENCY,
+                        n_bytes=4000,
+                        seed=int(seed),
+                    )
+                )
+                _, meta, hist = self._run_once(
+                    ds,
+                    test_name="compute_modes",
+                    seed=int(seed),
+                    grid_size=(64, 64, 64),
+                    max_steps=16,
+                    sweep_axis="omega_num_modes",
+                    sweep_value=float(num_modes),
+                    omega_num_modes=int(num_modes),
+                    dashboard_tag="compute_modes",
+                )
+                steps = max(1.0, float(meta.get("run_steps", 0)))
+                vals_ms.append(float(meta.get("simulate_ms", 0.0)) / steps)
+                vals_modes_final.append(
+                    float(hist["n_modes"][-1] if hist["n_modes"] else 0.0)
+                )
+            mu_ms, sd_ms = self._mean_std(vals_ms)
+            mu_modes, sd_modes = self._mean_std(vals_modes_final)
+            rows.append(
+                {
+                    "omega_num_modes": float(num_modes),
+                    "ms_per_step_mean": mu_ms,
+                    "ms_per_step_std": sd_ms,
+                    "ms_per_step_ci95": self._ci95(vals_ms),
+                    "active_modes_final_mean": mu_modes,
+                    "active_modes_final_std": sd_modes,
+                    "active_modes_final_ci95": self._ci95(vals_modes_final),
+                }
+            )
+
+        x = np.asarray([r["omega_num_modes"] for r in rows], dtype=np.float64)
+        y = np.asarray([r["ms_per_step_mean"] for r in rows], dtype=np.float64)
+        alpha, coeff = self._fit_power_law(x, y)
+        return {
+            "rows": rows,
+            "fit_alpha": float(alpha),
+            "fit_coeff": float(coeff),
         }
 
     def _run_latency_test(self) -> dict[str, Any]:
@@ -354,7 +536,16 @@ class KernelScaling(Experiment):
                         seed=int(seed),
                     )
                 )
-                _, meta, _ = self._run_once(ds, grid_size=(32, 32, 32), max_steps=16)
+                _, meta, _ = self._run_once(
+                    ds,
+                    test_name="latency",
+                    seed=int(seed),
+                    grid_size=(32, 32, 32),
+                    max_steps=16,
+                    sweep_axis="sequence_length",
+                    sweep_value=float(seq_len),
+                    dashboard_tag="latency",
+                )
                 steps = max(1.0, float(meta.get("run_steps", 0)))
                 vals.append(float(meta.get("simulate_ms", 0.0)) / steps)
             per_len_samples[int(seq_len)] = vals
@@ -364,6 +555,7 @@ class KernelScaling(Experiment):
                     "seq_len": float(seq_len),
                     "ms_per_step_mean": mu,
                     "ms_per_step_std": sd,
+                    "ms_per_step_ci95": self._ci95(vals),
                     "cv": float(sd / mu) if mu > 0.0 else 0.0,
                 }
             )
@@ -400,7 +592,7 @@ class KernelScaling(Experiment):
             ("pure_random", GeneralizationType.PURE_RANDOM),
         )
         rows: list[dict[str, Any]] = []
-        for name, gtype in cases:
+        for case_idx, (name, gtype) in enumerate(cases):
             structures: list[float] = []
             entropies: list[float] = []
             collisions: list[float] = []
@@ -414,7 +606,14 @@ class KernelScaling(Experiment):
                     )
                 )
                 state, _, hist = self._run_once(
-                    ds, grid_size=(32, 32, 32), max_steps=180
+                    ds,
+                    test_name=f"generalization_{name}",
+                    seed=int(seed),
+                    grid_size=(32, 32, 32),
+                    max_steps=180,
+                    sweep_axis="generalization_type",
+                    sweep_value=float(case_idx),
+                    dashboard_tag="generalization",
                 )
                 cryst = float(
                     hist["n_crystallized"][-1] if hist["n_crystallized"] else 0.0
@@ -443,10 +642,13 @@ class KernelScaling(Experiment):
                     "name": name,
                     "structure_ratio_mean": s_mu,
                     "structure_ratio_std": s_sd,
+                    "structure_ratio_ci95": self._ci95(structures),
                     "normalized_entropy_mean": e_mu,
                     "normalized_entropy_std": e_sd,
+                    "normalized_entropy_ci95": self._ci95(entropies),
                     "collision_ratio_mean": c_mu,
                     "collision_ratio_std": c_sd,
+                    "collision_ratio_ci95": self._ci95(collisions),
                 }
             )
         return {"rows": rows}
@@ -455,4 +657,12 @@ class KernelScaling(Experiment):
         pass
 
     def project(self) -> dict:
-        return self.projector.project(self.inference)
+        outputs = self.projector.project(self.inference)
+        rows = self._get_results_list()
+        provenance_path = ""
+        if rows:
+            provenance_path = str(rows[0].get("provenance_jsonl", ""))
+        return {"projectors": outputs, "provenance_jsonl": provenance_path}
+
+    def _get_results_list(self) -> list[dict[str, Any]]:
+        return list(self.inference.results)

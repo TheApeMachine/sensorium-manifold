@@ -32,6 +32,7 @@ class ManifoldRunConfig:
     velocity_scale: float = 0.0
     allow_analysis_fallback: bool = False
     analysis_mode_bins: int = 512
+    omega_num_modes: int | None = None
 
 
 def _collect_stream(
@@ -246,7 +247,14 @@ def run_stream_on_manifold(
     init_ms = float((time.perf_counter() - init_t0) * 1000.0)
 
     thermo = ThermodynamicsDomain(grid_size=cfg.grid_size)
-    wave = OmegaWaveDomain(grid_size=cfg.grid_size)
+    wave = OmegaWaveDomain(
+        grid_size=cfg.grid_size,
+        num_modes=(
+            int(cfg.omega_num_modes)
+            if isinstance(cfg.omega_num_modes, int) and cfg.omega_num_modes > 0
+            else None
+        ),
+    )
 
     sim_t0 = time.perf_counter()
     step_count = 0
@@ -278,5 +286,6 @@ def run_stream_on_manifold(
         "init_ms": float(init_ms),
         "simulate_ms": float(simulate_ms),
         "n_particles": int(n),
+        "omega_num_modes": int(wave.num_modes),
     }
     return state, meta

@@ -9,26 +9,35 @@
 \multicolumn{2}{l}{\textit{Experimental Conditions}} \\
 \quad Seeds & 7, 19, 43 \\
 \quad Particle sweep & 1000, 2000, 4000, 8000, 16000 \\
+\quad Mode-count sweep ($k$) & 64, 128, 256, 512 \\
 \quad Sequence sweep & 1000, 4000, 16000, 64000 \\
+\quad Backend counts & mps:81 \\
+\quad Provenance log & \texttt{/Users/theapemachine/go/src/github.com/theapemachine/thermo_manifold/paper/artifacts/kernelscaling_raw_provenance.jsonl} \\
 \midrule
 \multicolumn{2}{l}{\textit{$\omega$-Field Dynamics}} \\
-\quad Final active modes & 19.33 \\
-\quad Final crystallized modes & 1.00 \\
+\quad Final active modes & 19.67 \\
+\quad Final crystallized modes & 2.00 \\
 \quad Pruning rate & 0.964 \\
+\quad Pruning rate 95\% CI & $\pm$ 0.006 \\
 \midrule
 \multicolumn{2}{l}{\textit{Latency Scaling (fixed $k$, tested range)}} \\
-\quad Power-law exponent $\alpha$ in $t_\mathrm{step}(N)=aN^\alpha$ & 0.043 \\
-\quad 95\% CI for $\alpha$ & [0.016, 0.084] \\
-\quad Mean coefficient of variation (ms/step) & 3.9\% \\
+\quad Power-law exponent $\alpha$ in $t_\mathrm{step}(N)=aN^\alpha$ & 0.052 \\
+\quad 95\% CI for $\alpha$ & [-0.052, 0.177] \\
+\quad Mean coefficient of variation (ms/step) & 14.3\% \\
+\midrule
+\multicolumn{2}{l}{\textit{Mode-Count Scaling (fixed grid)}} \\
+\quad ms/step at $k=64$ & 31.433 $\pm$ 4.925 \\
+\quad ms/step at $k=512$ & 53.482 $\pm$ 12.669 \\
+\quad Power-law exponent $\beta$ in $t_\mathrm{step}(k)=bk^\beta$ & 0.319 \\
 \midrule
 \multicolumn{2}{l}{\textit{Interference at Scale}} \\
 \quad Efficiency at highest pattern count (32) & 12.5\% $\pm$ 0.0\% \\
-\quad Conflict score at highest pattern count & 0.732 $\pm$ 0.005 \\
+\quad Conflict score at highest pattern count & 0.735 $\pm$ 0.041 \\
 \midrule
 \multicolumn{2}{l}{\textit{Generalization}} \\
-\quad Repetitive structure ratio & 1.6\% $\pm$ 2.2\% \\
+\quad Repetitive structure ratio & 4.7\% $\pm$ 2.2\% \\
 \quad Semi Random structure ratio & 6.2\% $\pm$ 0.0\% \\
-\quad Natural Like structure ratio & 5.7\% $\pm$ 0.7\% \\
+\quad Natural Like structure ratio & 6.2\% $\pm$ 0.0\% \\
 \quad Pure Random structure ratio & 6.2\% $\pm$ 0.0\% \\
 \bottomrule
 \end{tabular}

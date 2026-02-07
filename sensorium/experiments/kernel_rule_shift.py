@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import time
 from pathlib import Path
+from typing import Any
 
 
 from sensorium.experiments.base import Experiment
@@ -57,8 +58,17 @@ class KernelRuleShift(Experiment):
         self.eval_every = 5
         self.grid_size = (64, 64, 64)
         self.dt = 0.01
-        self.seeds = (7, 19, 43)
+        self.seeds = tuple(self.experiment_seeds(default=(7, 19, 43)))
+        self.run_config = ManifoldRunConfig(
+            grid_size=self.grid_size,
+            max_steps=16,
+            min_steps=4,
+            allow_analysis_fallback=False,
+        )
         self.scenarios = self._build_scenarios()
+        self._run_rows: list[dict[str, Any]] = []
+        self._dashboard_tags: set[str] = set()
+        self._provenance_path: str = ""
 
         self.inference = InferenceObserver(
             [ParticleCount().observe, ModeCount().observe]
@@ -152,6 +162,9 @@ class KernelRuleShift(Experiment):
             f"[rule_shift] Starting scaled matrix: {len(self.scenarios)} scenarios x {len(self.seeds)} seeds"
         )
 
+        self._run_rows = []
+        self._dashboard_tags = set()
+        self._provenance_path = ""
         run_count = 0
         wall_times: list[float] = []
         n_particles_acc: list[int] = []
@@ -173,16 +186,42 @@ class KernelRuleShift(Experiment):
                 )
 
                 start_time = time.time()
-                state, meta = run_stream_on_manifold(
-                    dataset.generate(),
-                    config=ManifoldRunConfig(
-                        grid_size=self.grid_size,
-                        max_steps=16,
-                        min_steps=4,
-                    ),
+                scenario_tag = str(scenario["scenario"])
+                run_name = f"{self.experiment_name}_{scenario_tag}_s{int(seed)}"
+                record_dashboard = (
+                    bool(self.dashboard) and scenario_tag not in self._dashboard_tags
                 )
+                if record_dashboard:
+                    self.start_dashboard(grid_size=self.grid_size, run_name=run_name)
+                try:
+                    state, meta = run_stream_on_manifold(
+                        dataset.generate(),
+                        config=self.run_config,
+                        on_step=self.dashboard_update if record_dashboard else None,
+                    )
+                finally:
+                    if record_dashboard:
+                        self.close_dashboard()
+                        self._dashboard_tags.add(scenario_tag)
                 wall_time_ms = (time.time() - start_time) * 1000.0
                 wall_times.append(float(wall_time_ms))
+                self._run_rows.append(
+                    {
+                        "scenario": str(scenario["scenario"]),
+                        "domain": str(scenario["domain"]),
+                        "seed": int(seed),
+                        "run_name": run_name,
+                        "run_backend": str(meta.get("run_backend", "unknown")),
+                        "run_steps": int(meta.get("run_steps", 0)),
+                        "run_termination": str(meta.get("run_termination", "unknown")),
+                        "init_ms": float(meta.get("init_ms", 0.0)),
+                        "simulate_ms": float(meta.get("simulate_ms", 0.0)),
+                        "wall_time_ms": float(wall_time_ms),
+                        "n_phases": int(len(dataset.phases)),
+                        "total_reps": int(dataset.total_reps),
+                        "total_bytes": int(len(dataset.train_bytes)),
+                    }
+                )
 
                 token_ids = state.get("token_ids")
                 if token_ids is None:
@@ -214,9 +253,11 @@ class KernelRuleShift(Experiment):
                 self.inference.observe(
                     state,
                     manifold=None,
+                    run_name=run_name,
                     run_backend=str(meta.get("run_backend", "unknown")),
                     run_steps=int(meta.get("run_steps", 0)),
                     run_termination=str(meta.get("run_termination", "unknown")),
+                    init_ms=float(meta.get("init_ms", 0.0)),
                     simulate_ms=float(meta.get("simulate_ms", 0.0)),
                     scenario=str(scenario["scenario"]),
                     domain=str(scenario["domain"]),
@@ -234,6 +275,14 @@ class KernelRuleShift(Experiment):
                     **prediction,
                 )
 
+        self.assert_allowed_backends(self._run_rows, allowed=("mps",))
+        self._provenance_path = str(
+            self.write_provenance_jsonl(
+                self._run_rows, stem=f"{self.experiment_name}_raw"
+            )
+        )
+        for row in self.inference.results:
+            row["provenance_jsonl"] = self._provenance_path
         self.project()
 
         mean_particles = int(sum(n_particles_acc) / max(1, len(n_particles_acc)))
@@ -251,4 +300,5 @@ class KernelRuleShift(Experiment):
 
     def project(self) -> dict:
         """Project observation to artifacts."""
-        return self.projector.project(self.inference)
+        outputs = self.projector.project(self.inference)
+        return {"projectors": outputs, "provenance_jsonl": self._provenance_path}
