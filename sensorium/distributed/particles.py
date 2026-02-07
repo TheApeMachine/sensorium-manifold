@@ -5,6 +5,28 @@ from dataclasses import dataclass
 import torch
 
 from .runtime import Face, RankConfig
+from .triton_kernels import classify_migration_faces
+
+try:
+    from .metal_kernels import (
+        classify_migration_faces_metal,
+        metal_distributed_available,
+    )
+except Exception:
+
+    def metal_distributed_available() -> bool:
+        return False
+
+    def classify_migration_faces_metal(
+        positions: torch.Tensor,
+        *,
+        lo: tuple[float, float, float],
+        hi: tuple[float, float, float],
+    ) -> torch.Tensor:
+        del lo, hi
+        return torch.zeros(
+            (positions.shape[0],), device=positions.device, dtype=torch.int32
+        )
 
 
 PARTICLE_FIELDS: tuple[str, ...] = (
@@ -115,13 +137,25 @@ class ParticleMigrator:
         hi = (origin + local) * self.grid_spacing
 
         pos = batch.positions
+        if self.device.type == "mps" and metal_distributed_available():
+            codes = classify_migration_faces_metal(
+                pos,
+                lo=(float(lo[0]), float(lo[1]), float(lo[2])),
+                hi=(float(hi[0]), float(hi[1]), float(hi[2])),
+            )
+        else:
+            codes = classify_migration_faces(
+                pos,
+                lo=(float(lo[0]), float(lo[1]), float(lo[2])),
+                hi=(float(hi[0]), float(hi[1]), float(hi[2])),
+            )
         masks: dict[Face, torch.Tensor] = {
-            "x-": pos[:, 0] < lo[0],
-            "x+": pos[:, 0] >= hi[0],
-            "y-": pos[:, 1] < lo[1],
-            "y+": pos[:, 1] >= hi[1],
-            "z-": pos[:, 2] < lo[2],
-            "z+": pos[:, 2] >= hi[2],
+            "x-": codes == 1,
+            "x+": codes == 2,
+            "y-": codes == 3,
+            "y+": codes == 4,
+            "z-": codes == 5,
+            "z+": codes == 6,
         }
         outbound_any = torch.zeros(
             (batch.size(),), device=self.device, dtype=torch.bool

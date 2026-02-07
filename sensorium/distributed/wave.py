@@ -7,6 +7,7 @@ import torch
 
 from .particles import ParticleBatch
 from .runtime import Transport
+from .triton_kernels import accumulate_mode_shard
 
 
 @dataclass(frozen=True)
@@ -93,9 +94,14 @@ class ShardedWaveDomain:
         for packet in inbound:
             if not packet:
                 continue
-            local_idx = (packet["mode_idx"] - self.local_start).to(torch.int64)
-            self.accum_real.scatter_add_(0, local_idx, packet["real"])
-            self.accum_imag.scatter_add_(0, local_idx, packet["imag"])
+            accumulate_mode_shard(
+                packet["mode_idx"].to(torch.int64),
+                packet["real"],
+                packet["imag"],
+                local_start=self.local_start,
+                accum_real=self.accum_real,
+                accum_imag=self.accum_imag,
+            )
 
     def advance_wave(self, dt: float) -> None:
         dt_eff = min(float(dt), self.config.dt_max)

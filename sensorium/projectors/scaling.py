@@ -24,6 +24,24 @@ def _pm(mu: float, sd: float, *, percent: bool = False) -> str:
     return f"{mu:.3f} $\\pm$ {sd:.3f}"
 
 
+def _latex_escape_text(text: str) -> str:
+    out = str(text).replace("\\", "/")
+    replacements = (
+        ("&", r"\&"),
+        ("%", r"\%"),
+        ("$", r"\$"),
+        ("#", r"\#"),
+        ("_", r"\_"),
+        ("{", r"\{"),
+        ("}", r"\}"),
+        ("~", r"\textasciitilde{}"),
+        ("^", r"\textasciicircum{}"),
+    )
+    for src, dst in replacements:
+        out = out.replace(src, dst)
+    return out
+
+
 class ScalingTableProjector(BaseProjector):
     def __init__(self, output_dir: Path | None = None, name: str = "scaling_summary"):
         super().__init__(output_dir or Path("paper/tables"))
@@ -43,12 +61,7 @@ class ScalingTableProjector(BaseProjector):
         cond = row.get("conditions", {})
         backend_counts = row.get("backend_counts", {})
         provenance = str(row.get("provenance_jsonl", ""))
-        provenance_tex = (
-            provenance.replace("\\", "/")
-            .replace("_", r"\_")
-            .replace("&", r"\&")
-            .replace("%", r"\%")
-        )
+        provenance_tex = _latex_escape_text(provenance)
 
         self.ensure_output_dir()
         br = r"\\"

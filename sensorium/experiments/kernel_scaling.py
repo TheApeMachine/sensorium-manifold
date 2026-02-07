@@ -106,6 +106,7 @@ class KernelScaling(Experiment):
         sweep_value: float,
         omega_num_modes: int | None = None,
         dashboard_tag: str | None = None,
+        termination_policy: str = "either",
     ):
         history: dict[str, list[float]] = {
             "step": [],
@@ -190,6 +191,17 @@ class KernelScaling(Experiment):
             if record_dashboard:
                 self.close_dashboard()
                 self._dashboard_tags.add(dashboard_tag)
+        termination = str(meta.get("run_termination", ""))
+        if termination_policy == "quiet" and termination != "quiet":
+            raise RuntimeError(
+                f"[{test_name}] expected quiet termination but got '{termination}' "
+                f"(seed={seed}, grid={grid_size}, max_steps={max_steps})"
+            )
+        if termination_policy == "budget" and termination != "budget":
+            raise RuntimeError(
+                f"[{test_name}] expected fixed-budget termination but got '{termination}' "
+                f"(seed={seed}, grid={grid_size}, max_steps={max_steps})"
+            )
         self._run_rows.append(
             {
                 "scenario": str(test_name),
@@ -255,6 +267,7 @@ class KernelScaling(Experiment):
                 sweep_axis="seed",
                 sweep_value=float(seed),
                 dashboard_tag="population",
+                termination_policy="quiet",
             )
             histories.append(history)
             births = float(np.sum(history["n_births"]))
@@ -349,6 +362,7 @@ class KernelScaling(Experiment):
                     sweep_axis="n_patterns",
                     sweep_value=float(n_patterns),
                     dashboard_tag="interference",
+                    termination_policy="quiet",
                 )
                 cryst = float(
                     hist["n_crystallized"][-1] if hist["n_crystallized"] else 0.0
@@ -414,6 +428,7 @@ class KernelScaling(Experiment):
                     sweep_axis="n_particles",
                     sweep_value=float(n_particles),
                     dashboard_tag="compute_particles",
+                    termination_policy="budget",
                 )
                 steps = max(1.0, float(meta.get("run_steps", 0)))
                 vals.append(float(meta.get("simulate_ms", 0.0)) / steps)
@@ -447,6 +462,7 @@ class KernelScaling(Experiment):
                     sweep_axis="grid_cells",
                     sweep_value=float(grid_size[0] * grid_size[1] * grid_size[2]),
                     dashboard_tag="compute_grid",
+                    termination_policy="budget",
                 )
                 steps = max(1.0, float(meta.get("run_steps", 0)))
                 vals.append(float(meta.get("simulate_ms", 0.0)) / steps)
@@ -494,6 +510,7 @@ class KernelScaling(Experiment):
                     sweep_value=float(num_modes),
                     omega_num_modes=int(num_modes),
                     dashboard_tag="compute_modes",
+                    termination_policy="budget",
                 )
                 steps = max(1.0, float(meta.get("run_steps", 0)))
                 vals_ms.append(float(meta.get("simulate_ms", 0.0)) / steps)
@@ -545,6 +562,7 @@ class KernelScaling(Experiment):
                     sweep_axis="sequence_length",
                     sweep_value=float(seq_len),
                     dashboard_tag="latency",
+                    termination_policy="budget",
                 )
                 steps = max(1.0, float(meta.get("run_steps", 0)))
                 vals.append(float(meta.get("simulate_ms", 0.0)) / steps)
@@ -614,6 +632,7 @@ class KernelScaling(Experiment):
                     sweep_axis="generalization_type",
                     sweep_value=float(case_idx),
                     dashboard_tag="generalization",
+                    termination_policy="quiet",
                 )
                 cryst = float(
                     hist["n_crystallized"][-1] if hist["n_crystallized"] else 0.0

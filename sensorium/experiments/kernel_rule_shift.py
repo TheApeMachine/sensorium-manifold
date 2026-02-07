@@ -61,8 +61,8 @@ class KernelRuleShift(Experiment):
         self.seeds = tuple(self.experiment_seeds(default=(7, 19, 43)))
         self.run_config = ManifoldRunConfig(
             grid_size=self.grid_size,
-            max_steps=16,
-            min_steps=4,
+            max_steps=220,
+            min_steps=50,
             allow_analysis_fallback=False,
         )
         self.scenarios = self._build_scenarios()
@@ -203,6 +203,12 @@ class KernelRuleShift(Experiment):
                     if record_dashboard:
                         self.close_dashboard()
                         self._dashboard_tags.add(scenario_tag)
+                termination = str(meta.get("run_termination", ""))
+                if termination != "quiet":
+                    raise RuntimeError(
+                        f"[rule_shift] expected quiet termination but got '{termination}' "
+                        f"(scenario={scenario_tag}, seed={seed}, max_steps={self.run_config.max_steps})"
+                    )
                 wall_time_ms = (time.time() - start_time) * 1000.0
                 wall_times.append(float(wall_time_ms))
                 self._run_rows.append(

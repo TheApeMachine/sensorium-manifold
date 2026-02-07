@@ -8,7 +8,14 @@ from __future__ import annotations
 import argparse
 import os
 
-_EXPERIMENT_NAMES = ["ablation", "collision", "wave_trie", "rule_shift", "scaling"]
+_EXPERIMENT_NAMES = [
+    "ablation",
+    "collision",
+    "wave_trie",
+    "rule_shift",
+    "scaling",
+    "cross_modal",
+]
 
 
 def _set_interactive_matplotlib_backend() -> None:
@@ -42,6 +49,7 @@ def _resolve_experiments():
         WaveTrieExperiment,
         KernelRuleShift,
         KernelScaling,
+        KernelCrossModal,
     )
 
     experiments = {
@@ -50,6 +58,7 @@ def _resolve_experiments():
         "wave_trie": WaveTrieExperiment,
         "rule_shift": KernelRuleShift,
         "scaling": KernelScaling,
+        "cross_modal": KernelCrossModal,
     }
 
     all_experiments = [
@@ -58,6 +67,7 @@ def _resolve_experiments():
         WaveTrieExperiment,
         KernelRuleShift,
         KernelScaling,
+        KernelCrossModal,
     ]
     return experiments, all_experiments
 

@@ -15,6 +15,7 @@ __all__ = [
     "WaveTrieExperiment",
     "KernelRuleShift",
     "KernelScaling",
+    "KernelCrossModal",
 ]
 
 _CLASS_TO_MODULE = {
@@ -23,6 +24,7 @@ _CLASS_TO_MODULE = {
     "WaveTrieExperiment": ".wave_trie",
     "KernelRuleShift": ".kernel_rule_shift",
     "KernelScaling": ".kernel_scaling",
+    "KernelCrossModal": ".kernel_cross_modal",
 }
 
 

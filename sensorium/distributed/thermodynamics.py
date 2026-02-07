@@ -6,6 +6,42 @@ import math
 import torch
 
 from .runtime import FACES, Face, RankConfig, TickPhase, Transport
+from .triton_kernels import jacobi_step_halo, pack_halo_face
+
+try:
+    from .metal_kernels import (
+        jacobi_step_halo_metal,
+        metal_distributed_available,
+        pack_halo_face_scalar_metal,
+    )
+except Exception:
+
+    def metal_distributed_available() -> bool:
+        return False
+
+    def pack_halo_face_scalar_metal(
+        field: torch.Tensor, *, face: Face, halo: int
+    ) -> torch.Tensor:
+        del face, halo
+        return field
+
+    def jacobi_step_halo_metal(
+        phi: torch.Tensor,
+        rhs: torch.Tensor,
+        *,
+        halo_xm: torch.Tensor,
+        halo_xp: torch.Tensor,
+        halo_ym: torch.Tensor,
+        halo_yp: torch.Tensor,
+        halo_zm: torch.Tensor,
+        halo_zp: torch.Tensor,
+        dx: float,
+        out: torch.Tensor | None = None,
+    ) -> torch.Tensor:
+        del halo_xm, halo_xp, halo_ym, halo_yp, halo_zm, halo_zp, dx
+        out_t = out if out is not None else phi.clone()
+        out_t.copy_(rhs)
+        return out_t
 
 
 @dataclass(frozen=True)
@@ -94,6 +130,23 @@ class DistributedThermodynamicsDomain:
 
     def _pack_faces(self, tensor: torch.Tensor) -> dict[Face, torch.Tensor]:
         h = self.rank_config.halo_thickness
+        if self.device.type == "mps" and metal_distributed_available():
+            if tensor.ndim == 3:
+                return {
+                    face: pack_halo_face_scalar_metal(tensor, face=face, halo=h)
+                    for face in FACES
+                }
+            if tensor.ndim == 4 and int(tensor.shape[-1]) == 3:
+                faces: dict[Face, torch.Tensor] = {}
+                for face in FACES:
+                    chans = [
+                        pack_halo_face_scalar_metal(tensor[..., c], face=face, halo=h)
+                        for c in range(3)
+                    ]
+                    faces[face] = torch.stack(chans, dim=-1)
+                return faces
+        if self.device.type == "cuda":
+            return {face: pack_halo_face(tensor, face=face, halo=h) for face in FACES}
         return {
             "x-": tensor[:h, ...].contiguous(),
             "x+": tensor[-h:, ...].contiguous(),
@@ -215,16 +268,42 @@ class DistributedThermodynamicsDomain:
         h2 = self.config.grid_spacing * self.config.grid_spacing
         for it in range(self.config.gravity_jacobi_iters):
             self._exchange_scalar_halos("phi", phi, "gravity_halo", tick * 10000 + it)
-            ext = self._extended_scalar(phi, self._halo_scalar["phi"])
-            phi = (
-                ext[2:, 1:-1, 1:-1]
-                + ext[:-2, 1:-1, 1:-1]
-                + ext[1:-1, 2:, 1:-1]
-                + ext[1:-1, :-2, 1:-1]
-                + ext[1:-1, 1:-1, 2:]
-                + ext[1:-1, 1:-1, :-2]
-                - h2 * rhs
-            ) / 6.0
+            halos = self._halo_scalar["phi"]
+            if self.device.type == "cuda":
+                phi = jacobi_step_halo(
+                    phi,
+                    rhs,
+                    halo_xm=halos["x-"],
+                    halo_xp=halos["x+"],
+                    halo_ym=halos["y-"],
+                    halo_yp=halos["y+"],
+                    halo_zm=halos["z-"],
+                    halo_zp=halos["z+"],
+                    dx=self.config.grid_spacing,
+                )
+            elif self.device.type == "mps" and metal_distributed_available():
+                phi = jacobi_step_halo_metal(
+                    phi,
+                    rhs,
+                    halo_xm=halos["x-"],
+                    halo_xp=halos["x+"],
+                    halo_ym=halos["y-"],
+                    halo_yp=halos["y+"],
+                    halo_zm=halos["z-"],
+                    halo_zp=halos["z+"],
+                    dx=self.config.grid_spacing,
+                )
+            else:
+                ext = self._extended_scalar(phi, halos)
+                phi = (
+                    ext[2:, 1:-1, 1:-1]
+                    + ext[:-2, 1:-1, 1:-1]
+                    + ext[1:-1, 2:, 1:-1]
+                    + ext[1:-1, :-2, 1:-1]
+                    + ext[1:-1, 1:-1, 2:]
+                    + ext[1:-1, 1:-1, :-2]
+                    - h2 * rhs
+                ) / 6.0
         self.gravity_potential.copy_(phi)
 
     def advance_grid_interior(self, dt: float) -> None:
