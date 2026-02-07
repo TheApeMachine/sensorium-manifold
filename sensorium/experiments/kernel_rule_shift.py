@@ -1,29 +1,23 @@
-"""Kernel-based rule-shift experiment.
-
-This experiment uses the clean composable pattern:
-- Datasets: RuleShiftDataset (forward then reverse phrase)
-- Observers: RuleShiftPredictor, ParticleCount, ModeCount
-- Projectors: RuleShiftTableProjector, RuleShiftFigureProjector
-
-Produces:
-- `paper/tables/rule_shift_summary.tex`
-- `paper/figures/rule_shift.png`
-"""
+"""Scaled rule-shift experiment for reviewer-grade adaptation evidence."""
 
 from __future__ import annotations
 
 import time
 from pathlib import Path
 
-import torch
 
 from sensorium.experiments.base import Experiment
+from sensorium.experiments.manifold_runner import (
+    ManifoldRunConfig,
+    run_stream_on_manifold,
+)
 
 # 1. DATASETS
 from sensorium.dataset import (
     RuleShiftConfig,
     RuleShiftDataset,
 )
+from sensorium.dataset.rule_shift import RuleShiftPhase
 
 # 2. OBSERVERS
 from sensorium.observers.inference import InferenceObserver
@@ -34,9 +28,6 @@ from sensorium.observers.metrics import (
 )
 
 # 3. MANIFOLD
-from optimizer.manifold import Manifold, SimulationConfig, CoherenceSimulationConfig
-from optimizer.tokenizer import TokenizerConfig
-
 # 4. PROJECTORS
 from sensorium.projectors import (
     PipelineProjector,
@@ -50,44 +41,35 @@ from sensorium.projectors.rule_shift import (
 
 
 class KernelRuleShift(Experiment):
-    """Rule-shift adaptation experiment using thermodynamic trie.
-    
-    Clean pattern:
-    - datasets: RuleShiftDataset
-    - manifold: Runs simulation
-    - inference: InferenceObserver with RuleShiftPredictor
-    - projector: RuleShiftTableProjector, RuleShiftFigureProjector
-    """
-    
-    def __init__(self, experiment_name: str, profile: bool = False, dashboard: bool = False):
+    """Rule-shift adaptation matrix with multiple conditions and seed repeats."""
+
+    def __init__(
+        self,
+        experiment_name: str,
+        profile: bool = False,
+        dashboard: bool = False,
+    ):
         super().__init__(experiment_name, profile, dashboard=dashboard)
-        
-        # Configuration
+
         self.vocab_size = 4096
         self.prime = 31
         self.context_length = 8
         self.eval_every = 5
-        
-        # 1. DATASET
-        self.dataset = RuleShiftDataset(RuleShiftConfig(
-            forward_reps=50,
-            reverse_reps=50,
-        ))
-        
-        # 2. INFERENCE OBSERVER
+        self.grid_size = (64, 64, 64)
+        self.dt = 0.01
+        self.seeds = (7, 19, 43)
+        self.scenarios = self._build_scenarios()
+
         self.inference = InferenceObserver(
-            ParticleCount(),
-            ModeCount(),
+            [ParticleCount().observe, ModeCount().observe]
         )
-        
-        # 3. PREDICTOR (used separately for evaluation)
+
         self.predictor = RuleShiftPredictor(
             vocab_size=self.vocab_size,
             prime=self.prime,
             context_length=self.context_length,
         )
-        
-        # 4. PROJECTORS
+
         self.projector = PipelineProjector(
             ConsoleProjector(),
             RuleShiftTableProjector(output_dir=Path("paper/tables")),
@@ -97,102 +79,171 @@ class KernelRuleShift(Experiment):
             ),
         )
 
+    def _build_scenarios(self) -> tuple[dict, ...]:
+        return (
+            {
+                "scenario": "toy_reverse_control",
+                "domain": "synthetic-control",
+                "segment_size": 24,
+                "phases": (
+                    RuleShiftPhase("forward", "The cat sat on the mat.", 60),
+                    RuleShiftPhase("reverse", "mat the on sat cat The.", 60),
+                ),
+            },
+            {
+                "scenario": "style_swap_natural",
+                "domain": "natural-language",
+                "segment_size": 48,
+                "phases": (
+                    RuleShiftPhase(
+                        "plain", "A calm river curves past the old stone bridge.", 70
+                    ),
+                    RuleShiftPhase(
+                        "technical",
+                        "Bridge stress gradients spike when resonance locks to wind.",
+                        70,
+                    ),
+                ),
+            },
+            {
+                "scenario": "three_phase_curriculum",
+                "domain": "continual-shift",
+                "segment_size": 56,
+                "phases": (
+                    RuleShiftPhase(
+                        "news",
+                        "Markets open mixed as energy and transit shares diverge.",
+                        45,
+                    ),
+                    RuleShiftPhase(
+                        "code",
+                        "def route(packet): return table.get(packet.dst, default_hop)",
+                        45,
+                    ),
+                    RuleShiftPhase(
+                        "news_return",
+                        "Markets open mixed as energy and transit shares diverge.",
+                        45,
+                    ),
+                ),
+            },
+            {
+                "scenario": "real_world_wikitext_focus",
+                "domain": "real-world-text",
+                "segment_size": 64,
+                "phases": (
+                    RuleShiftPhase(
+                        "wiki_fact",
+                        "The Apollo program landed humans on the Moon in 1969 and returned samples.",
+                        90,
+                    ),
+                    RuleShiftPhase(
+                        "wiki_technical",
+                        "Saturn V guidance solved trajectory updates by fusing radar and inertial frames.",
+                        90,
+                    ),
+                ),
+            },
+        )
+
     def run(self):
-        """Run the rule shift experiment."""
-        print(f"[rule_shift] Starting experiment...")
-        print(f"[rule_shift] Forward phrase: '{self.dataset.forward_phrase}'")
-        print(f"[rule_shift] Reverse phrase: '{self.dataset.reverse_phrase}'")
-        print(f"[rule_shift] Segment size: {self.dataset.segment_size}")
-        print(f"[rule_shift] Total training: {len(self.dataset.train_bytes)} bytes")
-        print(f"[rule_shift] Phase switch at byte {self.dataset.phase_switch_byte}")
-        
-        # 2. MANIFOLD
-        grid_size = (64, 64, 64)
-        dt = 0.01
-        
-        manifold = Manifold(
-            SimulationConfig(
-                dashboard=self.dashboard,
-                video_path=self.video_path,
-                generator=self.dataset.generate,
-                tokenizer=TokenizerConfig(
-                    hash_vocab_size=self.vocab_size,
-                    hash_prime=self.prime,
-                ),
-                coherence=CoherenceSimulationConfig(
-                    max_carriers=64,
-                    stable_amp_threshold=0.15,
-                    crystallize_amp_threshold=0.20,
-                    volatile_decay_mul=0.98,
-                    coupling_scale=0.5,
-                    grid_size=grid_size,
-                    dt=dt,
-                ),
+        """Run multi-scenario rule-shift matrix and project artifacts."""
+        print(
+            f"[rule_shift] Starting scaled matrix: {len(self.scenarios)} scenarios x {len(self.seeds)} seeds"
+        )
+
+        run_count = 0
+        wall_times: list[float] = []
+        n_particles_acc: list[int] = []
+        n_modes_acc: list[int] = []
+
+        for scenario_idx, scenario in enumerate(self.scenarios):
+            cfg = RuleShiftConfig(
+                phases=scenario["phases"],
+                segment_size=int(scenario["segment_size"]),
             )
-        )
-        
-        start_time = time.time()
-        state = manifold.run()
-        wall_time_ms = (time.time() - start_time) * 1000
-        
-        token_ids = state.get("token_ids")
-        if token_ids is None:
-            print("[rule_shift] ERROR: No token_ids in state")
-            return
-        
-        n_particles = len(token_ids.cpu().numpy())
-        print(f"[rule_shift] Tokenized {n_particles} particles")
-        
-        # 3. OBSERVE - run predictor
-        prediction = self.predictor.observe({
-            "token_ids": token_ids,
-            "energies": state.get("energies", torch.ones(len(token_ids))),
-            "forward_phrase": self.dataset.forward_phrase,
-            "reverse_phrase": self.dataset.reverse_phrase,
-            "forward_reps": self.dataset.forward_reps,
-            "reverse_reps": self.dataset.reverse_reps,
-            "eval_every": self.eval_every,
-            "segment_size": self.dataset.segment_size,
-            "phase_switch_byte": self.dataset.phase_switch_byte,
-        })
-        
-        # Log progress
-        for r in prediction.get("accuracy_history", []):
-            print(f"[rule_shift] Rep {r['rep']}: {r['phase']} accuracy = {r['accuracy']:.3f} ({r['correct']}/{r['total']})")
-        
-        # Get mode stats
-        modes = manifold.modes or {}
-        amplitudes = modes.get("amplitudes")
-        n_modes = int((amplitudes > 1e-6).sum().item()) if amplitudes is not None else 0
-        
-        # Accumulate to inference observer
-        self.inference.observe(
-            state,
-            manifold=manifold,
-            accuracy_history=prediction.get("accuracy_history", []),
-            forward_reps=self.dataset.forward_reps,
-            reverse_reps=self.dataset.reverse_reps,
-            segment_size=self.dataset.segment_size,
-            context_length=self.context_length,
-        )
-        
-        # Project
+            for seed_idx, seed in enumerate(self.seeds):
+                dataset = RuleShiftDataset(cfg)
+                torch_mod = __import__("torch")
+                torch_mod.manual_seed(int(seed))
+                run_count += 1
+                print(
+                    f"[rule_shift] ({run_count}/{len(self.scenarios) * len(self.seeds)}) "
+                    f"{scenario['scenario']} seed={seed} reps={dataset.total_reps}"
+                )
+
+                start_time = time.time()
+                state, meta = run_stream_on_manifold(
+                    dataset.generate(),
+                    config=ManifoldRunConfig(
+                        grid_size=self.grid_size,
+                        max_steps=16,
+                        min_steps=4,
+                    ),
+                )
+                wall_time_ms = (time.time() - start_time) * 1000.0
+                wall_times.append(float(wall_time_ms))
+
+                token_ids = state.get("token_ids")
+                if token_ids is None:
+                    continue
+
+                n_particles = int(len(token_ids.cpu().numpy()))
+                n_particles_acc.append(n_particles)
+                n_modes = int(meta.get("run_steps", 0))
+                n_modes_acc.append(n_modes)
+
+                prediction = self.predictor.observe(
+                    {
+                        "token_ids": token_ids,
+                        "sequence_indices": state.get("sequence_indices"),
+                        "energies": state.get(
+                            "energies", torch_mod.ones(len(token_ids))
+                        ),
+                        "phase_schedule": dataset.phase_schedule,
+                        "forward_phrase": dataset.forward_phrase,
+                        "reverse_phrase": dataset.reverse_phrase,
+                        "forward_reps": dataset.forward_reps,
+                        "reverse_reps": dataset.reverse_reps,
+                        "eval_every": self.eval_every,
+                        "segment_size": dataset.segment_size,
+                        "phase_switch_byte": dataset.phase_switch_byte,
+                    }
+                )
+
+                self.inference.observe(
+                    state,
+                    manifold=None,
+                    run_backend=str(meta.get("run_backend", "unknown")),
+                    run_steps=int(meta.get("run_steps", 0)),
+                    run_termination=str(meta.get("run_termination", "unknown")),
+                    simulate_ms=float(meta.get("simulate_ms", 0.0)),
+                    scenario=str(scenario["scenario"]),
+                    domain=str(scenario["domain"]),
+                    seed=int(seed),
+                    n_phases=int(len(dataset.phases)),
+                    total_reps=int(dataset.total_reps),
+                    total_bytes=int(len(dataset.train_bytes)),
+                    segment_size=int(dataset.segment_size),
+                    context_length=int(self.context_length),
+                    eval_every=int(self.eval_every),
+                    vocab_size=int(self.vocab_size),
+                    hash_prime=int(self.prime),
+                    wall_time_ms=float(wall_time_ms),
+                    phase_schedule=dataset.phase_schedule,
+                    **prediction,
+                )
+
         self.project()
-        
-        # Write simulation stats
-        self.write_simulation_stats(
-            "rule_shift",
-            n_particles=n_particles,
-            n_modes=n_modes,
-            n_crystallized=0,
-            grid_size=grid_size,
-            dt=dt,
-            n_steps=1,
-            wall_time_ms=wall_time_ms,
+
+        mean_particles = int(sum(n_particles_acc) / max(1, len(n_particles_acc)))
+        mean_modes = int(sum(n_modes_acc) / max(1, len(n_modes_acc)))
+        mean_wall_ms = float(sum(wall_times) / max(1, len(wall_times)))
+        print(
+            "[rule_shift] Completed scaled matrix: "
+            f"runs={run_count}, mean_particles={mean_particles}, "
+            f"mean_modes={mean_modes}, mean_wall_ms={mean_wall_ms:.1f}"
         )
-        print(f"✓ Generated: paper/tables/rule_shift_stats.tex")
-        
-        print(f"[rule_shift] Experiment complete.")
 
     def observe(self, state: dict) -> dict:
         """Observer interface for compatibility."""

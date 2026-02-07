@@ -1,9 +1,8 @@
-"""Crystal Content panel -- decoded bytes + compact metrics (dark theme)."""
+"""Crystal Content panel -- decoded bytes + compact metrics."""
 
 from __future__ import annotations
 
 import numpy as np
-
 
 _VOCAB_SIZE = 2 ** 16
 _PRIME = 1315423911
@@ -36,11 +35,10 @@ class CrystalContentPlot:
     def __init__(self, ax) -> None:
         self.ax = ax
         ax.axis("off")
-        ax.set_facecolor("#0e0e1a")
 
         self._title = ax.text(
             0.01, 0.96, "Crystals", fontsize=9, fontweight="bold",
-            color="#f39c12", va="top", ha="left",
+            va="top", ha="left",
             transform=ax.transAxes, fontfamily="monospace",
         )
 
@@ -48,7 +46,7 @@ class CrystalContentPlot:
         for i in range(_MAX_CRYSTAL_LINES):
             y = 0.88 - i * 0.072
             txt = ax.text(
-                0.02, y, "", fontsize=6.5, color="#ddd",
+                0.02, y, "", fontsize=6.5,
                 va="top", ha="left", transform=ax.transAxes,
                 fontfamily="monospace",
             )
@@ -57,7 +55,7 @@ class CrystalContentPlot:
         sep_y = 0.88 - _MAX_CRYSTAL_LINES * 0.072 - 0.005
         self._sep = ax.text(
             0.01, sep_y, "",
-            fontsize=5, color="#555", va="top", ha="left",
+            fontsize=5, va="top", ha="left",
             transform=ax.transAxes, fontfamily="monospace",
         )
 
@@ -66,13 +64,14 @@ class CrystalContentPlot:
         for i in range(_MAX_METRIC_LINES):
             y = y_start - i * 0.05
             txt = ax.text(
-                0.02, y, "", fontsize=6.5, color="#aaa",
+                0.02, y, "", fontsize=6.5,
                 va="top", ha="left", transform=ax.transAxes,
                 fontfamily="monospace",
             )
             self._metric_texts.append(txt)
+        self._frame: dict | None = None
 
-    def update(self, state: dict) -> None:
+    def ingest(self, state: dict) -> None:
         def get(key, default=None):
             v = state.get(key, default)
             if v is not None and hasattr(v, "detach"):
@@ -146,12 +145,8 @@ class CrystalContentPlot:
                 )
 
         n_crystals = len(crystal_lines)
-        self._title.set_text(f"Crystallized Modes ({n_crystals})" if n_crystals else "Crystallized Modes (none yet)")
-
-        for i, txt in enumerate(self._crystal_texts):
-            txt.set_text(crystal_lines[i] if i < len(crystal_lines) else "")
-
-        self._sep.set_text("- " * 40 if n_crystals else "")
+        title = f"Crystallized Modes ({n_crystals})" if n_crystals else "Crystallized Modes (none yet)"
+        sep = "- " * 40 if n_crystals else ""
 
         # Metrics
         step = get_scalar("step", 0)
@@ -186,5 +181,25 @@ class CrystalContentPlot:
             f"R={kuramoto_R:.3f}  |  {n_modes-n_stable-n_crystal_m}n {n_stable}s {n_crystal_m}c",
         ]
 
+        self._frame = {
+            "title": title,
+            "crystal_lines": crystal_lines[:_MAX_CRYSTAL_LINES],
+            "sep": sep,
+            "metric_lines": metric_lines[:_MAX_METRIC_LINES],
+        }
+
+    def render(self) -> None:
+        frame = self._frame
+        if frame is None:
+            return
+
+        self._title.set_text(frame["title"])
+        for i, txt in enumerate(self._crystal_texts):
+            txt.set_text(frame["crystal_lines"][i] if i < len(frame["crystal_lines"]) else "")
+        self._sep.set_text(frame["sep"])
         for i, txt in enumerate(self._metric_texts):
-            txt.set_text(metric_lines[i] if i < len(metric_lines) else "")
+            txt.set_text(frame["metric_lines"][i] if i < len(frame["metric_lines"]) else "")
+
+    def update(self, state: dict) -> None:
+        self.ingest(state)
+        self.render()

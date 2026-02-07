@@ -8,7 +8,7 @@ from __future__ import annotations
 import argparse
 import os
 
-_EXPERIMENT_NAMES = ["ablation", "collision", "wave_trie"]
+_EXPERIMENT_NAMES = ["ablation", "collision", "wave_trie", "rule_shift", "scaling"]
 
 
 def _set_interactive_matplotlib_backend() -> None:
@@ -36,18 +36,28 @@ def _set_interactive_matplotlib_backend() -> None:
 
 def _resolve_experiments():
     # Import lazily so we can set the matplotlib backend first.
-    from . import AblationsExperiment, CollisionExperiment, WaveTrieExperiment
+    from . import (
+        AblationsExperiment,
+        CollisionExperiment,
+        WaveTrieExperiment,
+        KernelRuleShift,
+        KernelScaling,
+    )
 
     experiments = {
         "ablation": AblationsExperiment,
         "collision": CollisionExperiment,
         "wave_trie": WaveTrieExperiment,
+        "rule_shift": KernelRuleShift,
+        "scaling": KernelScaling,
     }
 
     all_experiments = [
         AblationsExperiment,
         CollisionExperiment,
         WaveTrieExperiment,
+        KernelRuleShift,
+        KernelScaling,
     ]
     return experiments, all_experiments
 

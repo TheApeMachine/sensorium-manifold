@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any
 
-import numpy as np
 import matplotlib.pyplot as plt
+import numpy as np
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 
 
@@ -36,42 +36,35 @@ class ThreeD:
         "_phase_cmap",
         "_color_mode",
         "_last_color_mode",
+        "_surface_stride",
+        "_surface_counter",
+        "_last_surface_label",
+        "_frame",
+        "_surface_state",
     )
 
     def __init__(self, grid_size: tuple[int, int, int], ax: Any) -> None:
         self.grid_size = gx, gy, gz = tuple(int(x) for x in grid_size)
         self.ax: Any = ax
 
-        # Axis styling -- dark theme
-        ax.set_facecolor("#0e0e1a")
-        for pane in (ax.xaxis.pane, ax.yaxis.pane, ax.zaxis.pane):
-            pane.set_facecolor("#141424")
-            pane.set_alpha(0.6)
-        for axis in (ax.xaxis, ax.yaxis, ax.zaxis):
-            axis.label.set_color("#aaa")
-            axis._axinfo["tick"]["color"] = "#666"
-            axis._axinfo["grid"]["color"] = "#333"
         ax.set(
             xlim=(0, gx), ylim=(0, gy), zlim=(0, gz), xlabel="X", ylabel="Y", zlabel="Z"
         )
-        ax.tick_params(labelsize=5, colors="#aaa", pad=0)
+        ax.tick_params(labelsize=5, pad=0)
 
         # Particle artist (Path3DCollection) so we can color by heat/coupling.
         self._particles = ax.scatter(
             [],
             [],
             [],
-            s=18,
-            c=[],
-            cmap="inferno",
             alpha=0.80,
-            edgecolors="#333",
-            linewidths=0.2,
+            edgecolors="none",
+            linewidths=0.0,
             depthshade=True,
         )
 
         # Field surface (lazy init)
-        self._field_surface: Optional[Poly3DCollection] = None
+        self._field_surface: Poly3DCollection | None = None
         self._field_z0 = 0.08 * gz
         self._field_height_scale = 0.18 * min(gx, gy, gz)
         self._field_X, self._field_Y = np.meshgrid(
@@ -83,24 +76,42 @@ class ThreeD:
 
         self._color_mode = "temperature"  # auto-selected each frame
         self._last_color_mode = "temperature"
+        # Updating the 3D surface is expensive; update it every N dashboard frames.
+        self._surface_stride = 3
+        self._surface_counter = 0
+        self._last_surface_label = ""
+        self._frame: dict | None = None
+        self._surface_state: dict | None = None
 
-    def update(self, state: dict) -> list[object]:
-        """Render simulation state (visualization-only light computations).
-
-        Auto-selects the most informative color mode based on available data:
-        - Phase mode: when particle_phase is available (shows oscillator dynamics)
-        - Temperature mode: when heats/c_v available (shows thermodynamics)
-        - Fallback: neutral coloring
-        """
+    def ingest(self, state: dict) -> None:
+        """Prepare particle render data from simulation state."""
         ax: Any = self.ax
         if ax is None:
-            return []
+            self._frame = {"skip": True}
+            return
+
+        self._surface_state = state
 
         # Get positions - the only required field
         positions = state.get("positions")
         if positions is None:
-            self._particles.set_data_3d([], [], [])
-            return [self._particles]
+            self._frame = {
+                "skip": False,
+                "n": 0,
+                "offsets": (
+                    np.array([], dtype=np.float32),
+                    np.array([], dtype=np.float32),
+                    np.array([], dtype=np.float32),
+                ),
+                "colors": np.array([], dtype=np.float32),
+                "sizes": np.array([], dtype=np.float32),
+                "cmap": self._particle_cmap,
+                "title": "Step 0 | 0p",
+                "color_label": "",
+                "size_label": "",
+                "color_uniform": False,
+            }
+            return
 
         # Convert to numpy if needed
         pos = (
@@ -111,167 +122,264 @@ class ThreeD:
         n = int(len(pos))
 
         if n == 0:
-            # Clear scatter
-            self._particles._offsets3d = ([], [], [])
-            self._particles.set_array(np.array([], dtype=np.float32))
+            offsets = (
+                np.array([], dtype=np.float32),
+                np.array([], dtype=np.float32),
+                np.array([], dtype=np.float32),
+            )
         else:
-            # The simulation evolves positions in *physical* coordinates with a domain length
-            # L_d = grid_d * dx, where dx = 1/max(grid_dims). The dashboard axes are in
-            # grid-index coordinates [0, grid_d). If we plot physical coords directly,
-            # particles appear bunched in a corner. Detect and rescale when needed.
             gx, gy, gz = self.grid_size
             dx = 1.0 / float(max(gx, gy, gz))
             domain = np.array([gx * dx, gy * dx, gz * dx], dtype=np.float64)
-            # Heuristic: if positions live within the physical domain, scale to index space.
             pos_max = float(np.nanmax(pos)) if pos.size else 0.0
             dom_max = float(np.max(domain))
-            if dom_max > 0.0 and pos_max <= (1.01 * dom_max):
-                pos_phys = pos
-                pos_plot = pos / dx
-            else:
-                pos_phys = pos * dx
-                pos_plot = pos
-
-            # ----------------------------------------------------------------
-            # Determine best color mode based on available data
-            # Priority: phase (ω-wave dynamics) > temperature > fallback
-            # ----------------------------------------------------------------
-            particle_phase = state.get("phase")
-            particle_energy = state.get("energy_osc")
-            heat = state.get("heats", None)
-            masses = state.get("masses", None)
-            c_v = state.get("c_v", None)
-
-            # Convert tensors to numpy
-            def to_np(x):
-                if x is None:
-                    return None
-                if hasattr(x, "detach"):
-                    return x.detach().cpu().numpy()
-                return np.asarray(x)
-
-            particle_phase = to_np(particle_phase)
-            particle_energy = to_np(particle_energy)
-            heat = to_np(heat)
-            masses = to_np(masses)
-
-            if c_v is not None and hasattr(c_v, "item"):
-                c_v = float(c_v.item())
-            try:
-                c_vf = float(c_v) if c_v is not None else None
-            except Exception:
-                c_vf = None
-
-            col = None
-            color_label = "neutral"
-            color_uniform = False
-            use_cyclic_cmap = False
-
-            # Try phase mode first (OmegaWave dynamics)
-            if particle_phase is not None and particle_phase.size == n:
-                # Phase is cyclic [-π, π], normalize to [0, 1] for colormap
-                phase = particle_phase.astype(np.float64)
-                phase = np.nan_to_num(phase, nan=0.0, posinf=0.0, neginf=0.0)
-                # Normalize phase to [0, 1] (cyclic)
-                col = (phase + np.pi) / (2 * np.pi)
-                col = np.clip(col, 0.0, 1.0).astype(np.float32)
-                color_label = "phase θ"
-                use_cyclic_cmap = True
-                self._color_mode = "phase"
-
-            # Fall back to temperature mode
-            elif (
-                heat is not None
-                and heat.size == n
-                and masses is not None
-                and masses.size == n
-                and (c_vf is not None and c_vf > 0.0)
-            ):
-                denom = masses.astype(np.float64) * float(c_vf)
-                with np.errstate(divide="ignore", invalid="ignore"):
-                    T = np.where(denom > 0, heat.astype(np.float64) / denom, 0.0)
-                col = T
-                color_label = "T(Q/(mc_v))"
-                self._color_mode = "temperature"
-
-            elif heat is not None and heat.size == n:
-                col = heat.astype(np.float64)
-                color_label = "heat Q"
-                self._color_mode = "heat"
-
-            if col is None:
-                col = np.zeros((n,), dtype=np.float64)
-                color_label = "neutral"
-                self._color_mode = "neutral"
-
-            # Normalize for non-cyclic colormaps
-            if not use_cyclic_cmap:
-                col = np.nan_to_num(col, nan=0.0, posinf=0.0, neginf=0.0)
-                col_range = float(np.max(col) - np.min(col)) if col.size else 0.0
-                if col_range <= 1e-12:
-                    col = np.full((n,), 0.55, dtype=np.float32)
-                    color_uniform = True
-                else:
-                    p10 = float(np.percentile(col, 10)) if col.size else 0.0
-                    p90 = float(np.percentile(col, 90)) if col.size else 1.0
-                    if not (p90 > p10):
-                        p10, p90 = float(np.min(col)), float(np.max(col))
-                    den = (p90 - p10) if (p90 > p10) else 1.0
-                    col = (col - p10) / den
-                    col = np.clip(col, 0.0, 1.0).astype(np.float32)
-
-            # ----------------------------------------------------------------
-            # Marker size: prefer oscillator amplitude (√E_osc), fall back to speed
-            # ----------------------------------------------------------------
-            size_label = "|v|"
-            if particle_energy is not None and particle_energy.size == n:
-                # Size by oscillator amplitude A = √E
-                amp = np.sqrt(np.maximum(particle_energy.astype(np.float64), 0.0))
-                amp = np.nan_to_num(amp, nan=0.0, posinf=0.0, neginf=0.0)
-                if np.max(amp) > 0:
-                    amp_norm = amp / np.max(amp)
-                    sizes = 12.0 + 50.0 * amp_norm
-                    self._particles.set_sizes(sizes.astype(np.float32))
-                    size_label = "√E_osc"
-                else:
-                    self._particles.set_sizes(np.full((n,), 18.0, dtype=np.float32))
-            else:
-                vel_s = state.get("velocities", None)
-                if vel_s is not None:
-                    vel_s = (
-                        vel_s.detach().cpu().numpy()
-                        if hasattr(vel_s, "detach")
-                        else np.asarray(vel_s)
-                    )
-                    if vel_s.ndim == 2 and vel_s.shape[0] == n and vel_s.shape[1] == 3:
-                        sp = np.sqrt(np.sum(vel_s.astype(np.float64) ** 2, axis=1))
-                        sp = np.nan_to_num(sp, nan=0.0, posinf=0.0, neginf=0.0)
-                        s10 = float(np.percentile(sp, 10)) if sp.size else 0.0
-                        s90 = float(np.percentile(sp, 90)) if sp.size else 1.0
-                        if not (s90 > s10):
-                            s10, s90 = float(np.min(sp)), float(np.max(sp))
-                        den = (s90 - s10) if (s90 > s10) else 1.0
-                        spn = np.clip((sp - s10) / den, 0.0, 1.0).astype(np.float32)
-                        self._particles.set_sizes(10.0 + 40.0 * spn)
-                    else:
-                        self._particles.set_sizes(np.full((n,), 18.0, dtype=np.float32))
-                else:
-                    self._particles.set_sizes(np.full((n,), 18.0, dtype=np.float32))
-
-            self._particles._offsets3d = (
-                pos_plot[:, 0],
-                pos_plot[:, 1],
-                pos_plot[:, 2],
+            pos_plot = (
+                pos / dx if dom_max > 0.0 and pos_max <= (1.01 * dom_max) else pos
             )
-            self._particles.set_array(col)
+            offsets = (
+                pos_plot[:, 0].astype(np.float32),
+                pos_plot[:, 1].astype(np.float32),
+                pos_plot[:, 2].astype(np.float32),
+            )
 
-            # Select colormap based on mode
-            if use_cyclic_cmap:
-                self._particles.set_cmap(self._phase_cmap)
-            else:
-                self._particles.set_cmap(self._particle_cmap)
+        # if n == 0:
+        #     color_label = ""
+        #     size_label = ""
+        #     color_uniform = False
+        #     offsets = (
+        #         np.array([], dtype=np.float32),
+        #         np.array([], dtype=np.float32),
+        #         np.array([], dtype=np.float32),
+        #     )
+        #     colors = np.array([], dtype=np.float32)
+        #     sizes = np.array([], dtype=np.float32)
+        #     cmap = self._particle_cmap
+        # else:
+        #     # The simulation evolves positions in *physical* coordinates with a domain length
+        #     # L_d = grid_d * dx, where dx = 1/max(grid_dims). The dashboard axes are in
+        #     # grid-index coordinates [0, grid_d). If we plot physical coords directly,
+        #     # particles appear bunched in a corner. Detect and rescale when needed.
+        #     gx, gy, gz = self.grid_size
+        #     dx = 1.0 / float(max(gx, gy, gz))
+        #     domain = np.array([gx * dx, gy * dx, gz * dx], dtype=np.float64)
+        #     # Heuristic: if positions live within the physical domain, scale to index space.
+        #     pos_max = float(np.nanmax(pos)) if pos.size else 0.0
+        #     dom_max = float(np.max(domain))
+        #     if dom_max > 0.0 and pos_max <= (1.01 * dom_max):
+        #         pos_plot = pos / dx
+        #     else:
+        #         pos_plot = pos
 
-        # Field surface: prefer ω-field coupling/support map (behavior), else show gravity.
+        #     # ----------------------------------------------------------------
+        #     # Determine best color mode based on available data
+        #     # Priority: phase (ω-wave dynamics) > temperature > fallback
+        #     # ----------------------------------------------------------------
+        #     particle_phase = state.get("phase")
+        #     particle_energy = state.get("energy_osc")
+        #     heat = state.get("heats", None)
+        #     masses = state.get("masses", None)
+        #     c_v = state.get("c_v", None)
+
+        #     # Convert tensors to numpy
+        #     def to_np(x):
+        #         if x is None:
+        #             return None
+        #         if hasattr(x, "detach"):
+        #             return x.detach().cpu().numpy()
+        #         return np.asarray(x)
+
+        #     particle_phase = to_np(particle_phase)
+        #     particle_energy = to_np(particle_energy)
+        #     heat = to_np(heat)
+        #     masses = to_np(masses)
+
+        #     if c_v is not None and hasattr(c_v, "item"):
+        #         c_v = float(c_v.item())
+        #     try:
+        #         c_vf = float(c_v) if c_v is not None else None
+        #     except Exception:
+        #         c_vf = None
+
+        #     col = None
+        #     color_label = "neutral"
+        #     color_uniform = False
+        #     use_cyclic_cmap = False
+
+        #     # Try phase mode first (OmegaWave dynamics)
+        #     if particle_phase is not None and particle_phase.size == n:
+        #         # Phase is cyclic [-π, π], normalize to [0, 1] for colormap
+        #         phase = particle_phase.astype(np.float64)
+        #         phase = np.nan_to_num(phase, nan=0.0, posinf=0.0, neginf=0.0)
+        #         # Normalize phase to [0, 1] (cyclic)
+        #         col = (phase + np.pi) / (2 * np.pi)
+        #         col = np.clip(col, 0.0, 1.0).astype(np.float32)
+        #         color_label = "phase θ"
+        #         use_cyclic_cmap = True
+        #         self._color_mode = "phase"
+
+        #     # Fall back to temperature mode
+        #     elif (
+        #         heat is not None
+        #         and heat.size == n
+        #         and masses is not None
+        #         and masses.size == n
+        #         and (c_vf is not None and c_vf > 0.0)
+        #     ):
+        #         denom = masses.astype(np.float64) * float(c_vf)
+        #         with np.errstate(divide="ignore", invalid="ignore"):
+        #             T = np.where(denom > 0, heat.astype(np.float64) / denom, 0.0)
+        #         col = T
+        #         color_label = "T(Q/(mc_v))"
+        #         self._color_mode = "temperature"
+
+        #     elif heat is not None and heat.size == n:
+        #         col = heat.astype(np.float64)
+        #         color_label = "heat Q"
+        #         self._color_mode = "heat"
+
+        #     if col is None:
+        #         col = np.zeros((n,), dtype=np.float64)
+        #         color_label = "neutral"
+        #         self._color_mode = "neutral"
+
+        #     # Normalize for non-cyclic colormaps
+        #     if not use_cyclic_cmap:
+        #         col = np.nan_to_num(col, nan=0.0, posinf=0.0, neginf=0.0)
+        #         col_range = float(np.max(col) - np.min(col)) if col.size else 0.0
+        #         if col_range <= 1e-12:
+        #             col = np.full((n,), 0.55, dtype=np.float32)
+        #             color_uniform = True
+        #         else:
+        #             p10 = float(np.percentile(col, 10)) if col.size else 0.0
+        #             p90 = float(np.percentile(col, 90)) if col.size else 1.0
+        #             if not (p90 > p10):
+        #                 p10, p90 = float(np.min(col)), float(np.max(col))
+        #             den = (p90 - p10) if (p90 > p10) else 1.0
+        #             col = (col - p10) / den
+        #             col = np.clip(col, 0.0, 1.0).astype(np.float32)
+
+        #     # ----------------------------------------------------------------
+        #     # Marker size: prefer oscillator amplitude (√E_osc), fall back to speed
+        #     # ----------------------------------------------------------------
+        #     size_label = "|v|"
+        #     if particle_energy is not None and particle_energy.size == n:
+        #         # Size by oscillator amplitude A = √E
+        #         amp = np.sqrt(np.maximum(particle_energy.astype(np.float64), 0.0))
+        #         amp = np.nan_to_num(amp, nan=0.0, posinf=0.0, neginf=0.0)
+        #         if np.max(amp) > 0:
+        #             amp_norm = amp / np.max(amp)
+        #             sizes = 12.0 + 50.0 * amp_norm
+        #             sizes = sizes.astype(np.float32)
+        #             size_label = "√E_osc"
+        #         else:
+        #             sizes = np.full((n,), 18.0, dtype=np.float32)
+        #     else:
+        #         vel_s = state.get("velocities", None)
+        #         if vel_s is not None:
+        #             vel_s = (
+        #                 vel_s.detach().cpu().numpy()
+        #                 if hasattr(vel_s, "detach")
+        #                 else np.asarray(vel_s)
+        #             )
+        #             if vel_s.ndim == 2 and vel_s.shape[0] == n and vel_s.shape[1] == 3:
+        #                 sp = np.sqrt(np.sum(vel_s.astype(np.float64) ** 2, axis=1))
+        #                 sp = np.nan_to_num(sp, nan=0.0, posinf=0.0, neginf=0.0)
+        #                 s10 = float(np.percentile(sp, 10)) if sp.size else 0.0
+        #                 s90 = float(np.percentile(sp, 90)) if sp.size else 1.0
+        #                 if not (s90 > s10):
+        #                     s10, s90 = float(np.min(sp)), float(np.max(sp))
+        #                 den = (s90 - s10) if (s90 > s10) else 1.0
+        #                 spn = np.clip((sp - s10) / den, 0.0, 1.0).astype(np.float32)
+        #                 sizes = (10.0 + 40.0 * spn).astype(np.float32)
+        #             else:
+        #                 sizes = np.full((n,), 18.0, dtype=np.float32)
+        #         else:
+        #             sizes = np.full((n,), 18.0, dtype=np.float32)
+
+        #     offsets = (
+        #         pos_plot[:, 0].astype(np.float32),
+        #         pos_plot[:, 1].astype(np.float32),
+        #         pos_plot[:, 2].astype(np.float32),
+        #     )
+        #     colors = col.astype(np.float32)
+
+        #     # Select colormap based on mode
+        #     if use_cyclic_cmap:
+        #         cmap = self._phase_cmap
+        #     else:
+        #         cmap = self._particle_cmap
+
+        step = state.get("step", 0)
+        if hasattr(step, "item"):
+            step = step.item()
+
+        # # Build title; surface label is resolved in render.
+        # extra = []
+        # label = color_label + (" (uniform)" if color_uniform else "")
+        # if label:
+        #     extra.append(f"color: {label}")
+        # if size_label:
+        #     extra.append(f"size: {size_label}")
+        # self._frame = {
+        #     "skip": False,
+        #     "n": n,
+        #     "offsets": offsets,
+        #     "colors": colors,
+        #     "sizes": sizes,
+        #     "cmap": cmap,
+        #     "step": int(step),
+        #     "color_label": color_label,
+        #     "size_label": size_label,
+        #     "color_uniform": color_uniform,
+        #     "extra": extra,
+        # }
+
+        self._frame = {
+            "skip": False,
+            "n": n,
+            "offsets": offsets,
+            "step": int(step),
+            "color_label": "",
+            "size_label": "",
+            "color_uniform": False,
+            "extra": [],
+        }
+
+    def render(self) -> list[object]:
+        frame = self._frame
+        if frame is None or bool(frame.get("skip", False)):
+            return []
+
+        self._particles._offsets3d = frame["offsets"]
+        # self._particles.set_array(frame["colors"])
+        # self._particles.set_sizes(frame["sizes"])
+        # self._particles.set_cmap(frame["cmap"])
+
+        # Surface update runs on render cadence, not simulation cadence.
+        self._surface_counter += 1
+        if (
+            self._surface_counter % self._surface_stride
+        ) == 0 and self._surface_state is not None:
+            field2d, surface_label = self._surface_field_from_state(self._surface_state)
+            if field2d is not None:
+                self._render_field(field2d)
+                self._last_surface_label = surface_label
+
+        extra = list(frame["extra"])
+        if self._last_surface_label:
+            extra.append(f"surface: {self._last_surface_label}")
+        self.ax.set_title(
+            f"Step {frame['step']} | {frame['n']}p\n" + " | ".join(extra),
+            fontsize=7,
+            pad=2,
+        )
+        return [self._particles]
+
+    def update(self, state: dict) -> list[object]:
+        self.ingest(state)
+        return self.render()
+
+    def _surface_field_from_state(self, state: dict) -> tuple[np.ndarray | None, str]:
         field2d, surface_label = self._coupling_or_support_field_xy(state)
         if field2d is None:
             gravity = state.get("gravity_potential")
@@ -286,30 +394,7 @@ class ThreeD:
                 if g.size > 0:
                     field2d = g
                     surface_label = "gravity φ(x,y)"
-        if field2d is not None:
-            self._render_field(field2d)
-
-        step = state.get("step", 0)
-        if hasattr(step, "item"):
-            step = step.item()
-
-        # Build title with current visualization mode
-        color_label = ""
-        color_uniform = False
-        size_label = ""
-        extra = []
-        label = color_label + (" (uniform)" if color_uniform else "")
-        if label:
-            extra.append(f"color: {label}")
-        if size_label:
-            extra.append(f"size: {size_label}")
-        if "surface_label" in locals() and surface_label:
-            extra.append(f"surface: {surface_label}")
-        ax.set_title(
-            f"Step {step} | {n}p\n" + " | ".join(extra), fontsize=7, color="#ddd", pad=2
-        )
-
-        return [self._particles]
+        return field2d, surface_label
 
     def _render_field(self, g: np.ndarray) -> None:
         """Render a scalar field as a translucent surface."""
@@ -349,7 +434,7 @@ class ThreeD:
 
     def _coupling_or_support_field_xy(
         self, state: dict
-    ) -> tuple[Optional[np.ndarray], str]:
+    ) -> tuple[np.ndarray | None, str]:
         """Compute a qualitative ω-field map on the mid-z plane.
 
         Prefer “coupling” when the ω-field has non-trivial |Ψ| energy; otherwise show
@@ -403,7 +488,11 @@ class ThreeD:
         # choose top modes by |Ψ| if available, otherwise by anchor support
         K = int(min(6, amp.shape[0]))
         if use_coupling:
-            top = np.argsort(amp_abs)[-K:][::-1]
+            if K >= amp_abs.shape[0]:
+                top = np.argsort(amp_abs)[::-1]
+            else:
+                top = np.argpartition(amp_abs, -K)[-K:]
+                top = top[np.argsort(amp_abs[top])[::-1]]
             label = "ω-field coupling Σ|Ψ_k|·overlap"
         else:
             # support per mode = Σ_a |w_ka|
@@ -412,7 +501,11 @@ class ThreeD:
             for k in range(int(amp.shape[0])):
                 base = k * slots
                 support[k] = float(np.sum(w_abs[base : base + slots]))
-            top = np.argsort(support)[-K:][::-1]
+            if K >= support.shape[0]:
+                top = np.argsort(support)[::-1]
+            else:
+                top = np.argpartition(support, -K)[-K:]
+                top = top[np.argsort(support[top])[::-1]]
             label = "ω-mode support Σ_a|w_ka|·overlap"
 
         # grid points on mid-z plane in physical coordinates

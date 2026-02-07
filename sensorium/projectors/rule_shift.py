@@ -1,14 +1,11 @@
-"""Rule shift projectors for tables and figures.
-
-Generates LaTeX tables and matplotlib figures showing
-how the manifold adapts when pattern rules change.
-"""
+"""Rule-shift projectors for tables and figures."""
 
 from __future__ import annotations
 
+from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, Union
+from typing import Any, Dict, Sequence, Union
 
 import numpy as np
 
@@ -17,192 +14,272 @@ from sensorium.projectors.base import BaseProjector
 
 @dataclass
 class RuleShiftFigureConfig:
-    """Configuration for rule shift figure."""
+    """Configuration for rule-shift figures."""
+
     name: str = "rule_shift"
     format: str = "png"
     dpi: int = 300
 
 
 class RuleShiftTableProjector(BaseProjector):
-    """Custom projector for rule shift summary table."""
-    
-    def __init__(self, output_dir: Path | None = None, name: str = "rule_shift_summary"):
+    """Project scaled rule-shift summary table with transparent conditions."""
+
+    def __init__(
+        self, output_dir: Path | None = None, name: str = "rule_shift_summary"
+    ):
         super().__init__(output_dir or Path("paper/tables"))
         self.name = name
-    
-    def project(self, source: Union["InferenceObserver", Dict[str, Any]]) -> Dict[str, Any]:
-        """Generate LaTeX summary table."""
+
+    @staticmethod
+    def _fmt_pct(value: float) -> str:
+        return f"{100.0 * float(value):.1f}\\%"
+
+    @staticmethod
+    def _mean_std(values: Sequence[float]) -> tuple[float, float]:
+        if not values:
+            return 0.0, 0.0
+        arr = np.asarray(values, dtype=np.float64)
+        return float(np.mean(arr)), float(np.std(arr))
+
+    def project(self, source: Union[Any, Dict[str, Any]]) -> Dict[str, Any]:
         results = self._get_results_list(source)
-        
         if not results:
             return {"status": "skipped", "reason": "no results"}
-        
-        # Get first (and likely only) result
-        result = results[0]
-        accuracy_history = result.get("accuracy_history", [])
-        forward_reps = result.get("forward_reps", 50)
-        segment_size = result.get("segment_size", 24)
-        context_length = result.get("context_length", 8)
-        
-        if not accuracy_history:
-            return {"status": "skipped", "reason": "no accuracy history"}
-        
+
         self.ensure_output_dir()
-        
-        forward_accs = [r["accuracy"] for r in accuracy_history if r["phase"] == "forward"]
-        reverse_accs = [r["accuracy"] for r in accuracy_history if r["phase"] == "reverse"]
-        
-        forward_baseline = np.mean(forward_accs) if forward_accs else 0.0
-        forward_final = forward_accs[-1] if forward_accs else 0.0
-        reverse_initial = reverse_accs[0] if reverse_accs else 0.0
-        reverse_final = reverse_accs[-1] if reverse_accs else 0.0
-        
-        # Find recovery point
-        recovery_rep = None
-        threshold = forward_baseline * 0.8
-        for r in accuracy_history:
-            if r["phase"] == "reverse" and r["accuracy"] >= threshold:
-                recovery_rep = r["rep"] - forward_reps
-                break
-        
-        table_content = r"""\begin{table}[t]
+        by_scenario: dict[str, list[dict[str, Any]]] = defaultdict(list)
+        for row in results:
+            by_scenario[str(row.get("scenario", "unknown"))].append(row)
+
+        header = r"""\begin{table*}[t]
 \centering
-\caption{Rule-shift adaptation results. The manifold learns forward transitions, then adapts online when the sequence reverses. Recovery time measures how quickly the system regains baseline accuracy after the rule shift.}
+\caption{Scaled rule-shift matrix with transparent conditions and adaptation metrics (mean $\pm$ std over seeds).}
 \label{tab:rule_shift}
-\begin{tabular}{l c c}
+\begin{tabular}{l l c c c c c c c c c}
 \toprule
-\textbf{Metric} & \textbf{Forward Phase} & \textbf{Reverse Phase} \\
+\textbf{Scenario} & \textbf{Domain} & \textbf{Seeds} & \textbf{Phases} & \textbf{Reps} & \textbf{Seg} & \textbf{Drop} & \textbf{Recovery} & \textbf{Final@1} & \textbf{Final@3} & \textbf{Final MRR} \\
 \midrule
 """
-        table_content += f"Mean accuracy & {forward_baseline*100:.1f}\\% & {(np.mean(reverse_accs) if reverse_accs else 0)*100:.1f}\\% \\\\\n"
-        table_content += f"Final accuracy & {forward_final*100:.1f}\\% & {reverse_final*100:.1f}\\% \\\\\n"
-        table_content += f"Initial accuracy & --- & {reverse_initial*100:.1f}\\% \\\\\n"
-        table_content += r"\midrule" + "\n"
-        table_content += r"\multicolumn{3}{l}{\textit{Adaptation Dynamics}} \\" + "\n"
-        table_content += f"\\quad Phase switch (rep) & \\multicolumn{{2}}{{c}}{{{forward_reps}}} \\\\\n"
-        table_content += f"\\quad Recovery (reps after switch) & \\multicolumn{{2}}{{c}}{{{recovery_rep if recovery_rep else 'N/A'}}} \\\\\n"
-        table_content += f"\\quad Segment size & \\multicolumn{{2}}{{c}}{{{segment_size}}} \\\\\n"
-        table_content += f"\\quad Context length & \\multicolumn{{2}}{{c}}{{{context_length}}} \\\\\n"
-        table_content += r"""\bottomrule
+        lines: list[str] = []
+        for scenario_name in sorted(by_scenario.keys()):
+            group = by_scenario[scenario_name]
+            first = group[0]
+            domain = str(first.get("domain", "n/a"))
+            n_seeds = len({int(r.get("seed", 0)) for r in group})
+            n_phases = int(first.get("n_phases", 0))
+            total_reps = int(first.get("total_reps", 0))
+            segment_size = int(first.get("segment_size", 0))
+
+            drops = [abs(float(r.get("worst_drop_top1", 0.0))) for r in group]
+            recoveries = [
+                float(r.get("mean_recovery_reps", -1.0))
+                for r in group
+                if float(r.get("mean_recovery_reps", -1.0)) >= 0.0
+            ]
+            final_top1 = [float(r.get("final_top1", 0.0)) for r in group]
+            final_top3 = [float(r.get("final_top3", 0.0)) for r in group]
+            final_mrr = [float(r.get("final_mrr", 0.0)) for r in group]
+
+            drop_mu, drop_sd = self._mean_std(drops)
+            rec_mu, rec_sd = self._mean_std(recoveries)
+            t1_mu, t1_sd = self._mean_std(final_top1)
+            t3_mu, t3_sd = self._mean_std(final_top3)
+            mrr_mu, mrr_sd = self._mean_std(final_mrr)
+            rec_txt = f"{rec_mu:.1f} $\\pm$ {rec_sd:.1f}" if recoveries else "N/A"
+
+            lines.append(
+                f"{scenario_name.replace('_', r'\_')} & "
+                f"{domain.replace('_', r'\_')} & "
+                f"{n_seeds} & {n_phases} & {total_reps} & {segment_size} & "
+                f"{self._fmt_pct(drop_mu)} $\\pm$ {self._fmt_pct(drop_sd)} & "
+                f"{rec_txt} & "
+                f"{self._fmt_pct(t1_mu)} $\\pm$ {self._fmt_pct(t1_sd)} & "
+                f"{self._fmt_pct(t3_mu)} $\\pm$ {self._fmt_pct(t3_sd)} & "
+                f"{self._fmt_pct(mrr_mu)} $\\pm$ {self._fmt_pct(mrr_sd)} \\\\"
+            )
+
+        footer = r"""\bottomrule
 \end{tabular}
-\end{table}
+\vspace{2pt}
+
+{\footnotesize Conditions are explicit: number of phases, total repetitions, segment length, and seed count are reported per scenario.}
+\end{table*}
 """
-        
         output_path = self.output_dir / f"{self.name}.tex"
-        output_path.write_text(table_content)
-        
+        output_path.write_text(header + "\n".join(lines) + "\n" + footer)
         return {"status": "success", "path": str(output_path)}
 
 
 class RuleShiftFigureProjector(BaseProjector):
-    """Custom projector for rule shift visualization."""
-    
+    """Rule-shift matrix figure projector with real-world focus panel."""
+
     def __init__(
         self,
         config: RuleShiftFigureConfig | None = None,
         output_dir: Path | None = None,
-        **kwargs
+        **kwargs,
     ):
         super().__init__(output_dir or Path("paper/figures"))
         if config:
             self.config = config
         else:
             self.config = RuleShiftFigureConfig(**kwargs)
-    
-    def project(self, source: Union["InferenceObserver", Dict[str, Any]]) -> Dict[str, Any]:
-        """Generate 3-panel visualization."""
+
+    @staticmethod
+    def _scenario_groups(
+        results: Sequence[Dict[str, Any]],
+    ) -> dict[str, list[dict[str, Any]]]:
+        groups: dict[str, list[dict[str, Any]]] = defaultdict(list)
+        for row in results:
+            groups[str(row.get("scenario", "unknown"))].append(row)
+        return groups
+
+    @staticmethod
+    def _history_mean(
+        group: Sequence[Dict[str, Any]], key: str
+    ) -> tuple[np.ndarray, np.ndarray]:
+        histories = [
+            list(row.get("accuracy_history", []))
+            for row in group
+            if row.get("accuracy_history")
+        ]
+        if not histories:
+            return np.array([], dtype=np.float64), np.array([], dtype=np.float64)
+        n = min(len(hist) for hist in histories)
+        if n <= 0:
+            return np.array([], dtype=np.float64), np.array([], dtype=np.float64)
+        reps = np.array(
+            [float(histories[0][i].get("rep", 0.0)) for i in range(n)], dtype=np.float64
+        )
+        mat = np.array(
+            [
+                [float(history[i].get(key, 0.0)) for i in range(n)]
+                for history in histories
+            ],
+            dtype=np.float64,
+        )
+        return reps, np.mean(mat, axis=0)
+
+    def project(self, source: Union[Any, Dict[str, Any]]) -> Dict[str, Any]:
         import matplotlib
+
         matplotlib.use("Agg")
         import matplotlib.pyplot as plt
-        
+
         results = self._get_results_list(source)
-        
         if not results:
             return {"status": "skipped", "reason": "no results"}
-        
-        result = results[0]
-        accuracy_history = result.get("accuracy_history", [])
-        forward_reps = result.get("forward_reps", 50)
-        
-        if not accuracy_history:
-            return {"status": "skipped", "reason": "no accuracy history"}
-        
+
+        groups = self._scenario_groups(results)
+        if not groups:
+            return {"status": "skipped", "reason": "no grouped results"}
+
         self.ensure_output_dir()
-        
-        reps = [r["rep"] for r in accuracy_history]
-        accuracies = [r["accuracy"] for r in accuracy_history]
-        phases = [r["phase"] for r in accuracy_history]
-        
-        forward_reps_list = [r for r, p in zip(reps, phases) if p == "forward"]
-        forward_accs = [a for a, p in zip(accuracies, phases) if p == "forward"]
-        reverse_reps_list = [r for r, p in zip(reps, phases) if p == "reverse"]
-        reverse_accs = [a for a, p in zip(accuracies, phases) if p == "reverse"]
-        
-        fig, axes = plt.subplots(1, 3, figsize=(14, 4))
-        
-        # Panel A: Accuracy over time
-        ax = axes[0]
-        ax.plot(forward_reps_list, forward_accs, 'o-', color='#336699', 
-               linewidth=2, markersize=6, label='Forward')
-        ax.plot(reverse_reps_list, reverse_accs, 's-', color='#4C994C',
-               linewidth=2, markersize=6, label='Reverse')
-        ax.axvline(x=forward_reps, color='red', linestyle='--', linewidth=2, label='Rule Shift')
-        if forward_accs:
-            ax.axhline(y=np.mean(forward_accs), color='#336699', linestyle=':', alpha=0.5)
-        ax.set_xlabel("Training repetition", fontsize=10)
-        ax.set_ylabel("Next-byte accuracy", fontsize=10)
-        ax.legend(loc='lower right', fontsize=9)
-        ax.set_ylim(-0.05, 1.05)
-        ax.spines['top'].set_visible(False)
-        ax.spines['right'].set_visible(False)
-        ax.text(0.02, 0.98, 'A', transform=ax.transAxes, fontsize=14, fontweight='bold', va='top')
-        
-        # Panel B: Accuracy comparison bar chart
-        ax = axes[1]
-        x_pos = np.arange(4)
-        values = [
-            np.mean(forward_accs) if forward_accs else 0,
-            forward_accs[-1] if forward_accs else 0,
-            reverse_accs[0] if reverse_accs else 0,
-            reverse_accs[-1] if reverse_accs else 0,
+        scenario_names = sorted(groups.keys())
+        fig, axes = plt.subplots(2, 2, figsize=(13.8, 8.2))
+
+        ax = axes[0, 0]
+        for name in scenario_names:
+            reps, top1 = self._history_mean(groups[name], "top1")
+            if reps.size:
+                ax.plot(reps, top1, linewidth=2.0, label=name.replace("_", " "))
+        ax.set_title("Adaptation trajectories (Top-1)")
+        ax.set_xlabel("Repetition")
+        ax.set_ylabel("Top-1 accuracy")
+        ax.set_ylim(0.0, 1.02)
+        ax.grid(True, alpha=0.25)
+        ax.legend(fontsize=7, loc="lower right")
+
+        ax = axes[0, 1]
+        x = np.arange(len(scenario_names), dtype=np.float64)
+        t1 = [
+            np.mean([float(r.get("final_top1", 0.0)) for r in groups[name]])
+            for name in scenario_names
         ]
-        labels = ["Fwd Mean", "Fwd Final", "Rev Initial", "Rev Final"]
-        colors = ['#336699', '#336699', '#4C994C', '#4C994C']
-        
-        bars = ax.bar(x_pos, values, color=colors, edgecolor='black', linewidth=0.5, alpha=0.8)
-        for bar, val in zip(bars, values):
-            ax.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.02,
-                   f"{val:.0%}", ha='center', va='bottom', fontsize=9)
-        ax.set_xticks(x_pos)
-        ax.set_xticklabels(labels, fontsize=9, rotation=15)
-        ax.set_ylabel("Accuracy", fontsize=10)
-        ax.set_ylim(0, 1.15)
-        ax.spines['top'].set_visible(False)
-        ax.spines['right'].set_visible(False)
-        ax.text(0.02, 0.98, 'B', transform=ax.transAxes, fontsize=14, fontweight='bold', va='top')
-        
-        # Panel C: Adaptation rate
-        ax = axes[2]
-        if reverse_accs and len(reverse_accs) > 1:
-            initial = reverse_accs[0]
-            deltas = [acc - initial for acc in reverse_accs]
-            delta_reps = [r - forward_reps for r in reverse_reps_list]
-            
-            ax.fill_between(delta_reps, 0, deltas, alpha=0.3, color='#4C994C')
-            ax.plot(delta_reps, deltas, 'o-', color='#4C994C', linewidth=2, markersize=6)
-            ax.axhline(y=0, color='black', linestyle='-', linewidth=0.5)
-            ax.set_xlabel("Reps after rule shift", fontsize=10)
-            ax.set_ylabel("Accuracy gain from initial", fontsize=10)
-        else:
-            ax.text(0.5, 0.5, "Insufficient data", ha='center', va='center',
-                   transform=ax.transAxes, fontsize=12)
-        ax.spines['top'].set_visible(False)
-        ax.spines['right'].set_visible(False)
-        ax.text(0.02, 0.98, 'C', transform=ax.transAxes, fontsize=14, fontweight='bold', va='top')
-        
+        t3 = [
+            np.mean([float(r.get("final_top3", 0.0)) for r in groups[name]])
+            for name in scenario_names
+        ]
+        mrr = [
+            np.mean([float(r.get("final_mrr", 0.0)) for r in groups[name]])
+            for name in scenario_names
+        ]
+        w = 0.25
+        ax.bar(x - w, t1, width=w, label="Final@1", color="#4C78A8")
+        ax.bar(x, t3, width=w, label="Final@3", color="#59A14F")
+        ax.bar(x + w, mrr, width=w, label="Final MRR", color="#F28E2B")
+        ax.set_xticks(x)
+        ax.set_xticklabels(
+            [name.replace("_", "\n") for name in scenario_names], fontsize=8
+        )
+        ax.set_ylim(0.0, 1.02)
+        ax.set_title("Final recall quality")
+        ax.grid(True, axis="y", alpha=0.25)
+        ax.legend(fontsize=8)
+
+        ax = axes[1, 0]
+        drops = [
+            np.mean([abs(float(r.get("worst_drop_top1", 0.0))) for r in groups[name]])
+            for name in scenario_names
+        ]
+        recov = []
+        for name in scenario_names:
+            vals = [float(r.get("mean_recovery_reps", -1.0)) for r in groups[name]]
+            vals = [v for v in vals if v >= 0.0]
+            recov.append(float(np.mean(vals)) if vals else np.nan)
+        ax.plot(x, drops, "o-", linewidth=2, color="#E15759", label="Worst drop")
+        ax.plot(x, recov, "s-", linewidth=2, color="#76B7B2", label="Recovery reps")
+        ax.set_xticks(x)
+        ax.set_xticklabels(
+            [name.replace("_", "\n") for name in scenario_names], fontsize=8
+        )
+        ax.set_title("Shift shock vs recovery speed")
+        ax.grid(True, alpha=0.25)
+        ax.legend(fontsize=8)
+
+        ax = axes[1, 1]
+        strongest = max(
+            scenario_names,
+            key=lambda n: max(float(r.get("total_bytes", 0.0)) for r in groups[n]),
+        )
+        reps, top1 = self._history_mean(groups[strongest], "top1")
+        _, top3 = self._history_mean(groups[strongest], "top3")
+        _, mrr_curve = self._history_mean(groups[strongest], "mrr")
+        ax.plot(reps, top1, linewidth=2.2, color="#4C78A8", label="Top-1")
+        ax.plot(reps, top3, linewidth=2.2, color="#59A14F", label="Top-3")
+        ax.plot(reps, mrr_curve, linewidth=2.2, color="#F28E2B", label="MRR")
+        ax.set_title(f"Strongest evidence: {strongest.replace('_', ' ')}")
+        ax.set_xlabel("Repetition")
+        ax.set_ylabel("Score")
+        ax.set_ylim(0.0, 1.02)
+        ax.grid(True, alpha=0.25)
+        ax.legend(fontsize=8, loc="lower right")
+
         plt.tight_layout()
-        output_path = self.output_dir / f"{self.config.name}.{self.config.format}"
-        plt.savefig(output_path, dpi=self.config.dpi, bbox_inches='tight')
-        plt.close()
-        
-        return {"status": "success", "path": str(output_path)}
+        matrix_path = self.output_dir / f"{self.config.name}.{self.config.format}"
+        fig.savefig(matrix_path, dpi=self.config.dpi, bbox_inches="tight")
+        plt.close(fig)
+
+        fig2, ax2 = plt.subplots(figsize=(8.2, 4.1))
+        ax2.plot(reps, top1, linewidth=2.4, color="#4C78A8", label="Top-1")
+        ax2.plot(reps, top3, linewidth=2.4, color="#59A14F", label="Top-3")
+        ax2.plot(reps, mrr_curve, linewidth=2.4, color="#F28E2B", label="MRR")
+        ax2.set_title(f"Rule-shift recall detail: {strongest.replace('_', ' ')}")
+        ax2.set_xlabel("Repetition")
+        ax2.set_ylabel("Score")
+        ax2.set_ylim(0.0, 1.02)
+        ax2.grid(True, alpha=0.25)
+        ax2.legend(loc="lower right")
+        plt.tight_layout()
+        focus_path = (
+            self.output_dir / f"{self.config.name}_realworld.{self.config.format}"
+        )
+        fig2.savefig(focus_path, dpi=self.config.dpi, bbox_inches="tight")
+        plt.close(fig2)
+
+        return {
+            "status": "success",
+            "path": str(matrix_path),
+            "focus_path": str(focus_path),
+            "strongest_scenario": strongest,
+        }

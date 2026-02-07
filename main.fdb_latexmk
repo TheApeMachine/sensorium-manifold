@@ -1,5 +1,5 @@
 # Fdb version 4
-["bibtex main"] 0 "main.aux" "main.bbl" "main" 0 0
+["bibtex main"] 0 "main.aux" "main.bbl" "main" 1770432399.97471 0
   "/usr/local/texlive/2025/texmf-dist/bibtex/bst/natbib/plainnat.bst" 1233624470 26816 ffe5423d2019860bad9f54bc402fac15 ""
   "main.aux" 0 -1 0 "pdflatex"
   "references.bib" 0 -1 0 ""
@@ -7,8 +7,7 @@
   "main.bbl"
   "main.blg"
   (rewritten before read)
-["pdflatex"] 1770414069.58176 "/Users/theapemachine/go/src/github.com/theapemachine/thermo_manifold/paper/main.tex" "main.pdf" "main" 1770414070.84929 0
-  "/Users/theapemachine/go/src/github.com/theapemachine/thermo_manifold/paper/main.tex" 1770414060.75598 112320 94c3daa23ab3189c87b86b605f7339f2 ""
+["pdflatex"] 1770432398.76445 "paper/main.tex" "main.pdf" "main" 1770432399.97487 0
   "/usr/local/texlive/2025/texmf-dist/fonts/enc/dvips/cm-super/cm-super-t1.enc" 1136849721 2971 def0b6c1f0b107b3b936def894055589 ""
   "/usr/local/texlive/2025/texmf-dist/fonts/enc/dvips/cm-super/cm-super-ts1.enc" 1136849721 2900 1537cc8184ad1792082cd229ecc269f4 ""
   "/usr/local/texlive/2025/texmf-dist/fonts/map/fontname/texfonts.map" 1577235249 3524 cb3e574dea2d1052e39280babc910dc8 ""
@@ -284,10 +283,10 @@
   "/usr/local/texlive/2025/texmf-var/fonts/map/pdftex/updmap/pdftex.map" 1766003463 5467155 19efa205003f9ecad95fbbaa6ff24da1 ""
   "/usr/local/texlive/2025/texmf-var/web2c/pdftex/pdflatex.fmt" 1766003405 3345740 dad43db84ce9102e8a8872538cd2536d ""
   "/usr/local/texlive/2025/texmf.cnf" 1741450484 577 418a7058ec8e006d8704f60ecd22c938 ""
-  "main.aux" 1770414070.50996 45636 5bae6610c9ccf00f39da62f416c4d4c2 "pdflatex"
+  "main.aux" 1770432399.64771 45740 8e14aec155d71cc7d9596b9139bb69cb "pdflatex"
   "main.bbl" 0 -1 0 "bibtex main"
-  "main.out" 1770414070.51187 12698 20cce48a2a67c0a96fc908aab4fb83b8 "pdflatex"
-  "paper/main.tex" 1770414060.75598 112320 94c3daa23ab3189c87b86b605f7339f2 ""
+  "main.out" 1770432399.64946 12738 02bd751242a9ff27ec5514a2fc79e551 "pdflatex"
+  "paper/main.tex" 1770432383.611 112940 6095d5cd9b518604cb459fd45c85ae18 ""
   (generated)
   "main.aux"
   "main.log"

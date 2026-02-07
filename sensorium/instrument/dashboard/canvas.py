@@ -1,77 +1,101 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional
 
-import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
+import matplotlib.pyplot as plt
 
-from sensorium.instrument.dashboard.threed import ThreeD
-from sensorium.instrument.dashboard.phase import PhasePlot
-from sensorium.instrument.dashboard.spectrogram import SpectrogramPlot
 from sensorium.instrument.dashboard.crystals import CrystalContentPlot
+from sensorium.instrument.dashboard.phase import PhasePlot
 from sensorium.instrument.dashboard.settling import SettlingPlot
+from sensorium.instrument.dashboard.spectrogram import SpectrogramPlot
+from sensorium.instrument.dashboard.threed import ThreeD
 
 
 @dataclass(frozen=True)
 class CanvasAxes:
     ax3d: object
-    ax_phase: Optional[object] = None
-    ax_spectrogram: Optional[object] = None
-    ax_crystals: Optional[object] = None
-    ax_settling: Optional[object] = None
+    ax_phase: object | None = None
+    ax_spectrogram: object | None = None
+    ax_crystals: object | None = None
+    ax_settling: object | None = None
 
 
 class Canvas:
-    """Two-column dashboard: 3D (left 50%) | analysis panels (right 50%)."""
+    """Dashboard layout with 3D + spectrogram on the left and analysis on the right."""
 
     def __init__(self, grid_size: tuple[int, int, int], datafn) -> None:
-        self.fig = plt.figure(figsize=(22, 11))
-
-        # Squeeze margins to near zero
+        # Keep a practical default window size so panels stay on-screen on laptops.
+        self.fig = plt.figure(figsize=(16, 9))
         self.fig.subplots_adjust(
-            left=0.02, right=0.98, top=0.97, bottom=0.03,
-            wspace=0.06, hspace=0.0,
+            left=0.04,
+            right=0.98,
+            top=0.96,
+            bottom=0.06,
+            wspace=0.12,
+            hspace=0.16,
         )
 
         gs_main = gridspec.GridSpec(
-            1, 2, figure=self.fig,
-            width_ratios=[50, 50],
-            wspace=0.06,
+            2,
+            2,
+            figure=self.fig,
+            width_ratios=[64, 36],
+            height_ratios=[74, 26],
+            wspace=0.12,
+            hspace=0.16,
         )
 
-        # Left: 3D full height
+        # Left column: 3D on top, spectrogram below.
         self.ax3d = self.fig.add_subplot(gs_main[0, 0], projection="3d")
+        self.ax_spectrogram = self.fig.add_subplot(gs_main[1, 0])
 
-        # Right: 3 rows.
-        # Row 1 is split into 2 columns: Psi phase | Crystallized modes.
-        # Row 2/3 span full width: spectrogram, settling diagnostics.
-        gs_right = gs_main[0, 1].subgridspec(
-            3, 1,
-            height_ratios=[30, 42, 20],
-            # Extra vertical breathing room so spectrogram title/ticks do not collide
-            # with Psi phase tick labels above.
-            hspace=0.18,
+        # Right column spans both rows:
+        # top split: Psi phase | Crystallized modes
+        # bottom: Settling diagnostics
+        gs_right = gs_main[:, 1].subgridspec(
+            2,
+            1,
+            height_ratios=[64, 36],
+            hspace=0.24,
         )
-
         gs_top = gs_right[0].subgridspec(
-            1, 2,
+            1,
+            2,
             width_ratios=[58, 42],
-            wspace=0.08,
+            wspace=0.14,
         )
         self.ax_phase = self.fig.add_subplot(gs_top[0, 0])
         self.ax_crystals = self.fig.add_subplot(gs_top[0, 1])
-        self.ax_spectrogram = self.fig.add_subplot(gs_right[1, 0])
-        self.ax_settling = self.fig.add_subplot(gs_right[2, 0])
-
-        # # Apply dark theme to all 2D axes
-        # for ax in (self.ax_phase, self.ax_spectrogram, self.ax_crystals, self.ax_settling):
-        #     ax.set_facecolor("#141424")
-        #     ax.tick_params(colors="#aaa", labelsize=6)
-        #     for spine in ax.spines.values():
-        #         spine.set_color("#333")
+        self.ax_settling = self.fig.add_subplot(gs_right[1, 0])
 
         self.datafn = datafn
+        self._render_array_keys = (
+            "positions",
+            "velocities",
+            "phase",
+            "energy_osc",
+            "heats",
+            "masses",
+            "psi_real",
+            "psi_imag",
+            "mode_state",
+            "omega_lattice",
+            "psi_amplitude",
+            "mode_anchor_idx",
+            "mode_anchor_weight",
+            "token_ids",
+            "sequence_indices",
+            "energies",
+            "gravity_potential",
+        )
+        self._render_scalar_keys = (
+            "step",
+            "dt",
+            "c_v",
+            "cfl_max_rate",
+            "spatial_sigma",
+        )
         self.plots = {
             "three": ThreeD(grid_size=grid_size, ax=self.ax3d),
             "phase": PhasePlot(ax=self.ax_phase),
@@ -95,6 +119,31 @@ class Canvas:
             ax_settling=self.ax_settling,
         )
 
-    def update(self, state: dict) -> None:
+    def ingest(self, state: dict) -> None:
+        render_state = self._prepare_render_state(state)
         for plot in self.plots.values():
-            plot.update(state)
+            ingest_fn = getattr(plot, "ingest", None)
+            if callable(ingest_fn):
+                ingest_fn(render_state)
+
+    def render(self) -> None:
+        for plot in self.plots.values():
+            render_fn = getattr(plot, "render", None)
+            if callable(render_fn):
+                render_fn()
+
+    def update(self, state: dict) -> None:
+        """Compatibility path: ingest + render in one call."""
+        self.ingest(state)
+
+    def _prepare_render_state(self, state: dict) -> dict:
+        """Prepare a lightweight dashboard state view for panel ingest methods."""
+        out = dict(state)
+        for key in self._render_scalar_keys:
+            v = out.get(key)
+            if v is not None and hasattr(v, "item"):
+                try:
+                    out[key] = float(v.item())
+                except Exception:
+                    pass
+        return out

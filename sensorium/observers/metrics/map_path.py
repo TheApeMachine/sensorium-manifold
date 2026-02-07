@@ -38,7 +38,9 @@ def _as_cpu_np_float64(x: Any) -> np.ndarray | None:
     return None
 
 
-def _fold_mass_over_keys(keys: np.ndarray, masses: np.ndarray) -> tuple[float, float, float]:
+def _fold_mass_over_keys(
+    keys: np.ndarray, masses: np.ndarray
+) -> tuple[float, float, float]:
     """Return (top1_share, participation_ratio, entropy_bits)."""
     if keys.size == 0:
         return 0.0, 0.0, 0.0
@@ -74,15 +76,17 @@ def _transition_metrics_from_keys(
     s = sample_indices[order]
     t = sequence_indices[order]
     k = keys[order]
-    same = (s[1:] == s[:-1])
-    next_pos = (t[1:] == (t[:-1] + 1))
+    same = s[1:] == s[:-1]
+    next_pos = t[1:] == (t[:-1] + 1)
     ok = same & next_pos
     src = k[:-1][ok]
     dst = k[1:][ok]
     if src.size == 0:
         return 0, 0, 0.0, 0.0, []
 
-    e_all = (src.astype(np.uint64) << np.uint64(32)) | (dst.astype(np.uint64) & np.uint64(0xFFFFFFFF))
+    e_all = (src.astype(np.uint64) << np.uint64(32)) | (
+        dst.astype(np.uint64) & np.uint64(0xFFFFFFFF)
+    )
     e_uniq, e_cnt = np.unique(e_all, return_counts=True)
     total = float(e_cnt.sum())
     top1_prob = float(float(np.max(e_cnt)) / total) if total > 0 else 0.0
@@ -102,13 +106,62 @@ def _transition_metrics_from_keys(
         dst_b = dst32 & 0xFF
         top_edges.append(
             {
-                "src": {"pos": int(src_pos), "byte": int(src_b), "label": _byte_label(src_b)},
-                "dst": {"pos": int(dst_pos), "byte": int(dst_b), "label": _byte_label(dst_b)},
+                "src": {
+                    "pos": int(src_pos),
+                    "byte": int(src_b),
+                    "label": _byte_label(src_b),
+                },
+                "dst": {
+                    "pos": int(dst_pos),
+                    "byte": int(dst_b),
+                    "label": _byte_label(dst_b),
+                },
                 "count": int(e_cnt[j]),
             }
         )
 
     return int(e_all.size), int(e_uniq.size), float(top1_prob), float(H), top_edges
+
+
+def _recall_metrics_from_transition_counts(
+    *, edge_ids: np.ndarray, edge_counts: np.ndarray
+) -> tuple[float, float, float, int, int]:
+    """Compute weighted next-edge recall from learned transition structure."""
+    if edge_ids.size == 0 or edge_counts.size == 0:
+        return 0.0, 0.0, 0.0, 0, 0
+
+    src_ids = (edge_ids >> np.uint64(32)).astype(np.uint64)
+    order = np.argsort(src_ids, kind="stable")
+    src_sorted = src_ids[order]
+    cnt_sorted = edge_counts[order].astype(np.float64)
+    _, starts = np.unique(src_sorted, return_index=True)
+
+    total = float(np.sum(cnt_sorted))
+    if not (total > 0.0):
+        return 0.0, 0.0, 0.0, int(edge_ids.size), int(starts.size)
+
+    top1_mass = 0.0
+    top3_mass = 0.0
+    rr_mass = 0.0
+    for i, st in enumerate(starts):
+        en = int(starts[i + 1]) if i + 1 < int(starts.size) else int(cnt_sorted.size)
+        c = cnt_sorted[int(st) : en]
+        if c.size == 0:
+            continue
+        ord_local = np.argsort(c)[::-1]
+        c_sorted = c[ord_local]
+        top1_mass += float(c_sorted[0])
+        top3_mass += float(np.sum(c_sorted[:3]))
+        ranks = np.arange(1, int(c_sorted.size) + 1, dtype=np.float64)
+        rr_mass += float(np.sum(c_sorted / ranks))
+
+    return (
+        float(top1_mass / total),
+        float(top3_mass / total),
+        float(rr_mass / total),
+        int(edge_ids.size),
+        int(starts.size),
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -143,7 +196,9 @@ class MapPathMetrics:
 
         # Construct keys.
         if self.key.kind == "sequence_byte":
-            key = ((t.astype(np.uint64) & np.uint64(0xFFFFFFFF)) << np.uint64(8)) | (b.astype(np.uint64) & np.uint64(0xFF))
+            key = ((t.astype(np.uint64) & np.uint64(0xFFFFFFFF)) << np.uint64(8)) | (
+                b.astype(np.uint64) & np.uint64(0xFF)
+            )
         elif self.key.kind == "spatial_morton_byte":
             # Prefer precomputed key from the physics domain if available.
             pre = _as_cpu_np_int64(state.get("spatial_token_ids"))
@@ -165,19 +220,31 @@ class MapPathMetrics:
                 if p.shape[0] != n:
                     return {}
                 inv_dx = 1.0 / float(dx)
-                ix = (np.floor(p[:, 0] * inv_dx).astype(np.int64) % gx).astype(np.uint32)
-                iy = (np.floor(p[:, 1] * inv_dx).astype(np.int64) % gy).astype(np.uint32)
-                iz = (np.floor(p[:, 2] * inv_dx).astype(np.int64) % gz).astype(np.uint32)
+                ix = (np.floor(p[:, 0] * inv_dx).astype(np.int64) % gx).astype(
+                    np.uint32
+                )
+                iy = (np.floor(p[:, 1] * inv_dx).astype(np.int64) % gy).astype(
+                    np.uint32
+                )
+                iz = (np.floor(p[:, 2] * inv_dx).astype(np.int64) % gz).astype(
+                    np.uint32
+                )
 
                 def _part1by2(v: np.ndarray) -> np.ndarray:
-                    v = v & np.uint32(0x3FF)  # up to 10 bits per axis (covers grid<=1024)
+                    v = v & np.uint32(
+                        0x3FF
+                    )  # up to 10 bits per axis (covers grid<=1024)
                     v = (v | (v << np.uint32(16))) & np.uint32(0x030000FF)
                     v = (v | (v << np.uint32(8))) & np.uint32(0x0300F00F)
                     v = (v | (v << np.uint32(4))) & np.uint32(0x030C30C3)
                     v = (v | (v << np.uint32(2))) & np.uint32(0x09249249)
                     return v
 
-                morton = (_part1by2(ix) | (_part1by2(iy) << np.uint32(1)) | (_part1by2(iz) << np.uint32(2))).astype(np.uint64)
+                morton = (
+                    _part1by2(ix)
+                    | (_part1by2(iy) << np.uint32(1))
+                    | (_part1by2(iz) << np.uint32(2))
+                ).astype(np.uint64)
                 key = (morton << np.uint64(8)) | (b.astype(np.uint64) & np.uint64(0xFF))
         else:
             return {}
@@ -195,7 +262,13 @@ class MapPathMetrics:
         # Folding requires masses.
         if m is not None and m.size == n:
             top1, pr, H = _fold_mass_over_keys(key, m)
-            out.update({"fold_top1": float(top1), "fold_pr": float(pr), "fold_entropy": float(H)})
+            out.update(
+                {
+                    "fold_top1": float(top1),
+                    "fold_pr": float(pr),
+                    "fold_entropy": float(H),
+                }
+            )
 
         # Path transitions.
         edges, uniq_e, top1_p, edge_H, top_edges = _transition_metrics_from_keys(
@@ -212,5 +285,36 @@ class MapPathMetrics:
             }
         )
 
-        return out
+        edge_ids = np.array([], dtype=np.uint64)
+        edge_counts = np.array([], dtype=np.int64)
+        if key.size > 1:
+            order = np.lexsort((t, s))
+            s2 = s[order]
+            t2 = t[order]
+            k2 = key[order]
+            ok2 = (s2[1:] == s2[:-1]) & (t2[1:] == (t2[:-1] + 1))
+            src2 = k2[:-1][ok2]
+            dst2 = k2[1:][ok2]
+            if src2.size > 0:
+                e_all2 = (src2.astype(np.uint64) << np.uint64(32)) | (
+                    dst2.astype(np.uint64) & np.uint64(0xFFFFFFFF)
+                )
+                edge_ids, edge_counts = np.unique(e_all2, return_counts=True)
 
+        recall_top1, recall_top3, recall_mrr, recall_edges, recall_prefixes = (
+            _recall_metrics_from_transition_counts(
+                edge_ids=edge_ids,
+                edge_counts=edge_counts,
+            )
+        )
+        out.update(
+            {
+                "recall_top1": float(recall_top1),
+                "recall_top3": float(recall_top3),
+                "recall_mrr": float(recall_mrr),
+                "recall_support_edges": int(recall_edges),
+                "recall_support_prefixes": int(recall_prefixes),
+            }
+        )
+
+        return out

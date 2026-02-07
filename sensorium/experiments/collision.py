@@ -7,6 +7,7 @@ paper.
 
 from __future__ import annotations
 
+from dataclasses import replace
 from sensorium.experiments.base import (
     Experiment,
 )
@@ -41,6 +42,8 @@ from sensorium.projectors import (
     CollisionFigureProjector,
 )
 
+from sensorium.console import console
+
 
 class CollisionExperiment(Experiment):
     """Demonstrate Thermodynamic Trie (Collision is Compression)
@@ -58,6 +61,7 @@ class CollisionExperiment(Experiment):
     ):
         reportable = [
             "scenario",
+            "seed",
             "n_tokens",
             "n_samples",
             "n_unique_tokens",
@@ -70,6 +74,9 @@ class CollisionExperiment(Experiment):
             "fold_pr",
             "transition_top1_prob",
             "transition_unique_edges",
+            "recall_top1",
+            "recall_top3",
+            "recall_mrr",
             "spatial_clustering",
             "mode_participation",
             "mode_entropy",
@@ -89,46 +96,39 @@ class CollisionExperiment(Experiment):
         self.grid_size: tuple[int, int, int] = (64, 64, 64)
         self.max_steps = 12
         self.min_steps = 4
+        self.seeds = self.experiment_seeds()
 
         # Medium-scale scenarios (run through the actual Manifold wrapper).
-        # 1) Controlled synthetic collision workload
-        self.scenarios: list[tuple[str, DatasetProtocol]] = [
+        self.scenario_specs: list[tuple[str, object]] = [
             (
                 "medium_collision",
-                SyntheticDataset(
-                    SyntheticConfig(
-                        pattern=SyntheticPattern.COLLISION,
-                        num_units=128,
-                        unit_length=512,
-                        collision_rate=0.5,
-                        seed=42,
-                    )
+                SyntheticConfig(
+                    pattern=SyntheticPattern.COLLISION,
+                    num_units=128,
+                    unit_length=512,
+                    collision_rate=0.5,
+                    seed=42,
                 ),
             ),
             (
                 "medium_repeated_ab",
-                SyntheticDataset(
-                    SyntheticConfig(
-                        pattern=SyntheticPattern.REPEATED,
-                        num_units=128,
-                        unit_length=512,
-                        repeat_sequence=b"AB",
-                        seed=42,
-                    )
+                SyntheticConfig(
+                    pattern=SyntheticPattern.REPEATED,
+                    num_units=128,
+                    unit_length=512,
+                    repeat_sequence=b"AB",
+                    seed=42,
                 ),
             ),
-            # 2) Real text stream at medium scale
             (
                 "medium_wikitext",
-                HuggingFaceDataset(
-                    HuggingFaceConfig(
-                        name="wikitext",
-                        subset="wikitext-2-raw-v1",
-                        split="train",
-                        field="text",
-                        streaming=True,
-                        max_samples=512,
-                    )
+                HuggingFaceConfig(
+                    name="wikitext",
+                    subset="wikitext-2-raw-v1",
+                    split="train",
+                    field="text",
+                    streaming=True,
+                    max_samples=512,
                 ),
             ),
         ]
@@ -137,9 +137,7 @@ class CollisionExperiment(Experiment):
                 TokenDistributionMetrics().observe,
                 SpatialClustering().observe,
                 WaveFieldMetrics().observe,
-                MapPathMetrics(
-                    key=KeySpec(kind="spatial_morton_byte"), topk=20
-                ).observe,
+                MapPathMetrics(key=KeySpec(kind="sequence_byte"), topk=20).observe,
                 CollisionPaperArtifacts().observe,
             ]
         )
@@ -152,7 +150,7 @@ class CollisionExperiment(Experiment):
                 TableConfig(
                     name=f"{experiment_name}_summary",
                     columns=reportable,
-                    caption="Collision experiment summary metrics",
+                    caption="Collision experiment raw per-seed metrics (MPS only)",
                     label=f"tab:{experiment_name}",
                     precision=3,
                 ),
@@ -165,62 +163,88 @@ class CollisionExperiment(Experiment):
                 output_dir=self.artifact_path("figures"),
             ),
         )
+        self.summary_table = LaTeXTableProjector(
+            TableConfig(
+                name=f"{experiment_name}_summary_ci",
+                columns=[],
+                caption="Collision experiment multi-seed summary with 95\\% CI (MPS only)",
+                label=f"tab:{experiment_name}_ci",
+                precision=4,
+            ),
+            output_dir=self.artifact_path("tables"),
+        )
+
+    def _build_dataset(self, spec: object, *, seed: int) -> DatasetProtocol:
+        if isinstance(spec, SyntheticConfig):
+            return SyntheticDataset(replace(spec, seed=int(seed)))
+        if isinstance(spec, HuggingFaceConfig):
+            return HuggingFaceDataset(spec)
+        raise TypeError(f"Unsupported scenario spec type: {type(spec)!r}")
 
     def run(self):
-        for scenario_name, dataset in self.scenarios:
-            tokenizer = UniversalTokenizer(
-                datasets=[dataset],
-                config=UniversalTokenizerConfig(
-                    max_tokens=65536,
-                    batch_tokens=65536,
-                    seed=42,
-                ),
-            )
-            instrumentation = []
-            if self.dashboard:
-                self.start_dashboard(
+        console.info("Running collision experiment")
+        console.info(f"Seeds: {self.seeds}")
+
+        for scenario_name, spec in self.scenario_specs:
+            for seed in self.seeds:
+                console.info(f"Running scenario: {scenario_name} (seed={seed})")
+                dataset = self._build_dataset(spec, seed=seed)
+
+                tokenizer = UniversalTokenizer(
+                    datasets=[dataset],
+                    config=UniversalTokenizerConfig(
+                        max_tokens=65536,
+                        batch_tokens=65536,
+                        seed=int(seed),
+                    ),
+                )
+                instrumentation = []
+                if self.dashboard:
+                    self.start_dashboard(
+                        grid_size=self.grid_size,
+                        run_name=f"{self.experiment_name}_{scenario_name}_s{seed}",
+                    )
+                    instrumentation = (
+                        [self._dashboard_instance]
+                        if self._dashboard_instance is not None
+                        else []
+                    )
+
+                manifold = Manifold(
+                    tokenizer=tokenizer,
                     grid_size=self.grid_size,
-                    run_name=f"{self.experiment_name}_{scenario_name}",
-                )
-                instrumentation = (
-                    [self._dashboard_instance]
-                    if self._dashboard_instance is not None
-                    else []
+                    max_steps=self.max_steps,
+                    instrumentation=instrumentation,
                 )
 
-            manifold = Manifold(
-                tokenizer=tokenizer,
-                grid_size=self.grid_size,
-                max_steps=self.max_steps,
-                instrumentation=instrumentation,
-            )
+                t0 = time.perf_counter()
+                state = manifold.run()
+                t1 = time.perf_counter()
+                steps = int(state.get("step", 0))
 
-            t0 = time.perf_counter()
-            state = manifold.run()
-            t1 = time.perf_counter()
-            steps = int(state.get("step", 0))
+                termination = "budget" if steps >= int(self.max_steps) else "quiet"
+                if steps < int(self.min_steps):
+                    termination = "quiet"  # only a labeling detail
 
-            termination = "budget" if steps >= int(self.max_steps) else "quiet"
-            if steps < int(self.min_steps):
-                termination = "quiet"  # only a labeling detail
+                self.observe(
+                    state,
+                    scenario=str(scenario_name),
+                    seed=int(seed),
+                    run_name=f"{self.experiment_name}_{scenario_name}_s{seed}",
+                    run_backend=str(manifold.device_name),
+                    run_steps=steps,
+                    run_termination=termination,
+                    simulate_ms=(t1 - t0) * 1000.0,
+                )
 
-            self.observe(
-                state,
-                scenario=str(scenario_name),
-                run_name=f"{self.experiment_name}_{scenario_name}",
-                run_backend=str(manifold.device_name),
-                run_steps=steps,
-                run_termination=termination,
-                simulate_ms=(t1 - t0) * 1000.0,
-            )
-
-            if self.dashboard:
-                self.close_dashboard()
+                if self.dashboard:
+                    self.close_dashboard()
 
         return self.project()
 
     def observe(self, state: dict, **meta) -> dict:
         """Observe the manifold state using composed observers."""
+        console.info("Observing manifold state")
         grid_dims = state.get("grid_size")
         if not (isinstance(grid_dims, (tuple, list)) and len(grid_dims) == 3):
             grid_dims = self.grid_size
@@ -233,4 +257,36 @@ class CollisionExperiment(Experiment):
 
     def project(self) -> dict:
         """Project accumulated observations to artifacts."""
-        return self.projector.project(self.inference)
+        console.info("Projecting accumulated observations to artifacts")
+        rows = list(self.inference.results)
+        self.assert_allowed_backends(rows, allowed=("mps",))
+        provenance = self.write_provenance_jsonl(
+            rows, stem=f"{self.experiment_name}_raw"
+        )
+
+        raw_outputs = self.projector.project(self.inference)
+
+        metric_fields = self.infer_numeric_fields(
+            rows,
+            candidate_fields=self.reportable,
+            exclude_fields=("seed",),
+        )
+        summary_rows = self.aggregate_rows_with_ci(
+            rows,
+            group_field="scenario",
+            metric_fields=metric_fields,
+            carry_fields=("run_backend",),
+            seed_field="seed",
+        )
+        summary_columns = self.ci_summary_columns(
+            metric_fields,
+            prefix_fields=("scenario", "run_backend", "n_seeds"),
+        )
+        self.summary_table.config.columns = summary_columns
+        summary_output = self.summary_table.project({"results": summary_rows})
+
+        return {
+            "raw": raw_outputs,
+            "summary_ci": summary_output,
+            "provenance_jsonl": str(provenance),
+        }

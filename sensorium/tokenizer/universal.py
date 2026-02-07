@@ -27,6 +27,7 @@ import torch
 from sensorium.kernels.runtime import get_device
 from sensorium.tokenizer.prototype import Tokenizer
 from sensorium.dataset.base import DatasetProtocol
+from sensorium.console import console
 
 
 @dataclass(frozen=True, slots=True)
@@ -54,6 +55,8 @@ class UniversalTokenizer(Tokenizer):
         self._rng.manual_seed(int(self.config.seed))
 
     def stream(self) -> Iterator[dict]:
+        console.info("Streaming tokens")
+
         cfg = self.config
         max_tokens = int(cfg.max_tokens)
         batch_tokens = int(cfg.batch_tokens)

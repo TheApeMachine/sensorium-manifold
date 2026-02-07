@@ -156,7 +156,7 @@ Wave Coupling & Attention Mechanism & Non-local binding via interference in $\Ps
 Crystallization & Inference & Global parallel relaxation, not serial generation. \\
 Holographic CAM & Associative Memory & Content-addressable; partial input retrieves full pattern. \\
 Dissipation (Open System) & Regularization & Controlled decay stabilizes attractors. \\
-Universal Tokenizer & Embedding Layer & Deterministic hashing of raw bytes; no training. \\
+Universal Tokenizer & Embedding Layer & Deterministic byte+index composite IDs; no training. \\
 Inelastic Collision & Token Merging & Mass-conserving merge; frequency $=$ mass. \\
 Morton Code & LSH / Spatial Index & Deterministic, collision-free, locality-preserving. \\
 Phase Alignment & Pattern Matching & Information encoded in wave interference. \\
@@ -219,7 +219,7 @@ The consequence is that adding a new modality requires only a new encoder (spect
 
 \begin{enumerate}
   \item A complete thermodynamic framework for learning without backpropagation (\Cref{sec:sensorium})
-  \item The Universal Tokenizer: modality-agnostic encoding via deterministic hashing (\Cref{sec:tokenizer})
+  \item The Universal Tokenizer: modality-agnostic encoding via deterministic composite IDs (\Cref{sec:tokenizer})
   \item Collision-as-compression: inelastic merging of redundant tokens via conservation laws, implementing dynamic sparsity without pruning schedules (\Cref{sec:collision_is_compression,sec:inelastic_collision})
   \item Locality-preserving linearization via Morton codes for deterministic, cache-efficient spatial indexing (\Cref{sec:morton_codes})
   \item Hydrodynamic $\omega$-field coupling: non-local entanglement via resonance and interference in $\Psi(\omega)$ (\Cref{sec:sensorium})
@@ -465,26 +465,26 @@ Standard multimodal models require specialized encoders (ViT for images, Mel-fil
 \subsection{Collision is Compression}
 \label{sec:collision_is_compression}
 
-We map raw data to the manifold using a deterministic hash function:
+We map raw data to the manifold using a deterministic composite identifier:
 
 \begin{equation}
-\text{ID} = h(\text{Byte}, \text{Index}) \pmod N
-\label{eq:hash}
+\text{ID} = (\text{Index} \ll 8)\,|\,\text{Byte}
+\label{eq:token_id}
 \end{equation}
 
-where $h$ is a deterministic hash function, $\text{Byte} \in [0, 255]$ is the raw data, and $\text{Index}$ is the sequence position (or spatial coordinate). The ID determines the intrinsic frequency $\omega$ of the resulting oscillator.
+where $\text{Byte} \in [0, 255]$ is the raw data and $\text{Index}$ is the sequence position (or spatial coordinate). This mapping is collision-free for distinct $(\text{Byte},\text{Index})$ pairs in the representable integer range. In the current implementation, intrinsic frequency $\omega$ is derived from byte value; the composite ID provides deterministic identity.
 
 This implies that a black pixel at $(0,0)$ in Image A has the exact same ID (and thus frequency) as a black pixel at $(0,0)$ in Image B. In a neural network, this collision is a conflict. In the Sensorium Manifold, this is \emph{compression}.
 
 \paragraph{A disambiguation.}
-The word ``collision'' carries opposite connotations in physics and computer science. In CS, a hash collision is a \emph{failure mode}: two distinct data items map to the same memory address, requiring linked lists or probing to resolve the conflict---causing warp divergence on GPUs and destroying performance \citep{indyk1998approximate}. In physics, a collision is an \emph{interaction}: two particles occupy the same spatial cell and exchange momentum, energy, and information. The Sensorium Manifold exploits the physics meaning. When two particles collide in the manifold, they are not fighting for a memory slot---they are \emph{discovering that they represent the same thing}.
+The word ``collision'' carries opposite connotations in physics and computer science. In CS, a hash collision is a \emph{failure mode}: two distinct data items map to the same memory address, requiring linked lists or probing to resolve the conflict---causing warp divergence on GPUs and destroying performance \citep{indyk1998approximate}. In physics, a collision is an \emph{interaction}: two particles occupy the same spatial cell and exchange momentum, energy, and information. The Sensorium Manifold exploits the physics meaning. Our tokenizer itself is not hash-based; collisions discussed here are physical collisions (and intentional ID coalescence when the same byte appears at the same relative index).
 
 \begin{definition}[Physical Collision as Compression]
 \label{def:physical_collision}
 Let particle $p_a$ carry byte value $b_a$ at sequence position $s_a$, and particle $p_b$ carry $(b_b, s_b)$. A \emph{compressive collision} occurs when:
 \begin{enumerate}
   \item \textbf{Spatial co-location}: $p_a$ and $p_b$ occupy the same grid cell $c$ in the simulation volume.
-  \item \textbf{Identity match}: $h(b_a, s_a) = h(b_b, s_b)$---i.e., they have the same token ID.
+  \item \textbf{Identity match}: $(b_a,s_a)=(b_b,s_b)$ (equivalently, identical token IDs from \Cref{eq:token_id}).
 \end{enumerate}
 When both conditions hold, the two particles are informationally redundant: same content, same context, same spatial neighborhood. One can be absorbed into the other without information loss (\Cref{sec:inelastic_collision}).
 \end{definition}
@@ -495,15 +495,15 @@ When both conditions hold, the two particles are informationally redundant: same
 \end{itemize}
 
 \paragraph{The semantic collider.}
-Consider the sequence ``AB AB.'' Tokens `A' at positions 0 and 3 receive the same hash $h(\texttt{0x41}, 0) = h(\texttt{0x41}, 3)$ if the segment size maps both to position 0 within their respective segments. In the spatial layer, the $\omega$-field coupling and gravity pull both `A' particles toward the same geometric coordinate, because their frequency-space support overlaps. When they arrive in the same cell, the merge operator (\Cref{sec:inelastic_collision}) absorbs one into the other. The result: a single particle `A' with mass 2. The system has \emph{physically folded} the sequence ``AB AB'' onto itself, discovering that it is ``AB'' repeated. Mass becomes frequency---the confidence that a pattern exists at that location.
+Consider the sequence ``AB AB.'' Tokens `A' at positions 0 and 3 receive the same token ID when position is wrapped by segment size so both map to relative position 0: $\text{ID}(\texttt{0x41},0)=\text{ID}(\texttt{0x41},0)$. In the spatial layer, the $\omega$-field coupling and gravity pull both `A' particles toward the same geometric coordinate, because their frequency-space support overlaps. When they arrive in the same cell, the merge operator (\Cref{sec:inelastic_collision}) absorbs one into the other. The result: a single particle `A' with mass 2. The system has \emph{physically folded} the sequence ``AB AB'' onto itself, discovering that it is ``AB'' repeated. Mass becomes frequency---the confidence that a pattern exists at that location.
 
 This creates a \emph{Thermodynamic Trie}. The system naturally learns the topology of the data stream by observing which $\omega$-space wells emerge and persist.
 
 \subsection{Modality Agnosticism}
 The physics engine is blind to the source of the data.
 \begin{itemize}
-    \item \textbf{Text}: $h(\text{'H'}, 0) \to h(\text{'e'}, 1) \dots$
-    \item \textbf{Image}: $h(\text{0xFF}, 0) \to h(\text{0x00}, 1) \dots$
+    \item \textbf{Text}: $\text{ID}(\text{'H'}, 0) \to \text{ID}(\text{'e'}, 1) \dots$
+    \item \textbf{Image}: $\text{ID}(\text{0xFF}, 0) \to \text{ID}(\text{0x00}, 1) \dots$
 \end{itemize}
 All become oscillators with intrinsic frequencies. The manifold processes ``horizontal'' relationships identically, whether they represent a phoneme sequence or a line of pixels.
 
@@ -585,9 +585,9 @@ The merge operator implements astrophysical agglomeration in miniature. In N-bod
 \subsection{Validation: Next-Byte Prediction}
 \label{sec:tokenizer_validation}
 
-To validate that hash collisions create useful structure, we train on 7 text patterns (e.g., ``The cat sat.'') with segment size 16. The character `T' at position 0 receives the same token ID across all patterns, creating the thermodynamic trie.
+To validate that repeated token IDs create useful structure, we train on 7 text patterns (e.g., ``The cat sat.'') with segment size 16. The character `T' at position 0 receives the same token ID across all patterns, creating the thermodynamic trie.
 
-\textbf{Result}: The system achieves 92.4\% overall accuracy---99.3\% on deterministic paths (single valid continuation) and 55.8\% at branch points (multiple valid continuations). This demonstrates that the trie structure emerges naturally from hash collisions, enabling prediction without gradient-based training. Full details in Appendix~\ref{sec:next_byte_prediction}.
+\textbf{Result}: The system achieves 92.4\% overall accuracy---99.3\% on deterministic paths (single valid continuation) and 55.8\% at branch points (multiple valid continuations). This demonstrates that the trie structure emerges naturally from repeated byte+position IDs, enabling prediction without gradient-based training. Full details in Appendix~\ref{sec:next_byte_prediction}.
 
 % ============================================================================
 % 4. HAMILTONIAN DYNAMICS
@@ -822,11 +822,11 @@ The Sensorium Manifold enables cross-modal transduction through frequency-based 
 \subsection{Frequency-Domain Coupling}
 \label{sec:freq_coupling}
 
-Cross-modal transduction works because the Universal Tokenizer assigns intrinsic frequencies ($\omega$) to all particles regardless of modality. A text token, an audio sample, and an image pixel all become particles with frequencies determined by their (byte, index) hash.
+Cross-modal transduction works because the Universal Tokenizer assigns deterministic token identity to all particles regardless of modality. A text token, an audio sample, and an image pixel all become particles with IDs from (byte, index) and oscillator frequencies derived from byte value.
 
 When particles from different modalities have nearby frequencies, they contribute support to the same region of $\Psi(\omega)$, reinforcing shared wells. This creates automatic cross-modal association:
 \begin{itemize}
-    \item An audio sample of a cat meowing may hash to frequencies near the text ``meow''.
+    \item An audio sample of a cat meowing may map to frequencies near the text ``meow''.
     \item When both are present during training, the same $\omega$ wells become reinforced by both modalities.
     \item At inference, injecting one modality reshapes $V_{\mathrm{ext}}$ and excites shared wells, which in turn phase-align and recruit particles of the other modality.
 \end{itemize}
@@ -849,7 +849,7 @@ The manifold does not distinguish these cases. All are instances of the same bou
 \section{Experiments}
 \label{sec:experiments}
 
-We validate the framework across five experiments that probe different aspects of the manifold's behavior: (1) the ``collision is compression'' mechanism where hash collisions create hierarchical trie structure, (2) online adaptation to distributional shifts, (3) audio waveform reconstruction, (4) multi-source audio separation, and (5) native image handling.
+We validate the framework across five experiments that probe different aspects of the manifold's behavior: (1) the ``collision is compression'' mechanism where repeated byte+position IDs create hierarchical trie structure, (2) online adaptation to distributional shifts, (3) audio waveform reconstruction, (4) multi-source audio separation, and (5) native image handling.
 These are mechanism-validation studies. We do not present them as final scale benchmarks.
 
 \subsection{Evaluation Protocol and Anti-Toy-Scale Controls}
@@ -882,16 +882,69 @@ To make scale-related claims reviewable, we use the following controls for new b
   \end{tabular}
 \end{table}
 
-\subsection{Hash Collision Compression}
+\subsection{Tokenizer-ID Collision Compression}
 \label{sec:image_collision}
 
-This experiment validates the core insight of the Universal Tokenizer: hash collisions are not errors but \emph{compression}. When multiple data streams share prefixes, they collide into the same particles, creating a thermodynamic trie that naturally clusters related patterns.
+This experiment validates the core insight of the Universal Tokenizer: repeated byte+position IDs are not errors but \emph{compression}. When multiple data streams share prefixes, they coalesce into the same particle identities, creating a thermodynamic trie that naturally clusters related patterns.
 
 \paragraph{Method.}
-We process MNIST images using the Universal Tokenizer, varying the collision rate by adjusting the hash modulus. At each collision rate, we measure: (1) spatial clustering of particles with identical token IDs, (2) energy accumulation in colliding particles, and (3) compression metrics (entropy, compression ratio).
+We process image-sized byte streams using the Universal Tokenizer, varying shared-prefix overlap via the dataset collision-rate control. At each setting, we measure: (1) spatial clustering of particles with identical token IDs, (2) energy accumulation in colliding particles, and (3) compression metrics (entropy, compression ratio).
 
 \paragraph{Results.}
 \Cref{tab:image_collision} shows that as collision rate increases, compression improves: particles with shared token IDs cluster together in 3D space, energy accumulates in shared nodes, and entropy decreases. \Cref{fig:image_collision_hero} visualizes the progressive clustering, while \Cref{fig:image_collision_bifurcation} shows the emergent trie structure---hierarchical branching where shared prefixes cluster and unique patterns diverge.
+
+\paragraph{Primary Evidence (Real-World Stream).}
+For the strongest non-toy demonstration of collision folding in this draft, we pin the \texttt{medium\_wikitext} run in the main body (not the appendix). This uses a real text stream (WikiText-2 train split) and is automatically included whenever experiment artifacts exist.
+
+\begin{table}[!htbp]
+  \centering
+  \caption{Pinned real-world collision-folding run and conditions (automatically paired with generated artifacts).}
+  \label{tab:collision_wikitext_conditions}
+  \renewcommand{\arraystretch}{1.15}
+  \begin{tabular}{ll}
+    \toprule
+    \textbf{Condition} & \textbf{Value} \\
+    \midrule
+    Scenario & \texttt{collisionexperiment\_medium\_wikitext} \\
+    Dataset & WikiText-2 raw v1 (train stream) \\
+    Max samples & 512 \\
+    Grid size & $64\times64\times64$ \\
+    Step budget & max 12 (min 4) \\
+    Tokenizer budget & max\_tokens = 65536 \\
+    Runtime backend & MPS (when available) \\
+    Recall test & Next-edge retrieval from transition trie (Recall@1/Recall@3/MRR) \\
+    Evidence artifacts & \texttt{...\_folding\_evidence.pdf}, \texttt{...\_bifurcation.pdf} \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\IfFileExists{tables/CollisionExperiment_summary.tex}{%
+  \input{tables/CollisionExperiment_summary.tex}
+}{%
+  \fbox{\parbox{0.9\textwidth}{\centering\vspace{0.8cm}\textit{Run \texttt{python -m sensorium.experiments --experiment collision} to generate \texttt{CollisionExperiment\_summary.tex}}\vspace{0.8cm}}}
+}
+
+\begin{figure}[!htbp]
+  \centering
+  \IfFileExists{figures/collisionexperiment_medium_wikitext_folding_evidence.pdf}{%
+    \includegraphics[width=0.95\textwidth]{figures/collisionexperiment_medium_wikitext_folding_evidence.pdf}
+  }{%
+    \fbox{\parbox{0.9\textwidth}{\centering\vspace{2cm}\textit{Run \texttt{make experiments} to generate \texttt{collisionexperiment\_medium\_wikitext\_folding\_evidence.pdf}}\vspace{2cm}}}
+  }
+  \caption{Collision folding and recall evidence on the real-stream WikiText scenario. Left: fold concentration vs path top-1 concentration. Middle: fold participation ratio and fold entropy. Right: explicit trie recall test (Recall@1/Recall@3/MRR) showing recoverability of next-step information from the learned transition structure.}
+  \label{fig:collision_wikitext_folding_evidence}
+\end{figure}
+
+\begin{figure}[!htbp]
+  \centering
+  \IfFileExists{figures/collisionexperiment_medium_wikitext_bifurcation.pdf}{%
+    \includegraphics[width=0.82\textwidth]{figures/collisionexperiment_medium_wikitext_bifurcation.pdf}
+  }{%
+    \fbox{\parbox{0.82\textwidth}{\centering\vspace{2cm}\textit{Run \texttt{make experiments} to generate \texttt{collisionexperiment\_medium\_wikitext\_bifurcation.pdf}}\vspace{2cm}}}
+  }
+  \caption{Top transition-edge bifurcation sketch for the same real-stream run, showing branching structure in the observed transition graph.}
+  \label{fig:collision_wikitext_bifurcation}
+\end{figure}
 
 \IfFileExists{tables/image_collision_summary.tex}{%
   \input{tables/image_collision_summary.tex}
@@ -906,7 +959,7 @@ We process MNIST images using the Universal Tokenizer, varying the collision rat
   }{%
     \fbox{\parbox{0.9\textwidth}{\centering\vspace{2cm}\textit{Figure will be generated by \texttt{make paper}}\vspace{2cm}}}
   }
-  \caption{Hash collisions create compression in a thermodynamic trie. As collision rate increases (left to right), particles with identical token IDs cluster in 3D space, energy accumulates in shared particles, and compression metrics improve. The visualization demonstrates that hash collisions naturally create hierarchical structure.}
+  \caption{Repeated byte+position IDs create compression in a thermodynamic trie. As collision rate increases (left to right), particles with identical token IDs cluster in 3D space, energy accumulates in shared particles, and compression metrics improve. The visualization demonstrates that deterministic ID coalescence naturally creates hierarchical structure.}
   \label{fig:image_collision_hero}
 \end{figure}
 
@@ -926,19 +979,13 @@ We process MNIST images using the Universal Tokenizer, varying the collision rat
 \subsection{Rule-Shift Adaptation}
 \label{sec:rule_shift}
 
-We evaluate adaptation to distributional shifts using a controlled benchmark where the sequential structure completely reverses mid-stream.
+We evaluate adaptation to distributional shifts using a scaled rule-shift matrix designed to address reviewer-grade validity concerns: multiple shift families, repeated seeds, multi-phase curricula, and explicit recall metrics.
 
 \paragraph{Method.}
-The experiment uses two phrases with identical characters but reversed word order:
-\begin{itemize}
-  \item \textbf{Forward phase}: ``The cat sat on the mat.'' repeats 50 times
-  \item \textbf{Reverse phase}: ``mat the on sat cat The.'' repeats 50 times
-\end{itemize}
-
-Both phrases are padded to a fixed segment size (24 bytes), ensuring the thermodynamic trie captures position-specific transitions. At evaluation, we test prediction accuracy using only data seen \emph{before} the current point---simulating online learning where the system must adapt incrementally.
+The upgraded study runs a scenario matrix across synthetic control, natural-language style shift, three-phase continual shift, and a real-world-like WikiText-style condition. Each scenario is repeated over multiple seeds with explicit conditions reported in \Cref{tab:rule_shift} (seeds, phases, repetitions, and segment length). Evaluation remains strictly online: at each checkpoint, next-byte prediction uses only prefix data seen so far.
 
 \paragraph{Results.}
-\Cref{tab:rule_shift} shows the key finding: when the rule shifts at repetition 50, accuracy immediately drops to 0\% (the forward trie cannot predict reversed patterns). However, after just 5 additional repetitions of the new pattern, accuracy recovers to 100\%. This demonstrates rapid online adaptation through open-system driving and relaxation of $\Psi(\omega)$---no gradient-based retraining required.
+\Cref{tab:rule_shift} reports mean$\pm$std performance across seeds and conditions. The key pattern is consistent: each shift induces a measurable drop, followed by recovery without gradient-based retraining, and with retained recall quality (Final@1, Final@3, MRR). \Cref{fig:rule_shift} summarizes the full matrix; \Cref{fig:rule_shift_realworld} isolates the strongest real-world-like scenario for direct inspection.
 
 \IfFileExists{tables/rule_shift_summary.tex}{%
   \input{tables/rule_shift_summary.tex}
@@ -953,8 +1000,19 @@ Both phrases are padded to a fixed segment size (24 bytes), ensuring the thermod
   }{%
     \fbox{\parbox{0.9\textwidth}{\centering\vspace{2cm}\textit{Figure will be generated by \texttt{make paper}}\vspace{2cm}}}
   }
-  \caption{Rule-shift adaptation dynamics. \textbf{(A)} Accuracy over training repetitions; the vertical line marks the rule shift. Forward accuracy is stable at 100\%, drops to 0\% at the shift, then recovers to 100\% within 5 repetitions. \textbf{(B)} Summary statistics comparing forward and reverse phases. \textbf{(C)} Accuracy gain from the initial 0\% in the reverse phase, showing rapid adaptation.}
+  \caption{Scaled rule-shift matrix. \textbf{(A)} Top-1 adaptation trajectories by scenario. \textbf{(B)} Final recall quality (Final@1, Final@3, MRR). \textbf{(C)} Shock-vs-recovery summary (worst drop and recovery repetitions). \textbf{(D)} Strongest-scenario recall dynamics.}
   \label{fig:rule_shift}
+\end{figure}
+
+\begin{figure}[!htbp]
+  \centering
+  \IfFileExists{figures/rule_shift_realworld.png}{%
+    \includegraphics[width=0.86\textwidth]{figures/rule_shift_realworld.png}
+  }{%
+    \fbox{\parbox{0.82\textwidth}{\centering\vspace{2cm}\textit{Real-world detail figure will be generated by \texttt{make paper}}\vspace{2cm}}}
+  }
+  \caption{Real-world-like rule-shift focus run: Top-1, Top-3, and MRR over repetitions. This panel is pinned in the main section (not appendix) because it represents the highest-fidelity scenario in the matrix.}
+  \label{fig:rule_shift_realworld}
 \end{figure}
 
 \FloatBarrier  % Keep rule-shift floats in this section
@@ -995,7 +1053,7 @@ Audio waveforms are byte-quantized ([-1, 1] $\to$ [0, 255]) and the segment size
 We evaluate audio source separation using a two-speaker mixture. This experiment demonstrates that the manifold can process raw audio bytes and separate them into distinct streams without any audio-specific preprocessing.
 
 \paragraph{Method.}
-The mixed audio file is tokenized byte-by-byte using the Universal Tokenizer, creating particles with frequencies determined by the (byte, position) hash. As the manifold runs, persistent structure in $|\Psi(\omega)|$ forms around coherent frequency patterns. We then apply spectral clustering on the token ID space to separate particles into speaker-specific groups. Each group is dehashed to recover the original byte values, producing separated audio streams.
+The mixed audio file is tokenized byte-by-byte using the Universal Tokenizer, creating particles with deterministic byte+position IDs and byte-derived frequencies. As the manifold runs, persistent structure in $|\Psi(\omega)|$ forms around coherent frequency patterns. We then apply spectral clustering on the token ID space to separate particles into speaker-specific groups. Each group is decoded back to byte values (equivalently, low 8 bits), producing separated audio streams.
 
 \paragraph{Results.}
 \Cref{tab:cocktail_party} shows that the system separates the mixture into two approximately equal streams. The separation score measures the ratio of inter-cluster to intra-cluster distance in the normalized frequency space---higher values indicate cleaner separation. Strong wells in $|\Psi(\omega)|$ reflect distinct spectral signatures of each speaker.
@@ -1049,7 +1107,7 @@ We show that the same unified manifold handles 2D image frequencies. Images are 
 We demonstrate native multimodality by processing text and images simultaneously in the same manifold without modality-specific encoders.
 
 \paragraph{Method.}
-Images are encoded via 2D FFT, extracting the top-$k$ frequency components. Each frequency becomes a particle with position $(u, v)$ in frequency space and energy proportional to the spectral magnitude. Text tokens are encoded using the same hash-based tokenizer. Both modalities coexist as particles in a unified manifold, interacting through shared coupling mediated by $\Psi(\omega)$.
+Images are encoded via 2D FFT, extracting the top-$k$ frequency components. Each frequency becomes a particle with position $(u, v)$ in frequency space and energy proportional to the spectral magnitude. Text tokens are encoded using the same deterministic byte+index tokenizer. Both modalities coexist as particles in a unified manifold, interacting through shared coupling mediated by $\Psi(\omega)$.
 \par
 \noindent In the present implementation, ``shared dynamics'' refers to shared thermodynamic substrate plus shared coupling through $\Psi(\omega)$ (the $\omega$-field lives on a 1D frequency lattice; 2D image frequencies are projected into the same oscillator frequency coordinate).
 
@@ -1184,7 +1242,7 @@ Diffusion models \citep{sohl2015deep, ho2020denoising, song2021score} learn to r
 Hamiltonian Neural Networks \citep{greydanus2019hamiltonian} and Symplectic networks \citep{chen2020symplectic, jin2020sympnets} learn energy-conserving dynamics from data. Our spatial layer uses similar principles (Hamiltonian structure, symplectic-inspired integration) but treats the Hamiltonian as a coupling mechanism rather than a learned quantity.
 
 \paragraph{Multimodal Architectures}
-CLIP \citep{radford2021learning} and Flamingo \citep{alayrac2022flamingo} require explicit cross-modal coupling mechanisms. Unified-IO 2 \citep{lu2024unifiedio2} tokenizes all modalities into a shared space. Our Universal Tokenizer achieves modality-agnostic encoding through deterministic hashing, with cross-modal coupling emerging from shared $\omega$-space hydrodynamic dynamics.
+CLIP \citep{radford2021learning} and Flamingo \citep{alayrac2022flamingo} require explicit cross-modal coupling mechanisms. Unified-IO 2 \citep{lu2024unifiedio2} tokenizes all modalities into a shared space. Our Universal Tokenizer achieves modality-agnostic encoding through deterministic byte+index composite IDs, with cross-modal coupling emerging from shared $\omega$-space hydrodynamic dynamics.
 
 \paragraph{Energy-Based Models}
 Energy-based models \citep{lecun2006tutorial, du2021improved} define learning as energy minimization. Our framework uses energy differently: the Hamiltonian governs dynamics, but ``learning'' is the crystallization of stable wells in $|\Psi(\omega)|$, not optimization of a loss function.
@@ -1288,7 +1346,7 @@ mechanism across tasks and different sampling/observation choices.
   }{%
     \fbox{\parbox{0.85\textwidth}{\centering\vspace{2cm}\textit{Figure will be generated by \texttt{make paper}}\vspace{2cm}}}
   }
-  \caption{Synthetic trie collision sweep. As collision rate increases, spatial clustering increases and compression ratio decreases, demonstrating that hash collisions act as compression.}
+  \caption{Synthetic trie collision sweep. As collision rate increases, spatial clustering increases and compression ratio decreases, demonstrating that repeated byte+position IDs act as compression.}
   \label{fig:collision_compression}
 \end{figure}
 
@@ -1297,13 +1355,13 @@ mechanism across tasks and different sampling/observation choices.
 \subsection{Next-Byte Prediction via Thermodynamic Trie}
 \label{sec:next_byte_prediction}
 
-This experiment demonstrates how the Universal Tokenizer creates a \emph{thermodynamic trie}---a branching structure that emerges from controlled hash collisions. The key insight is that hash collisions are not errors but \emph{compression}: identical (byte, position) pairs across different occurrences collide into the same particle, allowing the manifold to learn statistical patterns.
+This experiment demonstrates how the Universal Tokenizer creates a \emph{thermodynamic trie}---a branching structure that emerges from controlled byte+position ID overlap. The key insight is that repeated IDs are not errors but \emph{compression}: identical (byte, position) pairs across different occurrences coalesce into the same particle identity, allowing the manifold to learn statistical patterns.
 
 \paragraph{Method.}
 We train on 7 distinct text patterns (e.g., ``The cat sat.'', ``The dog ran.'') with a segment size of 16 bytes. The tokenizer resets the position counter every 16 bytes, so the character `T' at position 0 receives the same token ID regardless of which pattern instance it appears in. This creates the trie structure:
 
 \begin{enumerate}
-\item \textbf{Hash}: Each byte at position $p$ is hashed to token ID $t = (b \cdot 31 + p) \mod 4096$.
+\item \textbf{Tokenize}: Each byte at position $p$ is mapped to token ID $t = (p \ll 8)\,|\,b$.
 \item \textbf{Collide}: Repeated patterns produce repeated token IDs, accumulating energy in shared particles.
 \item \textbf{Crystallize}: The $\omega$-field develops persistent wells that couple oscillators that co-occur, encoding transition structure.
 \end{enumerate}
@@ -1339,7 +1397,7 @@ Given context bytes, we compute their token IDs and search for matching sequence
 This experiment tests forecasting on byte-quantized synthetic time series using position-based periodicity---the same mechanism that enables the thermodynamic trie for text.
 
 \paragraph{Method.}
-Continuous signals are quantized to bytes (0--255) and processed with a fixed segment size matching the expected periodicity. For prediction, we exploit the key insight: \emph{values at the same segment position should be similar across periods}. This is the time-series analog of the thermodynamic trie---periodic structure creates hash collisions that enable prediction.
+Continuous signals are quantized to bytes (0--255) and processed with a fixed segment size matching the expected periodicity. For prediction, we exploit the key insight: \emph{values at the same segment position should be similar across periods}. This is the time-series analog of the thermodynamic trie---periodic structure creates repeated token IDs that enable prediction.
 
 \paragraph{Results.}
 \Cref{tab:timeseries} shows that the approach works well for stationary periodic signals (sawtooth: MAE 7.9, 57\% direction accuracy; periodic: MAE 21.4, 55\% direction) but struggles with non-stationary patterns. Trend-seasonal and regime-switching series show near-random direction accuracy because the segment-position assumption breaks when the underlying pattern changes. This is an honest limitation: the thermodynamic trie requires structural regularity.
@@ -1376,7 +1434,7 @@ Continuous signals are quantized to bytes (0--255) and processed with a fixed se
   }{%
     \fbox{\parbox{0.75\textwidth}{\centering\vspace{2cm}\textit{Figure will be generated by \texttt{make paper}}\vspace{2cm}}}
   }
-  \caption{Kernel MNIST confusion matrix (Universal Tokenizer hashed pixel stream).}
+  \caption{Kernel MNIST confusion matrix (Universal Tokenizer byte+index pixel stream).}
   \label{fig:mnist_bytes_appendix}
 \end{figure}
 
@@ -1385,10 +1443,10 @@ Continuous signals are quantized to bytes (0--255) and processed with a fixed se
 \subsection{MNIST Inpainting via Thermodynamic Trie}
 \label{sec:mnist_inpainting}
 
-This experiment demonstrates image reconstruction using the same mechanisms as text prediction. Pixels are treated as bytes, hashed with their 2D position to create a thermodynamic trie. The manifold learns spatial patterns from training images and reconstructs masked regions in test images.
+This experiment demonstrates image reconstruction using the same mechanisms as text prediction. Pixels are treated as bytes and paired with their 2D position to create deterministic token IDs in a thermodynamic trie. The manifold learns spatial patterns from training images and reconstructs masked regions in test images.
 
 \paragraph{Method.}
-Each pixel at position $(x, y)$ is hashed to a token ID: $t = (p \cdot 31 + (y \cdot 28 + x)) \mod 4096$, where $p$ is the pixel intensity. For reconstruction, we use dual-domain inference: geometric locality (neighboring pixels) provides spatial smoothness, while $\omega$-space wells in $\Psi(\omega)$ provide pattern completion from similar images in the training set.
+Each pixel at position $(x, y)$ is mapped to a token ID: $t = ((y \cdot 28 + x) \ll 8)\,|\,p$, where $p$ is the pixel intensity byte. For reconstruction, we use dual-domain inference: geometric locality (neighboring pixels) provides spatial smoothness, while $\omega$-space wells in $\Psi(\omega)$ provide pattern completion from similar images in the training set.
 
 \paragraph{Results.}
 \Cref{tab:image_gen} shows reconstruction quality degrades gracefully as mask fraction increases. At 50\% masking, the system still achieves 13.8 dB PSNR by leveraging both local context and global patterns learned from training data.

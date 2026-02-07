@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from dataclasses import replace
 import math
-import os
 from pathlib import Path
 from typing import Any, Dict, List
 
@@ -23,6 +22,8 @@ from sensorium.observers.metrics import (
 )
 from sensorium.observers.sql import SQLObserver, SQLObserverConfig
 from sensorium.projectors import (
+    CollisionFigureConfig,
+    CollisionFigureProjector,
     ConsoleProjector,
     LaTeXTableProjector,
     PipelineProjector,
@@ -43,6 +44,7 @@ class WaveTrieExperiment(Experiment):
             dashboard=dashboard,
             reportable=[
                 "scenario",
+                "seed",
                 "n_tokens",
                 "n_samples",
                 "compression_ratio",
@@ -62,6 +64,9 @@ class WaveTrieExperiment(Experiment):
                 "out_degree_coverage",
                 "transition_top1_prob",
                 "transition_entropy",
+                "recall_top1",
+                "recall_top3",
+                "recall_mrr",
                 "fold_top1",
                 "fold_pr",
                 "fold_entropy",
@@ -81,21 +86,14 @@ class WaveTrieExperiment(Experiment):
             ],
         )
 
-        allow_fallback = os.getenv(
-            "SENSORIUM_ALLOW_ANALYSIS_FALLBACK", ""
-        ).strip().lower() in {
-            "1",
-            "true",
-            "yes",
-            "on",
-        }
         self.run_config = ManifoldRunConfig(
             grid_size=(64, 64, 64),
             max_steps=16,
             min_steps=4,
-            allow_analysis_fallback=allow_fallback,
+            allow_analysis_fallback=False,
             analysis_mode_bins=512,
         )
+        self.seeds = self.experiment_seeds()
         self.scenarios: List[Dict[str, Any]] = self._build_scenarios()
 
         self.inference = InferenceObserver(
@@ -145,13 +143,31 @@ class WaveTrieExperiment(Experiment):
                 TableConfig(
                     name="wave_trie_summary",
                     columns=self.reportable,
-                    caption="Wave-trie branch/fold summary (real manifold)",
+                    caption="Wave-trie raw per-seed metrics (real manifold, MPS only)",
                     label="tab:wave_trie",
                     precision=4,
                 ),
                 output_dir=Path("paper/tables"),
             ),
+            CollisionFigureProjector(
+                CollisionFigureConfig(
+                    name_prefix=experiment_name,
+                    formats=("pdf",),
+                    dpi=220,
+                ),
+                output_dir=self.artifact_path("figures"),
+            ),
             TopTransitionsProjector(),
+        )
+        self.summary_table = LaTeXTableProjector(
+            TableConfig(
+                name="wave_trie_summary_ci",
+                columns=[],
+                caption="Wave-trie multi-seed summary with 95\\% CI (MPS only)",
+                label="tab:wave_trie_ci",
+                precision=4,
+            ),
+            output_dir=Path("paper/tables"),
         )
 
     def _branch_code(self, value: int, width: int, alphabet: str) -> str:
@@ -248,14 +264,6 @@ class WaveTrieExperiment(Experiment):
     def run(self):
         for item in self.scenarios:
             patterns = list(item["patterns"])
-            dataset = SyntheticDataset(
-                SyntheticConfig(
-                    pattern=SyntheticPattern.TEXT_PREFIX,
-                    text_patterns=patterns,
-                    pattern_counts=dict(item["counts"]),
-                    seed=42,
-                )
-            )
             n_tokens_target = sum(
                 len(p.encode("utf-8")) * int(item["repeats"]) for p in patterns
             )
@@ -264,64 +272,77 @@ class WaveTrieExperiment(Experiment):
             else:
                 run_cfg = replace(self.run_config, max_steps=14, min_steps=4)
 
-            if self.dashboard:
-                self.start_dashboard(
-                    grid_size=run_cfg.grid_size,
-                    run_name=f"{self.experiment_name}_{item['name']}",
+            for seed in self.seeds:
+                dataset = SyntheticDataset(
+                    SyntheticConfig(
+                        pattern=SyntheticPattern.TEXT_PREFIX,
+                        text_patterns=patterns,
+                        pattern_counts=dict(item["counts"]),
+                        seed=int(seed),
+                    )
                 )
-                state, run_meta = run_stream_on_manifold(
-                    dataset.generate(),
-                    config=run_cfg,
-                    on_step=self.dashboard_update,
+                run_name = f"{item['name']}_s{seed}"
+                if self.dashboard:
+                    self.start_dashboard(
+                        grid_size=run_cfg.grid_size,
+                        run_name=f"{self.experiment_name}_{run_name}",
+                    )
+                    state, run_meta = run_stream_on_manifold(
+                        dataset.generate(),
+                        config=run_cfg,
+                        on_step=self.dashboard_update,
+                    )
+                    self.close_dashboard()
+                else:
+                    state, run_meta = run_stream_on_manifold(
+                        dataset.generate(), config=run_cfg
+                    )
+                token_ids = state.get("token_ids")
+                n_tokens_observed = (
+                    int(token_ids.numel())
+                    if token_ids is not None
+                    else int(run_meta["n_particles"])
                 )
-                self.close_dashboard()
-            else:
-                state, run_meta = run_stream_on_manifold(
-                    dataset.generate(), config=run_cfg
+
+                result = self.inference.observe(
+                    state,
+                    scenario=str(item["name"]),
+                    seed=int(seed),
+                    run_name=str(run_name),
+                    n_tokens=n_tokens_observed,
+                    n_patterns=int(len(patterns)),
+                    families=int(item["families"]),
+                    branches_per_family=int(item["branches_per_family"]),
+                    repeats_per_pattern=int(item["repeats"]),
+                    expected_unique_edges=int(item["expected_unique_edges"]),
+                    expected_branch_nodes=int(item["expected_branch_nodes"]),
+                    expected_max_out_degree=int(item["expected_max_out_degree"]),
+                    run_backend=str(run_meta["run_backend"]),
+                    run_steps=int(run_meta["run_steps"]),
+                    run_termination=str(run_meta["run_termination"]),
+                    init_ms=float(run_meta["init_ms"]),
+                    simulate_ms=float(run_meta["simulate_ms"]),
                 )
-            token_ids = state.get("token_ids")
-            n_tokens_observed = (
-                int(token_ids.numel())
-                if token_ids is not None
-                else int(run_meta["n_particles"])
-            )
+                expected_edges = int(item["expected_unique_edges"])
+                expected_out_deg = int(item["expected_max_out_degree"])
 
-            result = self.inference.observe(
-                state,
-                scenario=str(item["name"]),
-                run_name=str(item["name"]),
-                n_tokens=n_tokens_observed,
-                n_patterns=int(len(patterns)),
-                families=int(item["families"]),
-                branches_per_family=int(item["branches_per_family"]),
-                repeats_per_pattern=int(item["repeats"]),
-                expected_unique_edges=int(item["expected_unique_edges"]),
-                expected_branch_nodes=int(item["expected_branch_nodes"]),
-                expected_max_out_degree=int(item["expected_max_out_degree"]),
-                run_backend=str(run_meta["run_backend"]),
-                run_steps=int(run_meta["run_steps"]),
-                run_termination=str(run_meta["run_termination"]),
-                init_ms=float(run_meta["init_ms"]),
-                simulate_ms=float(run_meta["simulate_ms"]),
-            )
-            expected_edges = int(item["expected_unique_edges"])
-            expected_out_deg = int(item["expected_max_out_degree"])
+                observed_edges = int(result.get("transition_unique_edges", 0) or 0)
+                observed_out_deg = int(result.get("sql_max_out_degree", 0) or 0)
+                edge_cov = (
+                    float(observed_edges / expected_edges)
+                    if expected_edges > 0
+                    else 0.0
+                )
+                out_cov = (
+                    float(observed_out_deg / expected_out_deg)
+                    if expected_out_deg > 0
+                    else 0.0
+                )
 
-            observed_edges = int(result.get("transition_unique_edges", 0) or 0)
-            observed_out_deg = int(result.get("sql_max_out_degree", 0) or 0)
-            edge_cov = (
-                float(observed_edges / expected_edges) if expected_edges > 0 else 0.0
-            )
-            out_cov = (
-                float(observed_out_deg / expected_out_deg)
-                if expected_out_deg > 0
-                else 0.0
-            )
-
-            result["branch_edge_coverage"] = edge_cov
-            result["out_degree_coverage"] = out_cov
-            self.inference.results[-1]["branch_edge_coverage"] = edge_cov
-            self.inference.results[-1]["out_degree_coverage"] = out_cov
+                result["branch_edge_coverage"] = edge_cov
+                result["out_degree_coverage"] = out_cov
+                self.inference.results[-1]["branch_edge_coverage"] = edge_cov
+                self.inference.results[-1]["out_degree_coverage"] = out_cov
 
         return self.project()
 
@@ -329,4 +350,31 @@ class WaveTrieExperiment(Experiment):
         return self.inference.observe(state)
 
     def project(self) -> dict:
-        return self.projector.project(self.inference)
+        rows = list(self.inference.results)
+        self.assert_allowed_backends(rows, allowed=("mps",))
+        provenance = self.write_provenance_jsonl(rows, stem="wave_trie_raw")
+        raw_outputs = self.projector.project(self.inference)
+
+        metric_fields = self.infer_numeric_fields(
+            rows,
+            candidate_fields=self.reportable,
+            exclude_fields=("seed",),
+        )
+        summary_rows = self.aggregate_rows_with_ci(
+            rows,
+            group_field="scenario",
+            metric_fields=metric_fields,
+            carry_fields=("run_backend",),
+            seed_field="seed",
+        )
+        summary_columns = self.ci_summary_columns(
+            metric_fields,
+            prefix_fields=("scenario", "run_backend", "n_seeds"),
+        )
+        self.summary_table.config.columns = summary_columns
+        summary_output = self.summary_table.project({"results": summary_rows})
+        return {
+            "raw": raw_outputs,
+            "summary_ci": summary_output,
+            "provenance_jsonl": str(provenance),
+        }

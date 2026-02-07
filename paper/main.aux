@@ -78,8 +78,8 @@
 \@writefile{toc}{\contentsline {subsection}{\numberline {3.1}Collision is Compression}{9}{subsection.3.1}\protected@file@percent }
 \newlabel{sec:collision_is_compression}{{3.1}{9}{Collision is Compression}{subsection.3.1}{}}
 \newlabel{sec:collision_is_compression@cref}{{[subsection][1][3]3.1}{[1][9][]9}{}{}{}}
-\newlabel{eq:hash}{{18}{9}{Collision is Compression}{equation.18}{}}
-\newlabel{eq:hash@cref}{{[equation][18][]18}{[1][9][]9}{}{}{}}
+\newlabel{eq:token_id}{{18}{9}{Collision is Compression}{equation.18}{}}
+\newlabel{eq:token_id@cref}{{[equation][18][]18}{[1][9][]9}{}{}{}}
 \@writefile{toc}{\contentsline {paragraph}{A disambiguation.}{9}{section*.12}\protected@file@percent }
 \newlabel{def:physical_collision}{{7}{9}{Physical Collision as Compression}{definition.7}{}}
 \newlabel{def:physical_collision@cref}{{[definition][7][]7}{[1][9][]9}{}{}{}}
@@ -192,98 +192,107 @@
 \providecommand*\caption@xref[2]{\@setref\relax\@undefined{#1}}
 \newlabel{tab:scale_validity}{{1}{18}{Scale-validity criteria for core claims}{table.caption.28}{}}
 \newlabel{tab:scale_validity@cref}{{[table][1][]1}{[1][18][]18}{}{}{}}
-\@writefile{lot}{\contentsline {table}{\numberline {2}{\ignorespaces Image-based hash collision compression metrics and inference performance. Higher collision rates lead to increased spatial clustering, energy accumulation, and compression. Inference accuracy measures prediction of missing pixels using learned spatial structure.}}{19}{table.caption.31}\protected@file@percent }
-\newlabel{tab:image_collision}{{2}{19}{Image-based hash collision compression metrics and inference performance. Higher collision rates lead to increased spatial clustering, energy accumulation, and compression. Inference accuracy measures prediction of missing pixels using learned spatial structure}{table.caption.31}{}}
-\newlabel{tab:image_collision@cref}{{[table][2][]2}{[1][19][]19}{}{}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {7.2}Hash Collision Compression}{19}{subsection.7.2}\protected@file@percent }
-\newlabel{sec:image_collision}{{7.2}{19}{Hash Collision Compression}{subsection.7.2}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {7.2}Tokenizer-ID Collision Compression}{19}{subsection.7.2}\protected@file@percent }
+\newlabel{sec:image_collision}{{7.2}{19}{Tokenizer-ID Collision Compression}{subsection.7.2}{}}
 \newlabel{sec:image_collision@cref}{{[subsection][2][7]7.2}{[1][18][]19}{}{}{}}
 \@writefile{toc}{\contentsline {paragraph}{Method.}{19}{section*.29}\protected@file@percent }
 \@writefile{toc}{\contentsline {paragraph}{Results.}{19}{section*.30}\protected@file@percent }
-\@writefile{lof}{\contentsline {figure}{\numberline {1}{\ignorespaces Hash collisions create compression in a thermodynamic trie. As collision rate increases (left to right), particles with identical token IDs cluster in 3D space, energy accumulates in shared particles, and compression metrics improve. The visualization demonstrates that hash collisions naturally create hierarchical structure.}}{20}{figure.caption.32}\protected@file@percent }
-\newlabel{fig:image_collision_hero}{{1}{20}{Hash collisions create compression in a thermodynamic trie. As collision rate increases (left to right), particles with identical token IDs cluster in 3D space, energy accumulates in shared particles, and compression metrics improve. The visualization demonstrates that hash collisions naturally create hierarchical structure}{figure.caption.32}{}}
-\newlabel{fig:image_collision_hero@cref}{{[figure][1][]1}{[1][19][]20}{}{}{}}
-\@writefile{lof}{\contentsline {figure}{\numberline {2}{\ignorespaces Bifurcation charts showing emergent trie structure. Top: hierarchical clustering dendrograms. Bottom: spatial bifurcation plots with convex hulls highlighting clusters. Higher collision rates create more pronounced branching---shared prefixes cluster together, unique patterns branch apart.}}{21}{figure.caption.33}\protected@file@percent }
-\newlabel{fig:image_collision_bifurcation}{{2}{21}{Bifurcation charts showing emergent trie structure. Top: hierarchical clustering dendrograms. Bottom: spatial bifurcation plots with convex hulls highlighting clusters. Higher collision rates create more pronounced branching---shared prefixes cluster together, unique patterns branch apart}{figure.caption.33}{}}
-\newlabel{fig:image_collision_bifurcation@cref}{{[figure][2][]2}{[1][19][]21}{}{}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {7.3}Rule-Shift Adaptation}{22}{subsection.7.3}\protected@file@percent }
-\newlabel{sec:rule_shift}{{7.3}{22}{Rule-Shift Adaptation}{subsection.7.3}{}}
-\newlabel{sec:rule_shift@cref}{{[subsection][3][7]7.3}{[1][22][]22}{}{}{}}
-\@writefile{toc}{\contentsline {paragraph}{Method.}{22}{section*.34}\protected@file@percent }
-\@writefile{toc}{\contentsline {paragraph}{Results.}{22}{section*.35}\protected@file@percent }
-\@writefile{lof}{\contentsline {figure}{\numberline {3}{\ignorespaces Rule-shift adaptation dynamics. \textbf  {(A)} Accuracy over training repetitions; the vertical line marks the rule shift. Forward accuracy is stable at 100\%, drops to 0\% at the shift, then recovers to 100\% within 5 repetitions. \textbf  {(B)} Summary statistics comparing forward and reverse phases. \textbf  {(C)} Accuracy gain from the initial 0\% in the reverse phase, showing rapid adaptation.}}{22}{figure.caption.37}\protected@file@percent }
-\newlabel{fig:rule_shift}{{3}{22}{Rule-shift adaptation dynamics. \textbf {(A)} Accuracy over training repetitions; the vertical line marks the rule shift. Forward accuracy is stable at 100\%, drops to 0\% at the shift, then recovers to 100\% within 5 repetitions. \textbf {(B)} Summary statistics comparing forward and reverse phases. \textbf {(C)} Accuracy gain from the initial 0\% in the reverse phase, showing rapid adaptation}{figure.caption.37}{}}
-\newlabel{fig:rule_shift@cref}{{[figure][3][]3}{[1][22][]22}{}{}{}}
-\@writefile{lot}{\contentsline {table}{\numberline {3}{\ignorespaces Rule-shift adaptation results. The manifold learns forward transitions, then adapts online when the sequence reverses. Recovery time measures how quickly the system regains baseline accuracy after the rule shift.}}{23}{table.caption.36}\protected@file@percent }
-\newlabel{tab:rule_shift}{{3}{23}{Rule-shift adaptation results. The manifold learns forward transitions, then adapts online when the sequence reverses. Recovery time measures how quickly the system regains baseline accuracy after the rule shift}{table.caption.36}{}}
-\newlabel{tab:rule_shift@cref}{{[table][3][]3}{[1][22][]23}{}{}{}}
+\@writefile{toc}{\contentsline {paragraph}{Primary Evidence (Real-World Stream).}{19}{section*.31}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {2}{\ignorespaces Pinned real-world collision-folding run and conditions (automatically paired with generated artifacts).}}{19}{table.caption.32}\protected@file@percent }
+\newlabel{tab:collision_wikitext_conditions}{{2}{19}{Pinned real-world collision-folding run and conditions (automatically paired with generated artifacts)}{table.caption.32}{}}
+\newlabel{tab:collision_wikitext_conditions@cref}{{[table][2][]2}{[1][19][]19}{}{}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {3}{\ignorespaces Collision experiment summary metrics}}{19}{table.caption.33}\protected@file@percent }
+\newlabel{tab:CollisionExperiment}{{3}{19}{Collision experiment summary metrics}{table.caption.33}{}}
+\newlabel{tab:CollisionExperiment@cref}{{[table][3][]3}{[1][19][]19}{}{}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {1}{\ignorespaces Collision folding and recall evidence on the real-stream WikiText scenario. Left: fold concentration vs path top-1 concentration. Middle: fold participation ratio and fold entropy. Right: explicit trie recall test (Recall@1/Recall@3/MRR) showing recoverability of next-step information from the learned transition structure.}}{20}{figure.caption.34}\protected@file@percent }
+\newlabel{fig:collision_wikitext_folding_evidence}{{1}{20}{Collision folding and recall evidence on the real-stream WikiText scenario. Left: fold concentration vs path top-1 concentration. Middle: fold participation ratio and fold entropy. Right: explicit trie recall test (Recall@1/Recall@3/MRR) showing recoverability of next-step information from the learned transition structure}{figure.caption.34}{}}
+\newlabel{fig:collision_wikitext_folding_evidence@cref}{{[figure][1][]1}{[1][19][]20}{}{}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {2}{\ignorespaces Top transition-edge bifurcation sketch for the same real-stream run, showing branching structure in the observed transition graph.}}{20}{figure.caption.35}\protected@file@percent }
+\newlabel{fig:collision_wikitext_bifurcation}{{2}{20}{Top transition-edge bifurcation sketch for the same real-stream run, showing branching structure in the observed transition graph}{figure.caption.35}{}}
+\newlabel{fig:collision_wikitext_bifurcation@cref}{{[figure][2][]2}{[1][19][]20}{}{}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {3}{\ignorespaces Repeated byte+position IDs create compression in a thermodynamic trie. As collision rate increases (left to right), particles with identical token IDs cluster in 3D space, energy accumulates in shared particles, and compression metrics improve. The visualization demonstrates that deterministic ID coalescence naturally creates hierarchical structure.}}{20}{figure.caption.36}\protected@file@percent }
+\newlabel{fig:image_collision_hero}{{3}{20}{Repeated byte+position IDs create compression in a thermodynamic trie. As collision rate increases (left to right), particles with identical token IDs cluster in 3D space, energy accumulates in shared particles, and compression metrics improve. The visualization demonstrates that deterministic ID coalescence naturally creates hierarchical structure}{figure.caption.36}{}}
+\newlabel{fig:image_collision_hero@cref}{{[figure][3][]3}{[1][19][]20}{}{}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {4}{\ignorespaces Bifurcation charts showing emergent trie structure. Top: hierarchical clustering dendrograms. Bottom: spatial bifurcation plots with convex hulls highlighting clusters. Higher collision rates create more pronounced branching---shared prefixes cluster together, unique patterns branch apart.}}{21}{figure.caption.37}\protected@file@percent }
+\newlabel{fig:image_collision_bifurcation}{{4}{21}{Bifurcation charts showing emergent trie structure. Top: hierarchical clustering dendrograms. Bottom: spatial bifurcation plots with convex hulls highlighting clusters. Higher collision rates create more pronounced branching---shared prefixes cluster together, unique patterns branch apart}{figure.caption.37}{}}
+\newlabel{fig:image_collision_bifurcation@cref}{{[figure][4][]4}{[1][19][]21}{}{}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {7.3}Rule-Shift Adaptation}{21}{subsection.7.3}\protected@file@percent }
+\newlabel{sec:rule_shift}{{7.3}{21}{Rule-Shift Adaptation}{subsection.7.3}{}}
+\newlabel{sec:rule_shift@cref}{{[subsection][3][7]7.3}{[1][21][]21}{}{}{}}
+\@writefile{toc}{\contentsline {paragraph}{Method.}{21}{section*.38}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Results.}{21}{section*.39}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {5}{\ignorespaces Scaled rule-shift matrix. \textbf  {(A)} Top-1 adaptation trajectories by scenario. \textbf  {(B)} Final recall quality (Final@1, Final@3, MRR). \textbf  {(C)} Shock-vs-recovery summary (worst drop and recovery repetitions). \textbf  {(D)} Strongest-scenario recall dynamics.}}{22}{figure.caption.41}\protected@file@percent }
+\newlabel{fig:rule_shift}{{5}{22}{Scaled rule-shift matrix. \textbf {(A)} Top-1 adaptation trajectories by scenario. \textbf {(B)} Final recall quality (Final@1, Final@3, MRR). \textbf {(C)} Shock-vs-recovery summary (worst drop and recovery repetitions). \textbf {(D)} Strongest-scenario recall dynamics}{figure.caption.41}{}}
+\newlabel{fig:rule_shift@cref}{{[figure][5][]5}{[1][21][]22}{}{}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {6}{\ignorespaces Real-world-like rule-shift focus run: Top-1, Top-3, and MRR over repetitions. This panel is pinned in the main section (not appendix) because it represents the highest-fidelity scenario in the matrix.}}{22}{figure.caption.42}\protected@file@percent }
+\newlabel{fig:rule_shift_realworld}{{6}{22}{Real-world-like rule-shift focus run: Top-1, Top-3, and MRR over repetitions. This panel is pinned in the main section (not appendix) because it represents the highest-fidelity scenario in the matrix}{figure.caption.42}{}}
+\newlabel{fig:rule_shift_realworld@cref}{{[figure][6][]6}{[1][21][]22}{}{}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {4}{\ignorespaces Scaled rule-shift matrix with transparent conditions and adaptation metrics (mean $\pm $ std over seeds).}}{23}{table.caption.40}\protected@file@percent }
+\newlabel{tab:rule_shift}{{4}{23}{Scaled rule-shift matrix with transparent conditions and adaptation metrics (mean $\pm $ std over seeds)}{table.caption.40}{}}
+\newlabel{tab:rule_shift@cref}{{[table][4][]4}{[1][21][]23}{}{}{}}
 \@writefile{toc}{\contentsline {subsection}{\numberline {7.4}Audio Waveform Inpainting}{23}{subsection.7.4}\protected@file@percent }
 \newlabel{sec:audio_exp}{{7.4}{23}{Audio Waveform Inpainting}{subsection.7.4}{}}
 \newlabel{sec:audio_exp@cref}{{[subsection][4][7]7.4}{[1][23][]23}{}{}{}}
-\@writefile{toc}{\contentsline {paragraph}{Method.}{23}{section*.38}\protected@file@percent }
-\@writefile{toc}{\contentsline {paragraph}{Results.}{23}{section*.39}\protected@file@percent }
-\@writefile{lof}{\contentsline {figure}{\numberline {4}{\ignorespaces Audio waveform inpainting. \textbf  {(A)} Original vs.\ reconstructed sine wave (first 200 samples at 20\% masking). \textbf  {(B)} SNR by waveform type at 20\% masking. \textbf  {(C)} MAE vs.\ mask percentage for sine wave.}}{23}{figure.caption.41}\protected@file@percent }
-\newlabel{fig:audio_gen}{{4}{23}{Audio waveform inpainting. \textbf {(A)} Original vs.\ reconstructed sine wave (first 200 samples at 20\% masking). \textbf {(B)} SNR by waveform type at 20\% masking. \textbf {(C)} MAE vs.\ mask percentage for sine wave}{figure.caption.41}{}}
-\newlabel{fig:audio_gen@cref}{{[figure][4][]4}{[1][23][]23}{}{}{}}
-\@writefile{lot}{\contentsline {table}{\numberline {4}{\ignorespaces Audio waveform inpainting results. Byte-quantized samples are reconstructed using periodic position matching. SNR measures signal quality; MAE measures amplitude error.}}{24}{table.caption.40}\protected@file@percent }
-\newlabel{tab:audio_gen}{{4}{24}{Audio waveform inpainting results. Byte-quantized samples are reconstructed using periodic position matching. SNR measures signal quality; MAE measures amplitude error}{table.caption.40}{}}
-\newlabel{tab:audio_gen@cref}{{[table][4][]4}{[1][23][]24}{}{}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {7.5}Cocktail Party Separation}{24}{subsection.7.5}\protected@file@percent }
-\newlabel{sec:cocktail_party}{{7.5}{24}{Cocktail Party Separation}{subsection.7.5}{}}
-\newlabel{sec:cocktail_party@cref}{{[subsection][5][7]7.5}{[1][24][]24}{}{}{}}
-\@writefile{toc}{\contentsline {paragraph}{Method.}{24}{section*.42}\protected@file@percent }
-\@writefile{toc}{\contentsline {paragraph}{Results.}{24}{section*.43}\protected@file@percent }
-\@writefile{lot}{\contentsline {table}{\numberline {5}{\ignorespaces Cocktail party separation via STFT-based spectral clustering. The mixed audio is transformed to time-frequency representation, frequency bins are clustered by spectral position, and inverse STFT reconstructs separated streams. Each speaker occupies distinct frequency bands.}}{25}{table.caption.44}\protected@file@percent }
-\newlabel{tab:cocktail_party}{{5}{25}{Cocktail party separation via STFT-based spectral clustering. The mixed audio is transformed to time-frequency representation, frequency bins are clustered by spectral position, and inverse STFT reconstructs separated streams. Each speaker occupies distinct frequency bands}{table.caption.44}{}}
-\newlabel{tab:cocktail_party@cref}{{[table][5][]5}{[1][24][]25}{}{}{}}
-\@writefile{lof}{\contentsline {figure}{\numberline {5}{\ignorespaces Cocktail party separation via spectral clustering. \textbf  {(A)} Token ID distributions for separated speakers, showing distinct frequency bands. \textbf  {(B)} Temporal distribution of samples, with each color representing a different speaker stream. \textbf  {(C)} Cluster statistics showing mean frequencies with standard deviation error bars; separation score quantifies inter-cluster vs intra-cluster distance.}}{25}{figure.caption.45}\protected@file@percent }
-\newlabel{fig:cocktail_party}{{5}{25}{Cocktail party separation via spectral clustering. \textbf {(A)} Token ID distributions for separated speakers, showing distinct frequency bands. \textbf {(B)} Temporal distribution of samples, with each color representing a different speaker stream. \textbf {(C)} Cluster statistics showing mean frequencies with standard deviation error bars; separation score quantifies inter-cluster vs intra-cluster distance}{figure.caption.45}{}}
-\newlabel{fig:cocktail_party@cref}{{[figure][5][]5}{[1][24][]25}{}{}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {7.6}Native Image Handling}{25}{subsection.7.6}\protected@file@percent }
-\newlabel{sec:image_exp}{{7.6}{25}{Native Image Handling}{subsection.7.6}{}}
-\newlabel{sec:image_exp@cref}{{[subsection][6][7]7.6}{[1][25][]25}{}{}{}}
-\@writefile{lof}{\contentsline {figure}{\numberline {6}{\ignorespaces MNIST byte-level processing via Universal Tokenizer. The system encodes raw pixel bytes as position-aware tokens, enabling pattern learning without image-specific preprocessing.}}{26}{figure.caption.46}\protected@file@percent }
-\newlabel{fig:mnist_bytes}{{6}{26}{MNIST byte-level processing via Universal Tokenizer. The system encodes raw pixel bytes as position-aware tokens, enabling pattern learning without image-specific preprocessing}{figure.caption.46}{}}
-\newlabel{fig:mnist_bytes@cref}{{[figure][6][]6}{[1][25][]26}{}{}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {7.7}Cross-Modal Processing}{26}{subsection.7.7}\protected@file@percent }
-\newlabel{sec:cross_modal_exp}{{7.7}{26}{Cross-Modal Processing}{subsection.7.7}{}}
-\newlabel{sec:cross_modal_exp@cref}{{[subsection][7][7]7.7}{[1][26][]26}{}{}{}}
-\@writefile{toc}{\contentsline {paragraph}{Method.}{26}{section*.47}\protected@file@percent }
-\@writefile{toc}{\contentsline {paragraph}{Results.}{26}{section*.48}\protected@file@percent }
-\@writefile{lot}{\contentsline {table}{\numberline {6}{\ignorespaces Cross-modal reconstruction results. Images are encoded via 2D FFT and processed alongside text tokens in a unified manifold. Reconstruction quality varies by pattern complexity.}}{27}{table.caption.49}\protected@file@percent }
-\newlabel{tab:cross_modal}{{6}{27}{Cross-modal reconstruction results. Images are encoded via 2D FFT and processed alongside text tokens in a unified manifold. Reconstruction quality varies by pattern complexity}{table.caption.49}{}}
-\newlabel{tab:cross_modal@cref}{{[table][6][]6}{[1][26][]27}{}{}{}}
-\@writefile{lof}{\contentsline {figure}{\numberline {7}{\ignorespaces Cross-modal processing. \textbf  {Top two rows}: Original and reconstructed images showing four pattern types. \textbf  {(A)} Frequency-space particle distribution for horizontal stripes showing energy concentration along vertical axis. \textbf  {(B)} MSE comparison across patterns. \textbf  {(C)} Text-image associations demonstrating semantic binding.}}{27}{figure.caption.50}\protected@file@percent }
-\newlabel{fig:cross_modal}{{7}{27}{Cross-modal processing. \textbf {Top two rows}: Original and reconstructed images showing four pattern types. \textbf {(A)} Frequency-space particle distribution for horizontal stripes showing energy concentration along vertical axis. \textbf {(B)} MSE comparison across patterns. \textbf {(C)} Text-image associations demonstrating semantic binding}{figure.caption.50}{}}
-\newlabel{fig:cross_modal@cref}{{[figure][7][]7}{[1][26][]27}{}{}{}}
-\@writefile{lof}{\contentsline {figure}{\numberline {8}{\ignorespaces Cross-modal particles in common embedding space. Image frequencies (blue) and text tokens (red stars) coexist in a shared 3D representation. The manifold processes both modalities through identical thermodynamic dynamics, with semantic associations emerging from shared coupling in $\Psi (\omega )$.}}{28}{figure.caption.51}\protected@file@percent }
-\newlabel{fig:cross_modal_embedding}{{8}{28}{Cross-modal particles in common embedding space. Image frequencies (blue) and text tokens (red stars) coexist in a shared 3D representation. The manifold processes both modalities through identical thermodynamic dynamics, with semantic associations emerging from shared coupling in $\Psi (\omega )$}{figure.caption.51}{}}
-\newlabel{fig:cross_modal_embedding@cref}{{[figure][8][]8}{[1][26][]28}{}{}{}}
-\@writefile{lof}{\contentsline {figure}{\numberline {9}{\ignorespaces Particle distribution in 2D frequency space. Each point represents a frequency component from the cross-modal experiment. Point size and color encode oscillator energy---higher energy indicates stronger resonance at that frequency. The cross pattern emerges from horizontal and vertical stripe images, with the DC component (center) having highest energy.}}{29}{figure.caption.52}\protected@file@percent }
-\newlabel{fig:frequency_particles}{{9}{29}{Particle distribution in 2D frequency space. Each point represents a frequency component from the cross-modal experiment. Point size and color encode oscillator energy---higher energy indicates stronger resonance at that frequency. The cross pattern emerges from horizontal and vertical stripe images, with the DC component (center) having highest energy}{figure.caption.52}{}}
-\newlabel{fig:frequency_particles@cref}{{[figure][9][]9}{[1][26][]29}{}{}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {7.8}Scaling Analysis}{30}{subsection.7.8}\protected@file@percent }
-\newlabel{sec:scaling_exp}{{7.8}{30}{Scaling Analysis}{subsection.7.8}{}}
-\newlabel{sec:scaling_exp@cref}{{[subsection][8][7]7.8}{[1][30][]30}{}{}{}}
-\@writefile{toc}{\contentsline {paragraph}{$\omega $-Field Structure Dynamics.}{30}{section*.53}\protected@file@percent }
-\@writefile{toc}{\contentsline {paragraph}{O($k$) Latency Independence.}{30}{section*.54}\protected@file@percent }
-\@writefile{toc}{\contentsline {paragraph}{Generalization.}{30}{section*.55}\protected@file@percent }
-\@writefile{lof}{\contentsline {figure}{\numberline {10}{\ignorespaces Scaling dynamics. \textbf  {(A)} Peak count / active-well mass in $|\Psi (\omega )|$ over time. \textbf  {(B)} Early-time transient reconfiguration of the $\omega $-field under new support. \textbf  {(C)} Strong-well count vs.\ pattern count showing saturation of representable structure at fixed $\omega $ resolution. \textbf  {(D)} Structure ratio across data types.}}{31}{figure.caption.57}\protected@file@percent }
-\newlabel{fig:scaling_dynamics}{{10}{31}{Scaling dynamics. \textbf {(A)} Peak count / active-well mass in $|\Psi (\omega )|$ over time. \textbf {(B)} Early-time transient reconfiguration of the $\omega $-field under new support. \textbf {(C)} Strong-well count vs.\ pattern count showing saturation of representable structure at fixed $\omega $ resolution. \textbf {(D)} Structure ratio across data types}{figure.caption.57}{}}
-\newlabel{fig:scaling_dynamics@cref}{{[figure][10][]10}{[1][30][]31}{}{}{}}
-\@writefile{lof}{\contentsline {figure}{\numberline {11}{\ignorespaces Compute scaling. \textbf  {(A)} Wall-clock time vs.\ particle count showing near-linear scaling. \textbf  {(B)} Time vs.\ grid size (larger grids are slightly faster due to GPU optimization). \textbf  {(C)} O($k$) latency test showing stable ms/step across 16$\times $ range of sequence lengths.}}{31}{figure.caption.58}\protected@file@percent }
-\newlabel{fig:scaling_compute}{{11}{31}{Compute scaling. \textbf {(A)} Wall-clock time vs.\ particle count showing near-linear scaling. \textbf {(B)} Time vs.\ grid size (larger grids are slightly faster due to GPU optimization). \textbf {(C)} O($k$) latency test showing stable ms/step across 16$\times $ range of sequence lengths}{figure.caption.58}{}}
-\newlabel{fig:scaling_compute@cref}{{[figure][11][]11}{[1][30][]31}{}{}{}}
-\@writefile{lot}{\contentsline {table}{\numberline {7}{\ignorespaces Scaling analysis summary. Carrier population dynamics show the manifold's ``carrying capacity'' and metabolic pruning behavior. Interference results show crystallization efficiency as pattern count increases.}}{32}{table.caption.56}\protected@file@percent }
-\newlabel{tab:scaling}{{7}{32}{Scaling analysis summary. Carrier population dynamics show the manifold's ``carrying capacity'' and metabolic pruning behavior. Interference results show crystallization efficiency as pattern count increases}{table.caption.56}{}}
-\newlabel{tab:scaling@cref}{{[table][7][]7}{[1][30][]32}{}{}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {7.9}Ablation Studies}{32}{subsection.7.9}\protected@file@percent }
-\newlabel{sec:ablations}{{7.9}{32}{Ablation Studies}{subsection.7.9}{}}
-\newlabel{sec:ablations@cref}{{[subsection][9][7]7.9}{[1][32][]32}{}{}{}}
+\@writefile{toc}{\contentsline {paragraph}{Method.}{23}{section*.43}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Results.}{23}{section*.44}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {7}{\ignorespaces Audio waveform inpainting. \textbf  {(A)} Original vs.\ reconstructed sine wave (first 200 samples at 20\% masking). \textbf  {(B)} SNR by waveform type at 20\% masking. \textbf  {(C)} MAE vs.\ mask percentage for sine wave.}}{23}{figure.caption.45}\protected@file@percent }
+\newlabel{fig:audio_gen}{{7}{23}{Audio waveform inpainting. \textbf {(A)} Original vs.\ reconstructed sine wave (first 200 samples at 20\% masking). \textbf {(B)} SNR by waveform type at 20\% masking. \textbf {(C)} MAE vs.\ mask percentage for sine wave}{figure.caption.45}{}}
+\newlabel{fig:audio_gen@cref}{{[figure][7][]7}{[1][23][]23}{}{}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {7.5}Cocktail Party Separation}{23}{subsection.7.5}\protected@file@percent }
+\newlabel{sec:cocktail_party}{{7.5}{23}{Cocktail Party Separation}{subsection.7.5}{}}
+\newlabel{sec:cocktail_party@cref}{{[subsection][5][7]7.5}{[1][23][]23}{}{}{}}
+\@writefile{toc}{\contentsline {paragraph}{Method.}{24}{section*.46}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Results.}{24}{section*.47}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {8}{\ignorespaces Cocktail party separation via spectral clustering. \textbf  {(A)} Token ID distributions for separated speakers, showing distinct frequency bands. \textbf  {(B)} Temporal distribution of samples, with each color representing a different speaker stream. \textbf  {(C)} Cluster statistics showing mean frequencies with standard deviation error bars; separation score quantifies inter-cluster vs intra-cluster distance.}}{24}{figure.caption.48}\protected@file@percent }
+\newlabel{fig:cocktail_party}{{8}{24}{Cocktail party separation via spectral clustering. \textbf {(A)} Token ID distributions for separated speakers, showing distinct frequency bands. \textbf {(B)} Temporal distribution of samples, with each color representing a different speaker stream. \textbf {(C)} Cluster statistics showing mean frequencies with standard deviation error bars; separation score quantifies inter-cluster vs intra-cluster distance}{figure.caption.48}{}}
+\newlabel{fig:cocktail_party@cref}{{[figure][8][]8}{[1][24][]24}{}{}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {7.6}Native Image Handling}{24}{subsection.7.6}\protected@file@percent }
+\newlabel{sec:image_exp}{{7.6}{24}{Native Image Handling}{subsection.7.6}{}}
+\newlabel{sec:image_exp@cref}{{[subsection][6][7]7.6}{[1][24][]24}{}{}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {9}{\ignorespaces MNIST byte-level processing via Universal Tokenizer. The system encodes raw pixel bytes as position-aware tokens, enabling pattern learning without image-specific preprocessing.}}{25}{figure.caption.49}\protected@file@percent }
+\newlabel{fig:mnist_bytes}{{9}{25}{MNIST byte-level processing via Universal Tokenizer. The system encodes raw pixel bytes as position-aware tokens, enabling pattern learning without image-specific preprocessing}{figure.caption.49}{}}
+\newlabel{fig:mnist_bytes@cref}{{[figure][9][]9}{[1][24][]25}{}{}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {7.7}Cross-Modal Processing}{25}{subsection.7.7}\protected@file@percent }
+\newlabel{sec:cross_modal_exp}{{7.7}{25}{Cross-Modal Processing}{subsection.7.7}{}}
+\newlabel{sec:cross_modal_exp@cref}{{[subsection][7][7]7.7}{[1][25][]25}{}{}{}}
+\@writefile{toc}{\contentsline {paragraph}{Method.}{25}{section*.50}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Results.}{25}{section*.51}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {10}{\ignorespaces Cross-modal processing. \textbf  {Top two rows}: Original and reconstructed images showing four pattern types. \textbf  {(A)} Frequency-space particle distribution for horizontal stripes showing energy concentration along vertical axis. \textbf  {(B)} MSE comparison across patterns. \textbf  {(C)} Text-image associations demonstrating semantic binding.}}{25}{figure.caption.52}\protected@file@percent }
+\newlabel{fig:cross_modal}{{10}{25}{Cross-modal processing. \textbf {Top two rows}: Original and reconstructed images showing four pattern types. \textbf {(A)} Frequency-space particle distribution for horizontal stripes showing energy concentration along vertical axis. \textbf {(B)} MSE comparison across patterns. \textbf {(C)} Text-image associations demonstrating semantic binding}{figure.caption.52}{}}
+\newlabel{fig:cross_modal@cref}{{[figure][10][]10}{[1][25][]25}{}{}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {11}{\ignorespaces Cross-modal particles in common embedding space. Image frequencies (blue) and text tokens (red stars) coexist in a shared 3D representation. The manifold processes both modalities through identical thermodynamic dynamics, with semantic associations emerging from shared coupling in $\Psi (\omega )$.}}{26}{figure.caption.53}\protected@file@percent }
+\newlabel{fig:cross_modal_embedding}{{11}{26}{Cross-modal particles in common embedding space. Image frequencies (blue) and text tokens (red stars) coexist in a shared 3D representation. The manifold processes both modalities through identical thermodynamic dynamics, with semantic associations emerging from shared coupling in $\Psi (\omega )$}{figure.caption.53}{}}
+\newlabel{fig:cross_modal_embedding@cref}{{[figure][11][]11}{[1][25][]26}{}{}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {12}{\ignorespaces Particle distribution in 2D frequency space. Each point represents a frequency component from the cross-modal experiment. Point size and color encode oscillator energy---higher energy indicates stronger resonance at that frequency. The cross pattern emerges from horizontal and vertical stripe images, with the DC component (center) having highest energy.}}{26}{figure.caption.54}\protected@file@percent }
+\newlabel{fig:frequency_particles}{{12}{26}{Particle distribution in 2D frequency space. Each point represents a frequency component from the cross-modal experiment. Point size and color encode oscillator energy---higher energy indicates stronger resonance at that frequency. The cross pattern emerges from horizontal and vertical stripe images, with the DC component (center) having highest energy}{figure.caption.54}{}}
+\newlabel{fig:frequency_particles@cref}{{[figure][12][]12}{[1][26][]26}{}{}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {7.8}Scaling Analysis}{26}{subsection.7.8}\protected@file@percent }
+\newlabel{sec:scaling_exp}{{7.8}{26}{Scaling Analysis}{subsection.7.8}{}}
+\newlabel{sec:scaling_exp@cref}{{[subsection][8][7]7.8}{[1][26][]26}{}{}{}}
+\@writefile{toc}{\contentsline {paragraph}{$\omega $-Field Structure Dynamics.}{26}{section*.55}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{O($k$) Latency Independence.}{26}{section*.56}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Generalization.}{26}{section*.57}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {13}{\ignorespaces Scaling dynamics. \textbf  {(A)} Peak count / active-well mass in $|\Psi (\omega )|$ over time. \textbf  {(B)} Early-time transient reconfiguration of the $\omega $-field under new support. \textbf  {(C)} Strong-well count vs.\ pattern count showing saturation of representable structure at fixed $\omega $ resolution. \textbf  {(D)} Structure ratio across data types.}}{27}{figure.caption.59}\protected@file@percent }
+\newlabel{fig:scaling_dynamics}{{13}{27}{Scaling dynamics. \textbf {(A)} Peak count / active-well mass in $|\Psi (\omega )|$ over time. \textbf {(B)} Early-time transient reconfiguration of the $\omega $-field under new support. \textbf {(C)} Strong-well count vs.\ pattern count showing saturation of representable structure at fixed $\omega $ resolution. \textbf {(D)} Structure ratio across data types}{figure.caption.59}{}}
+\newlabel{fig:scaling_dynamics@cref}{{[figure][13][]13}{[1][26][]27}{}{}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {14}{\ignorespaces Compute scaling. \textbf  {(A)} Wall-clock time vs.\ particle count showing near-linear scaling. \textbf  {(B)} Time vs.\ grid size (larger grids are slightly faster due to GPU optimization). \textbf  {(C)} O($k$) latency test showing stable ms/step across 16$\times $ range of sequence lengths.}}{27}{figure.caption.60}\protected@file@percent }
+\newlabel{fig:scaling_compute}{{14}{27}{Compute scaling. \textbf {(A)} Wall-clock time vs.\ particle count showing near-linear scaling. \textbf {(B)} Time vs.\ grid size (larger grids are slightly faster due to GPU optimization). \textbf {(C)} O($k$) latency test showing stable ms/step across 16$\times $ range of sequence lengths}{figure.caption.60}{}}
+\newlabel{fig:scaling_compute@cref}{{[figure][14][]14}{[1][26][]27}{}{}{}}
 \citation{prigogine1977self,prigogine1978time}
 \citation{conte2019thermodynamic,boyd2022thermodynamic,whitelam2025generative}
 \citation{kuramoto1975international,strogatz2000kuramoto}
 \citation{miyato2025akorn}
+\@writefile{lot}{\contentsline {table}{\numberline {5}{\ignorespaces Scaling evidence with explicit uncertainty and conditions (mean $\pm $ std over seeds unless stated).}}{28}{table.caption.58}\protected@file@percent }
+\newlabel{tab:scaling}{{5}{28}{Scaling evidence with explicit uncertainty and conditions (mean $\pm $ std over seeds unless stated)}{table.caption.58}{}}
+\newlabel{tab:scaling@cref}{{[table][5][]5}{[1][26][]28}{}{}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {7.9}Ablation Studies}{28}{subsection.7.9}\protected@file@percent }
+\newlabel{sec:ablations}{{7.9}{28}{Ablation Studies}{subsection.7.9}{}}
+\newlabel{sec:ablations@cref}{{[subsection][9][7]7.9}{[1][28][]28}{}{}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {8}Related Work}{28}{section.8}\protected@file@percent }
+\newlabel{sec:related}{{8}{28}{Related Work}{section.8}{}}
+\newlabel{sec:related@cref}{{[section][8][]8}{[1][28][]28}{}{}{}}
+\@writefile{toc}{\contentsline {paragraph}{Dissipative Structures and Thermodynamic Computing}{28}{section*.61}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Oscillator Networks and the Kuramoto Model}{28}{section*.62}\protected@file@percent }
 \citation{singer1999neuronal,engel2001dynamic,wang2010neurophysiological}
 \citation{hopfield1982neural}
 \citation{ramsauer2021hopfield}
@@ -292,17 +301,6 @@
 \citation{liu2024camelot}
 \citation{bulatov2024armt}
 \citation{liu2024memorymosaics}
-\@writefile{lot}{\contentsline {table}{\numberline {8}{\ignorespaces Kernel ablations. We disable individual carrier-memory mechanisms and report alignment before/after rule reversal.}}{33}{table.caption.59}\protected@file@percent }
-\newlabel{tab:ablation}{{8}{33}{Kernel ablations. We disable individual carrier-memory mechanisms and report alignment before/after rule reversal}{table.caption.59}{}}
-\newlabel{tab:ablation@cref}{{[table][8][]8}{[1][32][]33}{}{}{}}
-\@writefile{toc}{\contentsline {section}{\numberline {8}Related Work}{33}{section.8}\protected@file@percent }
-\newlabel{sec:related}{{8}{33}{Related Work}{section.8}{}}
-\newlabel{sec:related@cref}{{[section][8][]8}{[1][33][]33}{}{}{}}
-\@writefile{toc}{\contentsline {paragraph}{Dissipative Structures and Thermodynamic Computing}{33}{section*.60}\protected@file@percent }
-\@writefile{toc}{\contentsline {paragraph}{Oscillator Networks and the Kuramoto Model}{33}{section*.61}\protected@file@percent }
-\@writefile{toc}{\contentsline {paragraph}{Binding by Synchrony}{33}{section*.62}\protected@file@percent }
-\@writefile{toc}{\contentsline {paragraph}{Modern Hopfield Networks and Associative Memory}{33}{section*.63}\protected@file@percent }
-\@writefile{toc}{\contentsline {paragraph}{Content-Addressable Memory in Transformers}{33}{section*.64}\protected@file@percent }
 \citation{gu2018nonautoregressive}
 \citation{sahoo2024mdlm,nie2024scaling}
 \citation{sohl2015deep,ho2020denoising,song2021score}
@@ -312,38 +310,41 @@
 \citation{alayrac2022flamingo}
 \citation{lu2024unifiedio2}
 \citation{lecun2006tutorial,du2021improved}
+\@writefile{toc}{\contentsline {paragraph}{Binding by Synchrony}{29}{section*.63}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Modern Hopfield Networks and Associative Memory}{29}{section*.64}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Content-Addressable Memory in Transformers}{29}{section*.65}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Non-Autoregressive and Parallel Generation}{29}{section*.66}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Diffusion Models and Langevin Dynamics}{29}{section*.67}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Hamiltonian and Symplectic Neural Networks}{29}{section*.68}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Multimodal Architectures}{29}{section*.69}\protected@file@percent }
 \citation{bolya2023token,bolya2023token_diffusion}
 \citation{kitaev2020reformer}
 \citation{hebb1949organization}
 \citation{rao1999predictive,friston2010free}
-\@writefile{toc}{\contentsline {paragraph}{Non-Autoregressive and Parallel Generation}{34}{section*.65}\protected@file@percent }
-\@writefile{toc}{\contentsline {paragraph}{Diffusion Models and Langevin Dynamics}{34}{section*.66}\protected@file@percent }
-\@writefile{toc}{\contentsline {paragraph}{Hamiltonian and Symplectic Neural Networks}{34}{section*.67}\protected@file@percent }
-\@writefile{toc}{\contentsline {paragraph}{Multimodal Architectures}{34}{section*.68}\protected@file@percent }
-\@writefile{toc}{\contentsline {paragraph}{Energy-Based Models}{34}{section*.69}\protected@file@percent }
-\@writefile{toc}{\contentsline {paragraph}{Token Merging and Dynamic Sparsity}{34}{section*.70}\protected@file@percent }
-\@writefile{toc}{\contentsline {paragraph}{Locality-Sensitive Hashing in Attention}{34}{section*.71}\protected@file@percent }
-\@writefile{toc}{\contentsline {paragraph}{Hebbian Learning and Predictive Coding}{35}{section*.72}\protected@file@percent }
-\@writefile{toc}{\contentsline {section}{\numberline {9}Discussion}{35}{section.9}\protected@file@percent }
-\newlabel{sec:discussion}{{9}{35}{Discussion}{section.9}{}}
-\newlabel{sec:discussion@cref}{{[section][9][]9}{[1][35][]35}{}{}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {9.1}What Current Evidence Supports}{35}{subsection.9.1}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {9.2}What Remains Open}{35}{subsection.9.2}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {9.3}Evaluation Roadmap}{35}{subsection.9.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Energy-Based Models}{30}{section*.70}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Token Merging and Dynamic Sparsity}{30}{section*.71}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Locality-Sensitive Hashing in Attention}{30}{section*.72}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Hebbian Learning and Predictive Coding}{30}{section*.73}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {9}Discussion}{30}{section.9}\protected@file@percent }
+\newlabel{sec:discussion}{{9}{30}{Discussion}{section.9}{}}
+\newlabel{sec:discussion@cref}{{[section][9][]9}{[1][30][]30}{}{}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {9.1}What Current Evidence Supports}{30}{subsection.9.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {9.2}What Remains Open}{31}{subsection.9.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {9.3}Evaluation Roadmap}{31}{subsection.9.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {9.4}How We Handle the ``Toy-Scale'' Objection}{31}{subsection.9.4}\protected@file@percent }
 \bibstyle{plainnat}
 \bibdata{references}
 \bibcite{alayrac2022flamingo}{{1}{2022}{{Alayrac et~al.}}{{Alayrac, Donahue, Luc, Miech, Barr, Hasson, Lenc, Mensch, Millican, Reynolds, Ring, Rutherford, Cabi, Han, Gong, Samangooei, Monteiro, Menick, Borgeaud, Brock, Nematzadeh, Sharifzadeh, Binkowski, Barreira, Vinyals, Zisserman, and Simonyan}}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {9.4}How We Handle the ``Toy-Scale'' Objection}{36}{subsection.9.4}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {9.5}Interpreting Cross-Modal ``Horizontal''}{36}{subsection.9.5}\protected@file@percent }
-\@writefile{toc}{\contentsline {section}{\numberline {10}Conclusion}{36}{section.10}\protected@file@percent }
-\newlabel{sec:conclusion}{{10}{36}{Conclusion}{section.10}{}}
-\newlabel{sec:conclusion@cref}{{[section][10][]10}{[1][36][]36}{}{}{}}
 \bibcite{bolya2023token_diffusion}{{2}{2023}{{Bolya and Hoffman}}{{}}}
 \bibcite{bolya2023token}{{3}{2023}{{Bolya et~al.}}{{Bolya, Fu, Dai, Zhang, Feichtenhofer, and Hoffman}}}
 \bibcite{boyd2022thermodynamic}{{4}{2022}{{Boyd et~al.}}{{Boyd, Patra, Jarzynski, and Crutchfield}}}
 \bibcite{bryan1995ppm}{{5}{1995}{{Bryan et~al.}}{{Bryan, Norman, Stone, Cen, and Ostriker}}}
 \bibcite{bulatov2024armt}{{6}{2024}{{Bulatov et~al.}}{{Bulatov, Kuratov, and Burtsev}}}
 \bibcite{chen2020symplectic}{{7}{2020}{{Chen et~al.}}{{Chen, Zhang, Arjovsky, and Bottou}}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {9.5}Interpreting Cross-Modal ``Horizontal''}{32}{subsection.9.5}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {10}Conclusion}{32}{section.10}\protected@file@percent }
+\newlabel{sec:conclusion}{{10}{32}{Conclusion}{section.10}{}}
+\newlabel{sec:conclusion@cref}{{[section][10][]10}{[1][32][]32}{}{}{}}
 \bibcite{conte2019thermodynamic}{{8}{2019}{{Conte et~al.}}{{Conte, DeBenedictis, Ganesh, Hylton, Strachan, Williams, Alemi, Altenberg, Crooks, Crutchfield, del Rio, Deutsch, DeWeese, Douglas, Faggin, Frank, Fry, Harsha, Henry, Kish, Knight, Kumar, Li, Meaney, Molter, Morrision, Nisoli, Ogunnaike, Qian, Riechers, Rosen, Rubenstein, Sarpeshkar, Silvestri, Singer, Sinha, Smith, Still, Stokbro, Stopnitzky, Teo, Wootters, Yunes, Zak, and Zia}}}
 \bibcite{du2021improved}{{9}{2021}{{Du et~al.}}{{Du, Li, Tenenbaum, and Mordatch}}}
 \bibcite{engel2001dynamic}{{10}{2001}{{Engel et~al.}}{{Engel, Fries, and Singer}}}
@@ -384,88 +385,73 @@
 \bibcite{wang2010neurophysiological}{{45}{2010}{{Wang}}{{}}}
 \bibcite{whitelam2025generative}{{46}{2025}{{Whitelam}}{{}}}
 \bibcite{widrich2024hopfield}{{47}{2024}{{Widrich et~al.}}{{}}}
-\@writefile{toc}{\contentsline {section}{\numberline {A}Additional Experiments}{40}{appendix.A}\protected@file@percent }
-\newlabel{sec:appendix_experiments}{{A}{40}{Additional Experiments}{appendix.A}{}}
-\newlabel{sec:appendix_experiments@cref}{{[section][1][]A}{[1][40][]40}{}{}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {A.1}Universal Tokenizer Collision Regimes (TOY)}{40}{subsection.A.1}\protected@file@percent }
-\@writefile{lof}{\contentsline {figure}{\numberline {12}{\ignorespaces Synthetic trie collision sweep. As collision rate increases, spatial clustering increases and compression ratio decreases, demonstrating that hash collisions act as compression.}}{40}{figure.caption.74}\protected@file@percent }
-\newlabel{fig:collision_compression}{{12}{40}{Synthetic trie collision sweep. As collision rate increases, spatial clustering increases and compression ratio decreases, demonstrating that hash collisions act as compression}{figure.caption.74}{}}
-\newlabel{fig:collision_compression@cref}{{[figure][12][]12}{[1][40][]40}{}{}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {A.2}Next-Byte Prediction via Thermodynamic Trie}{40}{subsection.A.2}\protected@file@percent }
-\newlabel{sec:next_byte_prediction}{{A.2}{40}{Next-Byte Prediction via Thermodynamic Trie}{subsection.A.2}{}}
-\newlabel{sec:next_byte_prediction@cref}{{[subsection][2][1]A.2}{[1][40][]40}{}{}{}}
-\@writefile{toc}{\contentsline {paragraph}{Method.}{41}{section*.75}\protected@file@percent }
-\@writefile{toc}{\contentsline {paragraph}{Inference.}{41}{section*.76}\protected@file@percent }
-\@writefile{toc}{\contentsline {paragraph}{Results.}{41}{section*.77}\protected@file@percent }
-\@writefile{lof}{\contentsline {figure}{\numberline {13}{\ignorespaces Thermodynamic trie structure for next-byte prediction. \textbf  {(A)} Trie branching visualization showing candidate continuations at each position in the segment; node size encodes probability, edges show transitions between positions. \textbf  {(B)} Probability distributions at branch points where multiple continuations are valid; the manifold learns frequency-proportional distributions (e.g., ``The cat '' $\to $ `s':50\%, `r':33\%, `a':17\%). \textbf  {(C)} Accuracy by position in segment; green indicates deterministic paths ($>$95\%), orange indicates moderate ambiguity, red indicates branch points with multiple valid continuations.}}{42}{figure.caption.78}\protected@file@percent }
-\newlabel{fig:next_token}{{13}{42}{Thermodynamic trie structure for next-byte prediction. \textbf {(A)} Trie branching visualization showing candidate continuations at each position in the segment; node size encodes probability, edges show transitions between positions. \textbf {(B)} Probability distributions at branch points where multiple continuations are valid; the manifold learns frequency-proportional distributions (e.g., ``The cat '' $\to $ `s':50\%, `r':33\%, `a':17\%). \textbf {(C)} Accuracy by position in segment; green indicates deterministic paths ($>$95\%), orange indicates moderate ambiguity, red indicates branch points with multiple valid continuations}{figure.caption.78}{}}
-\newlabel{fig:next_token@cref}{{[figure][13][]13}{[1][41][]42}{}{}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {A.3}Time-Series Forecasting via Position Periodicity}{42}{subsection.A.3}\protected@file@percent }
-\newlabel{sec:timeseries}{{A.3}{42}{Time-Series Forecasting via Position Periodicity}{subsection.A.3}{}}
-\newlabel{sec:timeseries@cref}{{[subsection][3][1]A.3}{[1][42][]42}{}{}{}}
-\@writefile{toc}{\contentsline {paragraph}{Method.}{42}{section*.79}\protected@file@percent }
-\@writefile{toc}{\contentsline {paragraph}{Results.}{42}{section*.80}\protected@file@percent }
-\@writefile{lof}{\contentsline {figure}{\numberline {14}{\ignorespaces Time-series forecasting results. \textbf  {(A)} Actual vs.\ predicted values for the periodic signal (first 100 test points). \textbf  {(B)} Direction accuracy by signal type; 50\% is random baseline. \textbf  {(C)} Error distribution for periodic signal showing the concentration of predictions near true values.}}{42}{figure.caption.82}\protected@file@percent }
-\newlabel{fig:timeseries}{{14}{42}{Time-series forecasting results. \textbf {(A)} Actual vs.\ predicted values for the periodic signal (first 100 test points). \textbf {(B)} Direction accuracy by signal type; 50\% is random baseline. \textbf {(C)} Error distribution for periodic signal showing the concentration of predictions near true values}{figure.caption.82}{}}
-\newlabel{fig:timeseries@cref}{{[figure][14][]14}{[1][42][]42}{}{}{}}
-\@writefile{lot}{\contentsline {table}{\numberline {9}{\ignorespaces Time-series forecasting results across signal types. The manifold uses byte-quantized values and predicts future values using the thermodynamic trie. Direction accuracy measures correct trend prediction; within-N measures predictions within N quantization levels of the true value.}}{43}{table.caption.81}\protected@file@percent }
-\newlabel{tab:timeseries}{{9}{43}{Time-series forecasting results across signal types. The manifold uses byte-quantized values and predicts future values using the thermodynamic trie. Direction accuracy measures correct trend prediction; within-N measures predictions within N quantization levels of the true value}{table.caption.81}{}}
-\newlabel{tab:timeseries@cref}{{[table][9][]9}{[1][42][]43}{}{}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {A.4}MNIST Classification from Raw Bytes}{43}{subsection.A.4}\protected@file@percent }
-\@writefile{lof}{\contentsline {figure}{\numberline {15}{\ignorespaces Kernel MNIST confusion matrix (Universal Tokenizer hashed pixel stream).}}{43}{figure.caption.84}\protected@file@percent }
-\newlabel{fig:mnist_bytes_appendix}{{15}{43}{Kernel MNIST confusion matrix (Universal Tokenizer hashed pixel stream)}{figure.caption.84}{}}
-\newlabel{fig:mnist_bytes_appendix@cref}{{[figure][15][]15}{[1][43][]43}{}{}{}}
-\@writefile{lot}{\contentsline {table}{\numberline {10}{\ignorespaces Kernel MNIST classification from raw bytes using the Universal Tokenizer (position-aware hashing).}}{44}{table.caption.83}\protected@file@percent }
-\newlabel{tab:mnist_bytes}{{10}{44}{Kernel MNIST classification from raw bytes using the Universal Tokenizer (position-aware hashing)}{table.caption.83}{}}
-\newlabel{tab:mnist_bytes@cref}{{[table][10][]10}{[1][43][]44}{}{}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {A.5}MNIST Inpainting via Thermodynamic Trie}{44}{subsection.A.5}\protected@file@percent }
-\newlabel{sec:mnist_inpainting}{{A.5}{44}{MNIST Inpainting via Thermodynamic Trie}{subsection.A.5}{}}
-\newlabel{sec:mnist_inpainting@cref}{{[subsection][5][1]A.5}{[1][44][]44}{}{}{}}
-\@writefile{toc}{\contentsline {paragraph}{Method.}{44}{section*.85}\protected@file@percent }
-\@writefile{toc}{\contentsline {paragraph}{Results.}{44}{section*.86}\protected@file@percent }
-\@writefile{lof}{\contentsline {figure}{\numberline {16}{\ignorespaces MNIST inpainting via thermodynamic trie. \textbf  {(A)} Example reconstructions at different mask levels (top: original, bottom: reconstructed). \textbf  {(B)} PSNR and MAE as functions of mask fraction, showing graceful degradation. \textbf  {(C)} Error distribution histograms for each mask level.}}{44}{figure.caption.88}\protected@file@percent }
-\newlabel{fig:image_gen}{{16}{44}{MNIST inpainting via thermodynamic trie. \textbf {(A)} Example reconstructions at different mask levels (top: original, bottom: reconstructed). \textbf {(B)} PSNR and MAE as functions of mask fraction, showing graceful degradation. \textbf {(C)} Error distribution histograms for each mask level}{figure.caption.88}{}}
-\newlabel{fig:image_gen@cref}{{[figure][16][]16}{[1][44][]44}{}{}{}}
-\@writefile{lot}{\contentsline {table}{\numberline {11}{\ignorespaces MNIST inpainting via thermodynamic trie. The manifold learns pixel patterns from training images, then reconstructs masked regions in test images using dual-domain inference. PSNR (Peak Signal-to-Noise Ratio) measures reconstruction quality; MAE (Mean Absolute Error) measures pixel-level deviation.}}{45}{table.caption.87}\protected@file@percent }
-\newlabel{tab:image_gen}{{11}{45}{MNIST inpainting via thermodynamic trie. The manifold learns pixel patterns from training images, then reconstructs masked regions in test images using dual-domain inference. PSNR (Peak Signal-to-Noise Ratio) measures reconstruction quality; MAE (Mean Absolute Error) measures pixel-level deviation}{table.caption.87}{}}
-\newlabel{tab:image_gen@cref}{{[table][11][]11}{[1][44][]45}{}{}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {A.6}Byte Denoising via Thermodynamic Trie}{45}{subsection.A.6}\protected@file@percent }
-\newlabel{sec:text_diffusion}{{A.6}{45}{Byte Denoising via Thermodynamic Trie}{subsection.A.6}{}}
-\newlabel{sec:text_diffusion@cref}{{[subsection][6][1]A.6}{[1][45][]45}{}{}{}}
-\@writefile{toc}{\contentsline {paragraph}{Method.}{45}{section*.89}\protected@file@percent }
-\@writefile{toc}{\contentsline {paragraph}{Results.}{45}{section*.90}\protected@file@percent }
-\@writefile{lof}{\contentsline {figure}{\numberline {17}{\ignorespaces Byte denoising results. \textbf  {(A)} Character accuracy vs.\ mask percentage with random baseline shown as dashed line. \textbf  {(B)} Accuracy at each mask level, showing consistent above-random performance.}}{45}{figure.caption.92}\protected@file@percent }
-\newlabel{fig:text_diffusion}{{17}{45}{Byte denoising results. \textbf {(A)} Character accuracy vs.\ mask percentage with random baseline shown as dashed line. \textbf {(B)} Accuracy at each mask level, showing consistent above-random performance}{figure.caption.92}{}}
-\newlabel{fig:text_diffusion@cref}{{[figure][17][]17}{[1][45][]45}{}{}{}}
-\@writefile{lot}{\contentsline {table}{\numberline {12}{\ignorespaces Text byte denoising via thermodynamic trie. Masked characters are reconstructed using pattern matching from training data. Accuracy measures exact character recovery at masked positions.}}{46}{table.caption.91}\protected@file@percent }
-\newlabel{tab:text_diffusion}{{12}{46}{Text byte denoising via thermodynamic trie. Masked characters are reconstructed using pattern matching from training data. Accuracy measures exact character recovery at masked positions}{table.caption.91}{}}
-\newlabel{tab:text_diffusion@cref}{{[table][12][]12}{[1][45][]46}{}{}{}}
-\@writefile{lot}{\contentsline {table}{\numberline {13}{\ignorespaces Reconstruction examples at different masking levels. Errors are highlighted with underlines.}}{46}{table.caption.93}\protected@file@percent }
-\newlabel{tab:text_diffusion_examples}{{13}{46}{Reconstruction examples at different masking levels. Errors are highlighted with underlines}{table.caption.93}{}}
-\newlabel{tab:text_diffusion_examples@cref}{{[table][13][]13}{[1][45][]46}{}{}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {A.7}Continuous Kernel Simulation Snapshot}{46}{subsection.A.7}\protected@file@percent }
-\@writefile{lof}{\contentsline {figure}{\numberline {18}{\ignorespaces Final dashboard frame from a finite kernel simulation run.}}{46}{figure.caption.94}\protected@file@percent }
-\newlabel{fig:continuous_final}{{18}{46}{Final dashboard frame from a finite kernel simulation run}{figure.caption.94}{}}
-\newlabel{fig:continuous_final@cref}{{[figure][18][]18}{[1][46][]46}{}{}{}}
-\@writefile{toc}{\contentsline {section}{\numberline {B}Review-Ready Benchmark Templates}{46}{appendix.B}\protected@file@percent }
-\newlabel{app:review_templates}{{B}{46}{Review-Ready Benchmark Templates}{appendix.B}{}}
-\newlabel{app:review_templates@cref}{{[section][2][]B}{[1][46][]46}{}{}{}}
-\@writefile{lot}{\contentsline {table}{\numberline {14}{\ignorespaces Long-context byte/text benchmark template (fill with measured values).}}{47}{table.caption.95}\protected@file@percent }
-\newlabel{tab:template_text_scale}{{14}{47}{Long-context byte/text benchmark template (fill with measured values)}{table.caption.95}{}}
-\newlabel{tab:template_text_scale@cref}{{[table][14][]14}{[1][46][]47}{}{}{}}
-\@writefile{lot}{\contentsline {table}{\numberline {15}{\ignorespaces Continual adaptation template (distribution-shift protocol).}}{47}{table.caption.96}\protected@file@percent }
-\newlabel{tab:template_adaptation}{{15}{47}{Continual adaptation template (distribution-shift protocol)}{table.caption.96}{}}
-\newlabel{tab:template_adaptation@cref}{{[table][15][]15}{[1][46][]47}{}{}{}}
-\@writefile{lot}{\contentsline {table}{\numberline {16}{\ignorespaces Scaling decomposition template (single-factor sweeps + fitted exponents).}}{47}{table.caption.97}\protected@file@percent }
-\newlabel{tab:template_scaling}{{16}{47}{Scaling decomposition template (single-factor sweeps + fitted exponents)}{table.caption.97}{}}
-\newlabel{tab:template_scaling@cref}{{[table][16][]16}{[1][46][]47}{}{}{}}
-\@writefile{toc}{\contentsline {section}{\numberline {C}Extended Translation Table}{48}{appendix.C}\protected@file@percent }
-\newlabel{app:translation}{{C}{48}{Extended Translation Table}{appendix.C}{}}
-\newlabel{app:translation@cref}{{[section][3][]C}{[1][48][]48}{}{}{}}
-\@writefile{toc}{\contentsline {section}{\numberline {D}Pseudocode}{49}{appendix.D}\protected@file@percent }
-\newlabel{app:algorithms}{{D}{49}{Pseudocode}{appendix.D}{}}
-\newlabel{app:algorithms@cref}{{[section][4][]D}{[1][48][]49}{}{}{}}
-\@writefile{loa}{\contentsline {algorithm}{\numberline {1}{\ignorespaces Unified Manifold Step (Thermodynamics + Wave Dynamics)}}{49}{algorithm.1}\protected@file@percent }
-\newlabel{alg:unified_step}{{1}{49}{Unified Manifold Step (Thermodynamics + Wave Dynamics)}{algorithm.1}{}}
-\newlabel{alg:unified_step@cref}{{[algorithm][1][]1}{[1][48][]49}{}{}{}}
-\gdef \@abspage@last{49}
+\@writefile{toc}{\contentsline {section}{\numberline {A}Additional Experiments}{35}{appendix.A}\protected@file@percent }
+\newlabel{sec:appendix_experiments}{{A}{35}{Additional Experiments}{appendix.A}{}}
+\newlabel{sec:appendix_experiments@cref}{{[section][1][]A}{[1][35][]35}{}{}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {A.1}Universal Tokenizer Collision Regimes (TOY)}{35}{subsection.A.1}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {15}{\ignorespaces Synthetic trie collision sweep. As collision rate increases, spatial clustering increases and compression ratio decreases, demonstrating that repeated byte+position IDs act as compression.}}{36}{figure.caption.75}\protected@file@percent }
+\newlabel{fig:collision_compression}{{15}{36}{Synthetic trie collision sweep. As collision rate increases, spatial clustering increases and compression ratio decreases, demonstrating that repeated byte+position IDs act as compression}{figure.caption.75}{}}
+\newlabel{fig:collision_compression@cref}{{[figure][15][]15}{[1][35][]36}{}{}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {A.2}Next-Byte Prediction via Thermodynamic Trie}{36}{subsection.A.2}\protected@file@percent }
+\newlabel{sec:next_byte_prediction}{{A.2}{36}{Next-Byte Prediction via Thermodynamic Trie}{subsection.A.2}{}}
+\newlabel{sec:next_byte_prediction@cref}{{[subsection][2][1]A.2}{[1][36][]36}{}{}{}}
+\@writefile{toc}{\contentsline {paragraph}{Method.}{36}{section*.76}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Inference.}{36}{section*.77}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Results.}{36}{section*.78}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {16}{\ignorespaces Thermodynamic trie structure for next-byte prediction. \textbf  {(A)} Trie branching visualization showing candidate continuations at each position in the segment; node size encodes probability, edges show transitions between positions. \textbf  {(B)} Probability distributions at branch points where multiple continuations are valid; the manifold learns frequency-proportional distributions (e.g., ``The cat '' $\to $ `s':50\%, `r':33\%, `a':17\%). \textbf  {(C)} Accuracy by position in segment; green indicates deterministic paths ($>$95\%), orange indicates moderate ambiguity, red indicates branch points with multiple valid continuations.}}{37}{figure.caption.79}\protected@file@percent }
+\newlabel{fig:next_token}{{16}{37}{Thermodynamic trie structure for next-byte prediction. \textbf {(A)} Trie branching visualization showing candidate continuations at each position in the segment; node size encodes probability, edges show transitions between positions. \textbf {(B)} Probability distributions at branch points where multiple continuations are valid; the manifold learns frequency-proportional distributions (e.g., ``The cat '' $\to $ `s':50\%, `r':33\%, `a':17\%). \textbf {(C)} Accuracy by position in segment; green indicates deterministic paths ($>$95\%), orange indicates moderate ambiguity, red indicates branch points with multiple valid continuations}{figure.caption.79}{}}
+\newlabel{fig:next_token@cref}{{[figure][16][]16}{[1][36][]37}{}{}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {A.3}Time-Series Forecasting via Position Periodicity}{37}{subsection.A.3}\protected@file@percent }
+\newlabel{sec:timeseries}{{A.3}{37}{Time-Series Forecasting via Position Periodicity}{subsection.A.3}{}}
+\newlabel{sec:timeseries@cref}{{[subsection][3][1]A.3}{[1][37][]37}{}{}{}}
+\@writefile{toc}{\contentsline {paragraph}{Method.}{37}{section*.80}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Results.}{37}{section*.81}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {17}{\ignorespaces Time-series forecasting results. \textbf  {(A)} Actual vs.\ predicted values for the periodic signal (first 100 test points). \textbf  {(B)} Direction accuracy by signal type; 50\% is random baseline. \textbf  {(C)} Error distribution for periodic signal showing the concentration of predictions near true values.}}{38}{figure.caption.82}\protected@file@percent }
+\newlabel{fig:timeseries}{{17}{38}{Time-series forecasting results. \textbf {(A)} Actual vs.\ predicted values for the periodic signal (first 100 test points). \textbf {(B)} Direction accuracy by signal type; 50\% is random baseline. \textbf {(C)} Error distribution for periodic signal showing the concentration of predictions near true values}{figure.caption.82}{}}
+\newlabel{fig:timeseries@cref}{{[figure][17][]17}{[1][37][]38}{}{}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {A.4}MNIST Classification from Raw Bytes}{38}{subsection.A.4}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {18}{\ignorespaces Kernel MNIST confusion matrix (Universal Tokenizer byte+index pixel stream).}}{38}{figure.caption.83}\protected@file@percent }
+\newlabel{fig:mnist_bytes_appendix}{{18}{38}{Kernel MNIST confusion matrix (Universal Tokenizer byte+index pixel stream)}{figure.caption.83}{}}
+\newlabel{fig:mnist_bytes_appendix@cref}{{[figure][18][]18}{[1][38][]38}{}{}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {A.5}MNIST Inpainting via Thermodynamic Trie}{38}{subsection.A.5}\protected@file@percent }
+\newlabel{sec:mnist_inpainting}{{A.5}{38}{MNIST Inpainting via Thermodynamic Trie}{subsection.A.5}{}}
+\newlabel{sec:mnist_inpainting@cref}{{[subsection][5][1]A.5}{[1][38][]38}{}{}{}}
+\@writefile{toc}{\contentsline {paragraph}{Method.}{38}{section*.84}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Results.}{38}{section*.85}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {19}{\ignorespaces MNIST inpainting via thermodynamic trie. \textbf  {(A)} Example reconstructions at different mask levels (top: original, bottom: reconstructed). \textbf  {(B)} PSNR and MAE as functions of mask fraction, showing graceful degradation. \textbf  {(C)} Error distribution histograms for each mask level.}}{39}{figure.caption.86}\protected@file@percent }
+\newlabel{fig:image_gen}{{19}{39}{MNIST inpainting via thermodynamic trie. \textbf {(A)} Example reconstructions at different mask levels (top: original, bottom: reconstructed). \textbf {(B)} PSNR and MAE as functions of mask fraction, showing graceful degradation. \textbf {(C)} Error distribution histograms for each mask level}{figure.caption.86}{}}
+\newlabel{fig:image_gen@cref}{{[figure][19][]19}{[1][38][]39}{}{}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {A.6}Byte Denoising via Thermodynamic Trie}{39}{subsection.A.6}\protected@file@percent }
+\newlabel{sec:text_diffusion}{{A.6}{39}{Byte Denoising via Thermodynamic Trie}{subsection.A.6}{}}
+\newlabel{sec:text_diffusion@cref}{{[subsection][6][1]A.6}{[1][39][]39}{}{}{}}
+\@writefile{toc}{\contentsline {paragraph}{Method.}{39}{section*.87}\protected@file@percent }
+\@writefile{toc}{\contentsline {paragraph}{Results.}{39}{section*.88}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {20}{\ignorespaces Byte denoising results. \textbf  {(A)} Character accuracy vs.\ mask percentage with random baseline shown as dashed line. \textbf  {(B)} Accuracy at each mask level, showing consistent above-random performance.}}{40}{figure.caption.89}\protected@file@percent }
+\newlabel{fig:text_diffusion}{{20}{40}{Byte denoising results. \textbf {(A)} Character accuracy vs.\ mask percentage with random baseline shown as dashed line. \textbf {(B)} Accuracy at each mask level, showing consistent above-random performance}{figure.caption.89}{}}
+\newlabel{fig:text_diffusion@cref}{{[figure][20][]20}{[1][39][]40}{}{}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {A.7}Continuous Kernel Simulation Snapshot}{40}{subsection.A.7}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {21}{\ignorespaces Final dashboard frame from a finite kernel simulation run.}}{40}{figure.caption.90}\protected@file@percent }
+\newlabel{fig:continuous_final}{{21}{40}{Final dashboard frame from a finite kernel simulation run}{figure.caption.90}{}}
+\newlabel{fig:continuous_final@cref}{{[figure][21][]21}{[1][40][]40}{}{}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {B}Review-Ready Benchmark Templates}{40}{appendix.B}\protected@file@percent }
+\newlabel{app:review_templates}{{B}{40}{Review-Ready Benchmark Templates}{appendix.B}{}}
+\newlabel{app:review_templates@cref}{{[section][2][]B}{[1][40][]40}{}{}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {6}{\ignorespaces Long-context byte/text benchmark template (fill with measured values).}}{41}{table.caption.91}\protected@file@percent }
+\newlabel{tab:template_text_scale}{{6}{41}{Long-context byte/text benchmark template (fill with measured values)}{table.caption.91}{}}
+\newlabel{tab:template_text_scale@cref}{{[table][6][]6}{[1][40][]41}{}{}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {7}{\ignorespaces Continual adaptation template (distribution-shift protocol).}}{41}{table.caption.92}\protected@file@percent }
+\newlabel{tab:template_adaptation}{{7}{41}{Continual adaptation template (distribution-shift protocol)}{table.caption.92}{}}
+\newlabel{tab:template_adaptation@cref}{{[table][7][]7}{[1][40][]41}{}{}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {8}{\ignorespaces Scaling decomposition template (single-factor sweeps + fitted exponents).}}{41}{table.caption.93}\protected@file@percent }
+\newlabel{tab:template_scaling}{{8}{41}{Scaling decomposition template (single-factor sweeps + fitted exponents)}{table.caption.93}{}}
+\newlabel{tab:template_scaling@cref}{{[table][8][]8}{[1][40][]41}{}{}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {C}Extended Translation Table}{42}{appendix.C}\protected@file@percent }
+\newlabel{app:translation}{{C}{42}{Extended Translation Table}{appendix.C}{}}
+\newlabel{app:translation@cref}{{[section][3][]C}{[1][42][]42}{}{}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {D}Pseudocode}{43}{appendix.D}\protected@file@percent }
+\newlabel{app:algorithms}{{D}{43}{Pseudocode}{appendix.D}{}}
+\newlabel{app:algorithms@cref}{{[section][4][]D}{[1][42][]43}{}{}{}}
+\@writefile{loa}{\contentsline {algorithm}{\numberline {1}{\ignorespaces Unified Manifold Step (Thermodynamics + Wave Dynamics)}}{43}{algorithm.1}\protected@file@percent }
+\newlabel{alg:unified_step}{{1}{43}{Unified Manifold Step (Thermodynamics + Wave Dynamics)}{algorithm.1}{}}
+\newlabel{alg:unified_step@cref}{{[algorithm][1][]1}{[1][42][]43}{}{}{}}
+\gdef \@abspage@last{43}

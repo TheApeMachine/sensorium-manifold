@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from collections import deque
-from typing import Optional
 
 import numpy as np
 
@@ -27,11 +26,12 @@ class SettlingPlot:
             "R": deque(maxlen=500),
             "heat": deque(maxlen=500),
         }
-        self._prev_psi: Optional[np.ndarray] = None
+        self._prev_psi: np.ndarray | None = None
 
         ax.set_title("Settling dynamics", fontsize=10, pad=6)
         ax.set_xlabel("Step", fontsize=8)
         ax.tick_params(labelsize=7)
+        ax.set_yscale("log")
 
         # Left axis (log): convergence signals.
         (self._ln_dpsi,) = ax.plot([], [], color="#f39c12", lw=1.5, label="||ΔΨ|| (rms)")
@@ -39,10 +39,10 @@ class SettlingPlot:
 
         # Right axis: Kuramoto order parameter.
         self._ax2 = ax.twinx()
-        self._ax2.tick_params(labelsize=7, colors="#aaa")
+        self._ax2.tick_params(labelsize=7)
         (self._ln_R,) = self._ax2.plot([], [], color="#2ecc71", lw=1.5, label="R (Kuramoto)")
         self._ax2.set_ylim(0.0, 1.05)
-        self._ax2.set_ylabel("R", fontsize=8, color="#aaa")
+        self._ax2.set_ylabel("R", fontsize=8)
 
         # Small status text.
         self._status = ax.text(
@@ -54,7 +54,6 @@ class SettlingPlot:
             va="bottom",
             fontsize=7,
             family="monospace",
-            color="#ccc",
         )
 
         # Combined legend.
@@ -70,12 +69,10 @@ class SettlingPlot:
             fontsize=7,
             loc="upper left",
             framealpha=0.35,
-            facecolor="#1a1a2e",
-            edgecolor="#333",
-            labelcolor="#ccc",
         )
+        self._frame: dict | None = None
 
-    def update(self, state: dict) -> None:
+    def ingest(self, state: dict) -> None:
         def to_numpy(v, default=None):
             if v is None:
                 return default
@@ -112,7 +109,7 @@ class SettlingPlot:
                 R = float(np.abs(np.mean(np.exp(1j * phases))))
             if self._prev_psi is not None and self._prev_psi.shape == psi.shape and psi.size > 0:
                 d = psi - self._prev_psi
-                dpsi = float(np.sqrt(np.mean((d.real * d.real + d.imag * d.imag))))
+                dpsi = float(np.sqrt(np.mean(d.real * d.real + d.imag * d.imag)))
             self._prev_psi = psi
 
         heat = to_numpy(state.get("heats"), None)
@@ -127,26 +124,46 @@ class SettlingPlot:
 
         steps = np.asarray(h["step"], dtype=np.float64)
         if steps.size < 2:
+            self._frame = {
+                "ready": False,
+                "status": "",
+            }
             return
 
         dpsi_a = np.asarray(h["psi_delta"], dtype=np.float64)
         cfl_a = np.asarray(h["cfl_step"], dtype=np.float64)
         R_a = np.asarray(h["R"], dtype=np.float64)
 
-        self._ln_dpsi.set_data(steps, dpsi_a)
-        self._ln_cfl.set_data(steps, cfl_a)
-        self._ln_R.set_data(steps, R_a)
-
-        # Log-scale for convergence readability.
-        self.ax.set_yscale("log")
-
         # Status line (simple heuristic).
         tail = min(25, len(dpsi_a))
         dpsi_recent = float(np.median(dpsi_a[-tail:])) if tail > 0 else float("nan")
-        self._status.set_text(f"median(||ΔΨ||)[{tail}]={dpsi_recent:.2e}  R={R_a[-1]:.2f}")
+        self._frame = {
+            "ready": True,
+            "steps": steps,
+            "dpsi": dpsi_a,
+            "cfl": cfl_a,
+            "R": R_a,
+            "status": f"median(||ΔΨ||)[{tail}]={dpsi_recent:.2e}  R={R_a[-1]:.2f}",
+        }
+
+    def render(self) -> None:
+        frame = self._frame
+        if frame is None:
+            return
+        if not bool(frame.get("ready", False)):
+            self._status.set_text(frame.get("status", ""))
+            return
+
+        self._ln_dpsi.set_data(frame["steps"], frame["dpsi"])
+        self._ln_cfl.set_data(frame["steps"], frame["cfl"])
+        self._ln_R.set_data(frame["steps"], frame["R"])
+        self._status.set_text(frame["status"])
 
         self.ax.relim()
         self.ax.autoscale_view()
         self._ax2.relim()
         self._ax2.autoscale_view(scalex=False, scaley=False)
 
+    def update(self, state: dict) -> None:
+        self.ingest(state)
+        self.render()

@@ -1,12 +1,9 @@
-This is pdfTeX, Version 3.141592653-2.6-1.40.27 (TeX Live 2025) (preloaded format=pdflatex 2025.12.17)  6 FEB 2026 22:41
+This is pdfTeX, Version 3.141592653-2.6-1.40.27 (TeX Live 2025) (preloaded format=pdflatex 2025.12.17)  7 FEB 2026 03:46
 entering extended mode
  restricted \write18 enabled.
  %&-line parsing enabled.
-**/Users/theapemachine/go/src/github.com/theapemachine/thermo_manifold/paper/ma
-in.tex
-
-(/Users/theapemachine/go/src/github.com/theapemachine/thermo_manifold/paper/mai
-n.tex
+**paper/main.tex
+(./paper/main.tex
 LaTeX2e <2024-11-01> patch level 2
 L3 programming layer <2025-01-18>
 (/usr/local/texlive/2025/texmf-dist/tex/latex/base/article.cls
@@ -1071,11 +1068,6 @@ Package microtype Info: Loading generic protrusion settings for font family
 (microtype)             For optimal results, create family-specific settings.
 (microtype)             See the microtype manual for details.
 
-Underfull \hbox (badness 3078) in paragraph at lines 159--160
-[]|\T1/cmr/m/n/10.95 (+20) Deterministic hash-ing of raw
- []
-
-
 Underfull \hbox (badness 10000) in paragraph at lines 161--162
 []|\T1/cmr/m/n/10.95 (+20) Deterministic, collision-free,
  []
@@ -1213,19 +1205,20 @@ LaTeX Warning: Reference `tab:rule_shift' on page 1 undefined on input line 941
 .
 
 
+
+[20]
+
 LaTeX Warning: Reference `tab:audio_gen' on page 1 undefined on input line 971.
 
 
 
 
-[20]
+[21]
 
 LaTeX Warning: Reference `tab:cocktail_party' on page 1 undefined on input line
  1001.
 
 
-
-[21]
 
 [22]
 
@@ -1262,20 +1255,20 @@ Package natbib Warning: Citation `whitelam2025generative' on page 25 undefined
 on input line 1163.
 
 
-Package natbib Warning: Citation `kuramoto1975international' on page 25 undefin
+
+[25]
+
+Package natbib Warning: Citation `kuramoto1975international' on page 26 undefin
 ed on input line 1166.
 
 
-Package natbib Warning: Citation `strogatz2000kuramoto' on page 25 undefined on
+Package natbib Warning: Citation `strogatz2000kuramoto' on page 26 undefined on
  input line 1166.
 
 
-Package natbib Warning: Citation `miyato2025akorn' on page 25 undefined on inpu
+Package natbib Warning: Citation `miyato2025akorn' on page 26 undefined on inpu
 t line 1166.
 
-
-
-[25]
 
 Package natbib Warning: Citation `singer1999neuronal' on page 26 undefined on i
 nput line 1169.
@@ -1371,24 +1364,24 @@ Package natbib Warning: Citation `lu2024unifiedio2' on page 26 undefined on inp
 ut line 1187.
 
 
-Package natbib Warning: Citation `lecun2006tutorial' on page 26 undefined on in
+
+[26]
+
+Package natbib Warning: Citation `lecun2006tutorial' on page 27 undefined on in
 put line 1190.
 
 
-Package natbib Warning: Citation `du2021improved' on page 26 undefined on input
+Package natbib Warning: Citation `du2021improved' on page 27 undefined on input
  line 1190.
 
 
-Package natbib Warning: Citation `bolya2023token' on page 26 undefined on input
+Package natbib Warning: Citation `bolya2023token' on page 27 undefined on input
  line 1193.
 
 
-Package natbib Warning: Citation `bolya2023token_diffusion' on page 26 undefine
+Package natbib Warning: Citation `bolya2023token_diffusion' on page 27 undefine
 d on input line 1193.
 
-
-
-[26]
 
 Package natbib Warning: Citation `kitaev2020reformer' on page 27 undefined on i
 nput line 1196.
@@ -1415,12 +1408,12 @@ No file main.bbl.
 
 [29]
 
+[30]
+
 LaTeX Warning: Reference `tab:timeseries' on page 1 undefined on input line 134
 5.
 
 
-
-[30]
 
 [31]
 
@@ -1428,47 +1421,50 @@ LaTeX Warning: Reference `tab:image_gen' on page 1 undefined on input line 1394
 .
 
 
+
+[32]
+
 LaTeX Warning: Reference `tab:text_diffusion' on page 1 undefined on input line
  1424.
 
 
 
-[32]
-Overfull \hbox (1.33205pt too wide) in paragraph at lines 1475--1475
+[33]
+Overfull \hbox (0.52391pt too wide) in paragraph at lines 1475--1475
+[]|\T1/cmr/bx/n/10.95 (-20) Dataset|  
+ []
+
+
+Overfull \hbox (5.85924pt too wide) in paragraph at lines 1475--1475
 []|\T1/cmr/bx/n/10.95 (-20) Bits/byte|  
  []
 
 
-Overfull \hbox (59.76167pt too wide) in paragraph at lines 1473--1484
+Overfull \hbox (2.6537pt too wide) in paragraph at lines 1475--1475
+[]|\T1/cmr/bx/n/10.95 (-20) Tokens/s|  
+ []
+
+
+Overfull \hbox (5.42155pt too wide) in paragraph at lines 1473--1484
  [][] 
  []
 
 
-Overfull \hbox (53.8843pt too wide) in paragraph at lines 1491--1501
- [][] 
- []
-
-
-Overfull \hbox (40.2889pt too wide) in paragraph at lines 1508--1518
- [][] 
- []
-
-
-
-[33]
 
 [34]
+
+[35]
 Package hyperref Info: bookmark level for unknown algorithm defaults to 0 on in
 put line 1565.
 
 
-[35]
+[36]
 
 Package natbib Warning: There were undefined citations.
 
 
 
-[36] (./main.aux)
+[37] (./main.aux)
  ***********
 LaTeX2e <2024-11-01> patch level 2
 L3 programming layer <2025-01-18>
@@ -1478,16 +1474,16 @@ L3 programming layer <2025-01-18>
 LaTeX Warning: There were undefined references.
 
 Package rerunfilecheck Info: File `main.out' has not changed.
-(rerunfilecheck)             Checksum: 20CCE48A2A67C0A96FC908AAB4FB83B8;12698.
+(rerunfilecheck)             Checksum: 02BD751242A9FF27EC5514A2FC79E551;12738.
  ) 
 Here is how much of TeX's memory you used:
- 35480 strings out of 473190
- 699168 string characters out of 5715799
- 1149155 words of memory out of 5000000
+ 35487 strings out of 473190
+ 699046 string characters out of 5715799
+ 1153202 words of memory out of 5000000
  57502 multiletter control sequences out of 15000+600000
- 603531 words of font info for 306 fonts, out of 8000000 for 9000
+ 603843 words of font info for 309 fonts, out of 8000000 for 9000
  1141 hyphenation exceptions out of 8191
- 98i,16n,101p,1076b,612s stack positions out of 10000i,1000n,20000p,200000b,200000s
+ 98i,16n,101p,1007b,612s stack positions out of 10000i,1000n,20000p,200000b,200000s
 </usr/local/texlive/2025/texmf-dist/fonts/type1/public/amsfonts/cm/cmbx10.pfb
 ></usr/local/texlive/2025/texmf-dist/fonts/type1/public/amsfonts/cm/cmbx8.pfb><
 /usr/local/texlive/2025/texmf-dist/fonts/type1/public/amsfonts/cm/cmex10.pfb></
@@ -1522,10 +1518,10 @@ ts/type1/public/cm-super/sfti1000.pfb></usr/local/texlive/2025/texmf-dist/fonts
 ype1/public/cm-super/sfti1200.pfb></usr/local/texlive/2025/texmf-dist/fonts/typ
 e1/public/cm-super/sftt1095.pfb></usr/local/texlive/2025/texmf-dist/fonts/type1
 /public/cm-super/sftt1200.pfb>
-Output written on main.pdf (36 pages, 696404 bytes).
+Output written on main.pdf (37 pages, 696685 bytes).
 PDF statistics:
- 942 PDF objects out of 1000 (max. 8388607)
- 802 compressed objects within 9 object streams
- 300 named destinations out of 1000 (max. 500000)
+ 951 PDF objects out of 1000 (max. 8388607)
+ 810 compressed objects within 9 object streams
+ 301 named destinations out of 1000 (max. 500000)
  72861 words of extra memory for PDF output out of 74296 (max. 10000000)
 

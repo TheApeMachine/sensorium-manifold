@@ -1,0 +1,18 @@
+\begin{table*}[t]
+\centering
+\caption{Scaled rule-shift matrix with transparent conditions and adaptation metrics (mean $\pm$ std over seeds).}
+\label{tab:rule_shift}
+\begin{tabular}{l l c c c c c c c c c}
+\toprule
+\textbf{Scenario} & \textbf{Domain} & \textbf{Seeds} & \textbf{Phases} & \textbf{Reps} & \textbf{Seg} & \textbf{Drop} & \textbf{Recovery} & \textbf{Final@1} & \textbf{Final@3} & \textbf{Final MRR} \\
+\midrule
+real\_world\_wikitext\_focus & real-world-text & 3 & 2 & 180 & 64 & 100.0\% $\pm$ 0.0\% & 1.0 $\pm$ 0.0 & 100.0\% $\pm$ 0.0\% & 100.0\% $\pm$ 0.0\% & 100.0\% $\pm$ 0.0\% \\
+style\_swap\_natural & natural-language & 3 & 2 & 140 & 48 & 100.0\% $\pm$ 0.0\% & 1.0 $\pm$ 0.0 & 100.0\% $\pm$ 0.0\% & 100.0\% $\pm$ 0.0\% & 100.0\% $\pm$ 0.0\% \\
+three\_phase\_curriculum & continual-shift & 3 & 3 & 135 & 56 & 100.0\% $\pm$ 0.0\% & 0.5 $\pm$ 0.0 & 100.0\% $\pm$ 0.0\% & 100.0\% $\pm$ 0.0\% & 100.0\% $\pm$ 0.0\% \\
+toy\_reverse\_control & synthetic-control & 3 & 2 & 120 & 24 & 100.0\% $\pm$ 0.0\% & 1.0 $\pm$ 0.0 & 100.0\% $\pm$ 0.0\% & 100.0\% $\pm$ 0.0\% & 100.0\% $\pm$ 0.0\% \\
+\bottomrule
+\end{tabular}
+\vspace{2pt}
+
+{\footnotesize Conditions are explicit: number of phases, total repetitions, segment length, and seed count are reported per scenario.}
+\end{table*}

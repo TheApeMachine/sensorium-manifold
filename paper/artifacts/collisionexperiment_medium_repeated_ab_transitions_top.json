@@ -2,12 +2,12 @@
   "top_edges": [
     {
       "src": {
-        "pos": 37594,
+        "pos": 510,
         "byte": 65,
         "label": "A"
       },
       "dst": {
-        "pos": 37595,
+        "pos": 511,
         "byte": 66,
         "label": "B"
       },
@@ -15,12 +15,12 @@
     },
     {
       "src": {
-        "pos": 4250,
+        "pos": 174,
         "byte": 65,
         "label": "A"
       },
       "dst": {
-        "pos": 4251,
+        "pos": 175,
         "byte": 66,
         "label": "B"
       },
@@ -28,12 +28,12 @@
     },
     {
       "src": {
-        "pos": 4225,
+        "pos": 161,
         "byte": 66,
         "label": "B"
       },
       "dst": {
-        "pos": 4232,
+        "pos": 162,
         "byte": 65,
         "label": "A"
       },
@@ -41,12 +41,12 @@
     },
     {
       "src": {
-        "pos": 4226,
+        "pos": 162,
         "byte": 65,
         "label": "A"
       },
       "dst": {
-        "pos": 4227,
+        "pos": 163,
         "byte": 66,
         "label": "B"
       },
@@ -54,12 +54,12 @@
     },
     {
       "src": {
-        "pos": 4227,
+        "pos": 163,
         "byte": 66,
         "label": "B"
       },
       "dst": {
-        "pos": 4234,
+        "pos": 164,
         "byte": 65,
         "label": "A"
       },
@@ -67,12 +67,12 @@
     },
     {
       "src": {
-        "pos": 4232,
+        "pos": 164,
         "byte": 65,
         "label": "A"
       },
       "dst": {
-        "pos": 4233,
+        "pos": 165,
         "byte": 66,
         "label": "B"
       },
@@ -80,12 +80,12 @@
     },
     {
       "src": {
-        "pos": 4233,
+        "pos": 165,
         "byte": 66,
         "label": "B"
       },
       "dst": {
-        "pos": 4288,
+        "pos": 166,
         "byte": 65,
         "label": "A"
       },
@@ -93,12 +93,12 @@
     },
     {
       "src": {
-        "pos": 4234,
+        "pos": 166,
         "byte": 65,
         "label": "A"
       },
       "dst": {
-        "pos": 4235,
+        "pos": 167,
         "byte": 66,
         "label": "B"
       },
@@ -106,12 +106,12 @@
     },
     {
       "src": {
-        "pos": 4235,
+        "pos": 167,
         "byte": 66,
         "label": "B"
       },
       "dst": {
-        "pos": 4290,
+        "pos": 168,
         "byte": 65,
         "label": "A"
       },
@@ -119,12 +119,12 @@
     },
     {
       "src": {
-        "pos": 4240,
+        "pos": 168,
         "byte": 65,
         "label": "A"
       },
       "dst": {
-        "pos": 4241,
+        "pos": 169,
         "byte": 66,
         "label": "B"
       },
@@ -132,12 +132,12 @@
     },
     {
       "src": {
-        "pos": 4241,
+        "pos": 169,
         "byte": 66,
         "label": "B"
       },
       "dst": {
-        "pos": 4248,
+        "pos": 170,
         "byte": 65,
         "label": "A"
       },
@@ -145,12 +145,12 @@
     },
     {
       "src": {
-        "pos": 4242,
+        "pos": 170,
         "byte": 65,
         "label": "A"
       },
       "dst": {
-        "pos": 4243,
+        "pos": 171,
         "byte": 66,
         "label": "B"
       },
@@ -158,12 +158,12 @@
     },
     {
       "src": {
-        "pos": 4243,
+        "pos": 171,
         "byte": 66,
         "label": "B"
       },
       "dst": {
-        "pos": 4250,
+        "pos": 172,
         "byte": 65,
         "label": "A"
       },
@@ -171,12 +171,12 @@
     },
     {
       "src": {
-        "pos": 4248,
+        "pos": 172,
         "byte": 65,
         "label": "A"
       },
       "dst": {
-        "pos": 4249,
+        "pos": 173,
         "byte": 66,
         "label": "B"
       },
@@ -184,12 +184,12 @@
     },
     {
       "src": {
-        "pos": 4249,
+        "pos": 173,
         "byte": 66,
         "label": "B"
       },
       "dst": {
-        "pos": 4304,
+        "pos": 174,
         "byte": 65,
         "label": "A"
       },
@@ -197,12 +197,12 @@
     },
     {
       "src": {
-        "pos": 4251,
+        "pos": 175,
         "byte": 66,
         "label": "B"
       },
       "dst": {
-        "pos": 4306,
+        "pos": 176,
         "byte": 65,
         "label": "A"
       },
@@ -210,12 +210,12 @@
     },
     {
       "src": {
-        "pos": 4187,
+        "pos": 159,
         "byte": 66,
         "label": "B"
       },
       "dst": {
-        "pos": 4626,
+        "pos": 160,
         "byte": 65,
         "label": "A"
       },
@@ -223,12 +223,12 @@
     },
     {
       "src": {
-        "pos": 4288,
+        "pos": 176,
         "byte": 65,
         "label": "A"
       },
       "dst": {
-        "pos": 4289,
+        "pos": 177,
         "byte": 66,
         "label": "B"
       },
@@ -236,12 +236,12 @@
     },
     {
       "src": {
-        "pos": 4289,
+        "pos": 177,
         "byte": 66,
         "label": "B"
       },
       "dst": {
-        "pos": 4296,
+        "pos": 178,
         "byte": 65,
         "label": "A"
       },
@@ -249,12 +249,12 @@
     },
     {
       "src": {
-        "pos": 4290,
+        "pos": 178,
         "byte": 65,
         "label": "A"
       },
       "dst": {
-        "pos": 4291,
+        "pos": 179,
         "byte": 66,
         "label": "B"
       },

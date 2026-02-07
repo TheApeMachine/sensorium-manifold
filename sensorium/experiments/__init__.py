@@ -13,12 +13,16 @@ __all__ = [
     "AblationsExperiment",
     "CollisionExperiment",
     "WaveTrieExperiment",
+    "KernelRuleShift",
+    "KernelScaling",
 ]
 
 _CLASS_TO_MODULE = {
     "AblationsExperiment": ".ablations",
     "CollisionExperiment": ".collision",
     "WaveTrieExperiment": ".wave_trie",
+    "KernelRuleShift": ".kernel_rule_shift",
+    "KernelScaling": ".kernel_scaling",
 }
 
 
@@ -30,4 +34,3 @@ def __getattr__(name: str) -> Any:
     value = getattr(module, name)
     globals()[name] = value
     return value
-

@@ -1,0 +1,35 @@
+\begin{table*}[t]
+\centering
+\caption{Scaling evidence with explicit uncertainty and conditions (mean $\pm$ std over seeds unless stated).}
+\label{tab:scaling}
+\begin{tabular}{l l}
+\toprule
+\textbf{Check} & \textbf{Evidence} \\
+\midrule
+\multicolumn{2}{l}{\textit{Experimental Conditions}} \\
+\quad Seeds & 7, 19, 43 \\
+\quad Particle sweep & 1000, 2000, 4000, 8000, 16000 \\
+\quad Sequence sweep & 1000, 4000, 16000, 64000 \\
+\midrule
+\multicolumn{2}{l}{\textit{$\omega$-Field Dynamics}} \\
+\quad Final active modes & 19.33 \\
+\quad Final crystallized modes & 1.00 \\
+\quad Pruning rate & 0.964 \\
+\midrule
+\multicolumn{2}{l}{\textit{Latency Scaling (fixed $k$, tested range)}} \\
+\quad Power-law exponent $\alpha$ in $t_\mathrm{step}(N)=aN^\alpha$ & 0.043 \\
+\quad 95\% CI for $\alpha$ & [0.016, 0.084] \\
+\quad Mean coefficient of variation (ms/step) & 3.9\% \\
+\midrule
+\multicolumn{2}{l}{\textit{Interference at Scale}} \\
+\quad Efficiency at highest pattern count (32) & 12.5\% $\pm$ 0.0\% \\
+\quad Conflict score at highest pattern count & 0.732 $\pm$ 0.005 \\
+\midrule
+\multicolumn{2}{l}{\textit{Generalization}} \\
+\quad Repetitive structure ratio & 1.6\% $\pm$ 2.2\% \\
+\quad Semi Random structure ratio & 6.2\% $\pm$ 0.0\% \\
+\quad Natural Like structure ratio & 5.7\% $\pm$ 0.7\% \\
+\quad Pure Random structure ratio & 6.2\% $\pm$ 0.0\% \\
+\bottomrule
+\end{tabular}
+\end{table*}

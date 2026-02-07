@@ -2,13 +2,13 @@
 \centering
 \caption{Collision experiment summary metrics}
 \label{tab:CollisionExperiment}
-\begin{tabular}{ccccccccccccccccccccc}
+\begin{tabular}{cccccccccccccccccccccccc}
 \toprule
-Scenario & N Tokens & N Samples & N Unique Tokens & Compression Ratio & Collision Rate Observed & Entropy & Unique Keys & Key Collision Rate & Fold Top1 & Fold Pr & Transition Top1 Prob & Transition Unique Edges & Spatial Clustering & Mode Participation & Mode Entropy & Psi Delta Rel & Run Backend & Run Steps & Run Termination & Simulate Ms \\
+Scenario & N Tokens & N Samples & N Unique Tokens & Compression Ratio & Collision Rate Observed & Entropy & Unique Keys & Key Collision Rate & Fold Top1 & Fold Pr & Transition Top1 Prob & Transition Unique Edges & Recall Top1 & Recall Top3 & Recall Mrr & Spatial Clustering & Mode Participation & Mode Entropy & Psi Delta Rel & Run Backend & Run Steps & Run Termination & Simulate Ms \\
 \midrule
-medium\_collision &  &  & 25994 & $0.397$ & $0.603$ & $12.272$ &  &  &  &  &  &  &  & $5.417$ & $3.503$ & $0.641$ & mps & 12 & budget & $26530.907$ \\
-medium\_repeated\_ab &  &  & 512 & $0.008$ & $0.992$ & $9.000$ &  &  &  &  &  &  &  & $3.258$ & $1.829$ & $1.000$ & mps & 12 & budget & $26405.422$ \\
-medium\_wikitext &  &  & 24427 & $0.373$ & $0.627$ & $13.937$ &  &  &  &  &  &  &  & $11.926$ & $4.006$ & $0.856$ & mps & 12 & budget & $36794.793$ \\
+medium\_collision & 65536 & 128 & 25994 & $0.397$ & $0.603$ & $12.272$ & 25994 & $0.603$ & $0.002$ & $1012.103$ & $0.002$ & 42323 & $0.699$ & $0.763$ & $0.740$ &  & $5.465$ & $3.470$ & $0.616$ & mps & 12 & budget & $6612.759$ \\
+medium\_repeated\_ab & 65536 & 128 & 512 & $0.008$ & $0.992$ & $9.000$ & 512 & $0.992$ & $0.002$ & $512.000$ & $0.002$ & 511 & $1.000$ & $1.000$ & $1.000$ &  & $3.388$ & $1.865$ & $1.000$ & mps & 12 & budget & $6538.860$ \\
+medium\_wikitext & 65536 & 220 & 24427 & $0.373$ & $0.627$ & $13.937$ & 24427 & $0.627$ & $0.003$ & $8765.204$ & $7.04e-04$ & 52130 & $0.521$ & $0.819$ & $0.685$ &  & $9.285$ & $3.749$ & $1.117$ & mps & 12 & budget & $15373.346$ \\
 \bottomrule
 \end{tabular}
 \end{table}
